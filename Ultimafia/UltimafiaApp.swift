@@ -1,17 +1,14 @@
-//
-//  UltimafiaApp.swift
-//  Ultimafia
-//
-//  Created by Vincent Deriu on 8/24/26.
-//
-
 import SwiftUI
 
 @main
 struct UltimafiaApp: App {
+    @State private var appModel = AppModel()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(appModel)
+                .tint(UMTheme.blood)
         }
     }
 }

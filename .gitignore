@@ -1,0 +1,52 @@
+# macOS
+.DS_Store
+._*
+
+# Xcode user state / build output
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.xcarchive
+*.dSYM
+*.dSYM.zip
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager (keep Package.resolved)
+.build/
+.swiftpm/
+/Packages/
+SourcePackages/
+
+# CocoaPods / Carthage (none in use today)
+Pods/
+Carthage/Build/
+Carthage/Checkouts/
+
+# fastlane outputs
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Secrets / signing — never commit
+Ultimafia/App/Secrets.swift
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+*.p8
+*.pem
+*.key
+*.keychain
+*.keychain-db
+.env
+.env.*
+GoogleService-Info.plist
+ExportOptions*.plist

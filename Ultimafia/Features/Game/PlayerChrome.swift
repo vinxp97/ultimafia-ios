@@ -1,0 +1,391 @@
+import SwiftUI
+import ImageIO
+#if canImport(UIKit)
+import UIKit
+typealias UMPlatformImage = UIImage
+#else
+import AppKit
+typealias UMPlatformImage = NSImage
+#endif
+
+extension UMPlatformImage {
+    static func um(cg: CGImage) -> UMPlatformImage {
+        #if canImport(UIKit)
+        UIImage(cgImage: cg)
+        #else
+        NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        #endif
+    }
+}
+
+func platformImage(_ image: UMPlatformImage) -> Image {
+    #if canImport(UIKit)
+    Image(uiImage: image)
+    #else
+    Image(nsImage: image)
+    #endif
+}
+
+
+enum UMAvatarURL {
+    static func live(userId: String) -> URL? {
+        URL(string: "https://ultimafia.com/uploads/\(userId)_avatar.webp")
+    }
+}
+
+enum UMDefaultAvatar {
+    // Same palette as react_main/src/components/Basic.jsx InlineAvatar
+    static let hexes = [
+        "#fff59d", "#ef9a9a", "#9fa8da", "#ce93d8", "#a5d6a7",
+        "#f48fb1", "#ffcc80", "#90deea", "#80cbc4",
+    ]
+    static let iconURL = URL(string: "https://cdn.jsdelivr.net/gh/UltiMafia/Ultimafia@master/react_main/src/images/avatar.webp")
+
+    static func color(for username: String) -> Color {
+        var rand: Int32 = 0
+        let units = Array(username.utf16)
+        for unit in units {
+            rand ^= Int32(unit)
+        }
+        if units.count > 1 {
+            rand ^= Int32(units[1])
+        }
+        rand ^= rand &<< 13
+        rand ^= rand &>> 7
+        rand ^= rand &<< 17
+        let mixed = abs(Double(rand)) / 2_147_483_648.0
+        let i = min(hexes.count - 1, Int(floor(mixed * Double(hexes.count))))
+        return Color(umHex: hexes[i]) ?? Color(white: 0.7)
+    }
+}
+
+struct UMDefaultAvatarView: View {
+    var name: String
+
+    var body: some View {
+        ZStack {
+            UMDefaultAvatar.color(for: name)
+            if let url = UMDefaultAvatar.iconURL {
+                AnimatedWebPView(url: url, showsPlaceholder: false)
+                    .scaledToFill()
+            }
+        }
+    }
+}
+
+struct UMAvatarView: View {
+    let userId: String?
+    let hasAvatar: Bool
+    var name: String = ""
+    var size: CGFloat = 28
+    var square: Bool = false
+
+    init(userId: String?, hasAvatar: Bool, name: String = "", size: CGFloat = 28, square: Bool = false) {
+        self.userId = userId
+        self.hasAvatar = hasAvatar
+        self.name = name
+        self.size = size
+        self.square = square
+    }
+
+    init(player: GamePlayer, size: CGFloat = 28) {
+        self.init(userId: player.userId, hasAvatar: player.avatar, name: player.name, size: size)
+    }
+
+    var body: some View {
+        Group {
+            if hasAvatar, let userId, !userId.isEmpty, let url = UMAvatarURL.live(userId: userId) {
+                AnimatedWebPView(url: url)
+            } else {
+                UMDefaultAvatarView(name: name)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(square ? AnyShape(RoundedRectangle(cornerRadius: size * 0.18)) : AnyShape(Circle()))
+        .overlay {
+            if square {
+                RoundedRectangle(cornerRadius: size * 0.18).stroke(UMTheme.line, lineWidth: 1)
+            } else {
+                Circle().stroke(UMTheme.line, lineWidth: 1)
+            }
+        }
+    }
+}
+
+struct AnimatedWebPView: View {
+    let url: URL
+    var showsPlaceholder: Bool = true
+    @State private var frames: [UMPlatformImage] = []
+    @State private var delays: [Double] = []
+    @State private var index = 0
+
+    var body: some View {
+        Group {
+            if let image = frames.indices.contains(index) ? frames[index] : frames.first {
+                platformImage(image)
+                    .resizable()
+                    .scaledToFill()
+            } else if showsPlaceholder {
+                ProgressView().scaleEffect(0.6)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: url.absoluteString) {
+            await load()
+            while !Task.isCancelled, frames.count > 1 {
+                let delay = delays.indices.contains(index) ? delays[index] : 0.1
+                try? await Task.sleep(nanoseconds: UInt64(max(delay, 0.04) * 1_000_000_000))
+                await MainActor.run {
+                    if frames.count > 1 { index = (index + 1) % frames.count }
+                }
+            }
+        }
+    }
+
+    private func load() async {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let parsed = Self.frames(from: data)
+            await MainActor.run {
+                frames = parsed.images
+                delays = parsed.delays
+                index = 0
+            }
+        } catch {
+            frames = []
+        }
+    }
+
+    private static func frames(from data: Data) -> (images: [UMPlatformImage], delays: [Double]) {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return ([], []) }
+        let count = CGImageSourceGetCount(src)
+        var images: [UMPlatformImage] = []
+        var delays: [Double] = []
+        for i in 0..<count {
+            guard let cg = CGImageSourceCreateImageAtIndex(src, i, nil) else { continue }
+            images.append(UMPlatformImage.um(cg: cg))
+            delays.append(frameDelay(src, index: i))
+        }
+        return (images, delays)
+    }
+
+    private static func frameDelay(_ src: CGImageSource, index: Int) -> Double {
+        guard let props = CGImageSourceCopyPropertiesAtIndex(src, index, nil) as? [String: Any] else { return 0.1 }
+        for key in ["{GIF}", "{WebP}", "{PNG}"] {
+            if let dict = props[key] as? [String: Any] {
+                if let d = dict["UnclampedDelayTime"] as? Double, d > 0 { return d }
+                if let d = dict["DelayTime"] as? Double, d > 0 { return d }
+            }
+        }
+        return 0.1
+    }
+}
+
+extension Color {
+    init?(umHex raw: String?) {
+        guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        if s.hasPrefix("#") { s.removeFirst() }
+        if s.count == 3 {
+            s = s.map { "\($0)\($0)" }.joined()
+        }
+        guard s.count == 6 || s.count == 8, let v = UInt64(s, radix: 16) else { return nil }
+        let a, r, g, b: Double
+        if s.count == 8 {
+            a = Double((v >> 24) & 0xFF) / 255
+            r = Double((v >> 16) & 0xFF) / 255
+            g = Double((v >> 8) & 0xFF) / 255
+            b = Double(v & 0xFF) / 255
+        } else {
+            a = 1
+            r = Double((v >> 16) & 0xFF) / 255
+            g = Double((v >> 8) & 0xFF) / 255
+            b = Double(v & 0xFF) / 255
+        }
+        self = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
+    }
+}
+
+func umNormalizedColorToken(_ raw: String) -> String? {
+    let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if t.isEmpty { return nil }
+    let lower = t.lowercased()
+    if ["none", "default", "null", "undefined"].contains(lower) { return nil }
+    return t
+}
+
+func umColorString(_ any: Any?) -> String? {
+    if let s = any as? String {
+        return umNormalizedColorToken(s)
+    }
+    if let d = any as? [String: Any] {
+        for key in ["darkTheme", "dark", "lightTheme", "light"] {
+            if let s = d[key] as? String, let token = umNormalizedColorToken(s) {
+                return token
+            }
+        }
+    }
+    return nil
+}
+
+func umNameFill(_ hex: String?) -> Color {
+    Color(umHex: hex) ?? .white
+}
+
+struct PlayerNameView: View {
+    let player: GamePlayer
+    var fontSize: CGFloat = 14
+    var dead: Bool = false
+
+    private var anim: String { (player.animatedNameColor ?? "none").lowercased() }
+    private var shouldAnimate: Bool { !dead && anim != "none" && !anim.isEmpty }
+    private var usesClip: Bool {
+        ["rainbow", "patriotic", "gradient", "tricolor"].contains(anim)
+    }
+    private var nameFont: Font { player.displayFont(size: fontSize) }
+    private var solidColor: Color { umNameFill(player.nameColorHex) }
+
+    var body: some View {
+        Group {
+            if dead {
+                label.foregroundStyle(Color.red)
+            } else if shouldAnimate, usesClip {
+                loopingClipName
+            } else if shouldAnimate {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let t = context.date.timeIntervalSinceReferenceDate
+                    label
+                        .foregroundStyle(solidColor)
+                        .shadow(color: glowColor(t: t), radius: glowRadius(t: t))
+                        .opacity(pulseOpacity(t: t))
+                }
+            } else {
+                label.foregroundStyle(solidColor)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var label: Text {
+        Text(player.name).font(nameFont)
+    }
+
+    private var loopingClipName: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let shift = CGFloat((context.date.timeIntervalSinceReferenceDate / 3.0).truncatingRemainder(dividingBy: 1))
+            label
+                .foregroundStyle(Color.white)
+                .overlay {
+                    GeometryReader { geo in
+                        periodGradient
+                            .frame(width: geo.size.width * 2, height: geo.size.height)
+                            .offset(x: -shift * geo.size.width)
+                    }
+                    .allowsHitTesting(false)
+                }
+                .mask(label)
+        }
+    }
+
+    private var periodGradient: LinearGradient {
+        LinearGradient(stops: gradientStops, startPoint: .leading, endPoint: .trailing)
+    }
+
+    private var gradientStops: [Gradient.Stop] {
+        let a = Color(umHex: player.nameGradientColorA) ?? Color(umHex: "#ff0040") ?? .red
+        let b = Color(umHex: player.nameGradientColorB) ?? Color(umHex: "#00c2ff") ?? .cyan
+        let c = Color(umHex: player.nameGradientColorC) ?? Color(umHex: "#3dff6a") ?? .green
+        switch anim {
+        case "patriotic":
+            let red = Color(umHex: "#b22234") ?? Color(red: 0.70, green: 0.13, blue: 0.20)
+            let blue = Color(umHex: "#3c3b6e") ?? Color(red: 0.24, green: 0.23, blue: 0.43)
+            return [
+                .init(color: red, location: 0),
+                .init(color: .white, location: 0.1666),
+                .init(color: blue, location: 0.3333),
+                .init(color: red, location: 0.5),
+                .init(color: .white, location: 0.6666),
+                .init(color: blue, location: 0.8333),
+                .init(color: red, location: 1),
+            ]
+        case "gradient":
+            return [
+                .init(color: a, location: 0),
+                .init(color: b, location: 0.25),
+                .init(color: a, location: 0.5),
+                .init(color: b, location: 0.75),
+                .init(color: a, location: 1),
+            ]
+        case "tricolor":
+            return [
+                .init(color: a, location: 0),
+                .init(color: b, location: 0.1666),
+                .init(color: c, location: 0.3333),
+                .init(color: a, location: 0.5),
+                .init(color: b, location: 0.6666),
+                .init(color: c, location: 0.8333),
+                .init(color: a, location: 1),
+            ]
+        default:
+            let r = Color(umHex: "#ff0040") ?? .red
+            let o = Color(umHex: "#ff7a00") ?? .orange
+            let y = Color(umHex: "#ffd000") ?? .yellow
+            let g = Color(umHex: "#3dff6a") ?? .green
+            let c2 = Color(umHex: "#00c2ff") ?? .cyan
+            let p = Color(umHex: "#7a5cff") ?? .purple
+            return [
+                .init(color: r, location: 0),
+                .init(color: o, location: 0.0833),
+                .init(color: y, location: 0.1666),
+                .init(color: g, location: 0.25),
+                .init(color: c2, location: 0.3333),
+                .init(color: p, location: 0.4166),
+                .init(color: r, location: 0.5),
+                .init(color: o, location: 0.5833),
+                .init(color: y, location: 0.6666),
+                .init(color: g, location: 0.75),
+                .init(color: c2, location: 0.8333),
+                .init(color: p, location: 0.9166),
+                .init(color: r, location: 1),
+            ]
+        }
+    }
+
+    private func glowColor(t: TimeInterval) -> Color {
+        guard anim == "glow" || anim == "pulse" else { return .clear }
+        return solidColor.opacity(anim == "glow" ? 0.55 + 0.35 * sin(t * 4) : 0.35)
+    }
+
+    private func glowRadius(t: TimeInterval) -> CGFloat {
+        if anim == "glow" { return 4 + 2 * CGFloat(sin(t * 4)) }
+        return 0
+    }
+
+    private func pulseOpacity(t: TimeInterval) -> Double {
+        guard anim == "pulse" else { return 1 }
+        return 0.65 + 0.35 * (0.5 + 0.5 * sin(t * (.pi * 2 / 1.1)))
+    }
+}
+
+extension GamePlayer {
+    func displayFont(size: CGFloat) -> Font {
+        switch (nameFont ?? "default").lowercased() {
+        case "slab", "georgia":
+            return .system(size: size, weight: .semibold, design: .serif)
+        case "mono":
+            return .system(size: size, weight: .semibold, design: .monospaced)
+        case "poppins", "trebuchet", "verdana":
+            return .system(size: size, weight: .semibold, design: .rounded)
+        case "bettynoir", "nabla":
+            return .system(size: size, weight: .bold, design: .serif)
+        case "autophobia", "spooky":
+            return .system(size: size, weight: .medium, design: .serif)
+        default:
+            return .system(size: size, weight: .semibold)
+        }
+    }
+
+    var bodyColor: Color {
+        umNameFill(textColorHex)
+    }
+}
