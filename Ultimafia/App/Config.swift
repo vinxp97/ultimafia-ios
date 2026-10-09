@@ -5,8 +5,7 @@ enum UMConfig {
     static let siteBase = URL(string: "https://ultimafia.com")!
     static let socketBase = URL(string: "wss://ultimafia.com")!
     /// Public web API key from the ultimafia.com client.
-    /// Kept out of git: defined in Ultimafia/App/Secrets.swift (gitignored).
-    /// See Secrets.swift.template at the repo root.
+    /// Defined in Ultimafia/App/Secrets.swift.
     static let firebaseAPIKey = UMSecrets.firebaseAPIKey
     static let allowedEmailDomains: Set<String> = [
         "gmail.com", "hotmail.com", "aol.com", "msn.com", "yandex.ru",

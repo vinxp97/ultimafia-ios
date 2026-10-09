@@ -35,7 +35,6 @@ fastlane/screenshots/**/*.png
 fastlane/test_output/
 
 # Secrets / signing — never commit
-Ultimafia/App/Secrets.swift
 *.p12
 *.cer
 *.certSigningRequest
