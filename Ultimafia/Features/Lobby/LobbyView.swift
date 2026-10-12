@@ -266,7 +266,7 @@ struct LobbySetupStrip: View {
 }
 
 
-/// Lobby header logo, picked by month like the website (Feb, Jun, Jul, Oct, Dec), Default otherwise.
+/// Lobby header logo, picked by month like the website (Feb, Jun, Jul, Oct, Nov, Dec), Default otherwise.
 enum SeasonalLogo {
     static func current(_ date: Date = .now) -> String {
         switch Calendar.current.component(.month, from: date) {
@@ -274,6 +274,7 @@ enum SeasonalLogo {
         case 6: return "Logo-pride"
         case 7: return "Logo-july"
         case 10: return "Logo-halloween"
+        case 11: return "Logo-thanksgiving"
         case 12: return "Logo-winter"
         default: return "Logo-default"
         }
