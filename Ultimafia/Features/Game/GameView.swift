@@ -629,10 +629,12 @@ private struct ChatComposer: View {
     private enum SlashSuggestion: Identifiable {
         case command(SlashCommand)
         case player(String, GamePlayer)
+        case noOne(String)
         var id: String {
             switch self {
             case .command(let c): return "c:" + c.name
             case .player(let cmd, let p): return "p:\(cmd):" + p.id
+            case .noOne(let label): return "n:" + label
             }
         }
     }
@@ -653,8 +655,17 @@ private struct ChatComposer: View {
         guard !arg.contains(" ") else { return [] }
         let targets = session.slashTargets(for: cmd)
         if targets.contains(where: { $0.name.caseInsensitiveCompare(arg) == .orderedSame }) { return [] }
-        return targets.filter { arg.isEmpty || $0.name.lowercased().hasPrefix(arg.lowercased()) }
+        var out: [SlashSuggestion] = targets
+            .filter { arg.isEmpty || $0.name.lowercased().hasPrefix(arg.lowercased()) }
             .map { .player(cmd, $0) }
+        // /vote: No One goes last when the meeting offers it.
+        if cmd == "vote", let m = session.villageMeeting, m.targets.contains("*") {
+            let label = m.noOneDisplayName ?? "No one"
+            if arg.isEmpty || label.lowercased().hasPrefix(arg.lowercased()) || "nl".hasPrefix(arg.lowercased()) {
+                out.append(.noOne(label))
+            }
+        }
+        return out
     }
 
     private func applySlash(_ item: SlashSuggestion) {
@@ -663,6 +674,10 @@ private struct ChatComposer: View {
             draft = "/" + c.name + (c.arg == .none ? "" : " ")
         case .player(let cmd, let p):
             draft = "/\(cmd) \(p.name) "
+        case .noOne:
+            // "nl" means No one, unless a player is literally named nl.
+            let nlIsPlayer = session.players.contains { $0.name.caseInsensitiveCompare("nl") == .orderedSame }
+            draft = nlIsPlayer ? "/vote " : "/vote nl"
         }
         session.slashHint = nil
     }
@@ -688,11 +703,17 @@ private struct ChatComposer: View {
                                 case .player(_, let p):
                                     UMAvatarView(player: p, size: 20)
                                     Text(p.name).font(.subheadline.weight(.semibold))
+                                case .noOne(let label):
+                                    Image(systemName: "nosign")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .frame(width: 20, height: 20)
+                                    Text(label).font(.subheadline.weight(.semibold))
                                 }
                             }
                             .lineLimit(1)
+                            .frame(minHeight: 20)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 6)
                             .background(UMTheme.card, in: Capsule())
                             .overlay(Capsule().stroke(UMTheme.line, lineWidth: 1))
                         }
@@ -732,13 +753,6 @@ private struct ChatComposer: View {
                                 Text(item.code)
                                     .font(.subheadline.weight(.semibold))
                                     .lineLimit(1)
-                                if item.isSticker {
-                                    Text("STICKER")
-                                        .font(.system(size: 9, weight: .heavy))
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(UMTheme.blood.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
-                                }
                             }
                             .frame(height: 20)
                             .padding(.horizontal, 10)
