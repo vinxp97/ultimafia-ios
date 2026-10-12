@@ -15,6 +15,12 @@ struct LobbyView: View {
                     }
                     section("Open", games: excludingSeated(app.openGames), empty: "No open games right now.")
                     section("In progress", games: excludingSeated(app.inProgressGames), empty: "Nothing in progress.")
+                    section("Finished", games: app.finishedGames, empty: "No finished games.")
+                    if app.finishedHasMore, !app.finishedGames.isEmpty {
+                        Button("Load more") { Task { await app.loadFinished(reset: false) } }
+                            .frame(maxWidth: .infinity)
+                            .tint(UMTheme.blood)
+                    }
                 }
                 .padding(16)
             }
@@ -27,6 +33,9 @@ struct LobbyView: View {
                 await RoleCatalog.shared.load()
                 await app.refreshLobby()
                 app.startPresence()
+            }
+            .fullScreenCover(item: Bindable(app).reviewItem) { item in
+                UMInAppBrowser(url: item.url, shareSiteSession: true) { app.reviewItem = nil }
             }
             .navigationDestination(for: AppModel.Route.self) { route in
                 switch route {
@@ -214,6 +223,9 @@ struct GameRow: View {
                         Button("Watch") { app.openGame(game, spectate: true) }
                             .buttonStyle(.bordered)
                     }
+                } else if game.isFinished {
+                    Button("Review") { app.reviewItem = UMBrowserItem(url: game.reviewURL) }
+                        .buttonStyle(.bordered)
                 } else {
                     Button("Spectate") { app.openGame(game, spectate: true) }
                         .buttonStyle(.bordered)

@@ -82,6 +82,12 @@ struct SetupInfo: Decodable, Hashable, Identifiable {
     }
 }
 
+/// Game types the app supports in each surface. Add Liars Dice, Secret Dictator, Wacky Words,
+/// Ghost here as the app learns them.
+enum UMGameTypes {
+    static let reviewable: Set<String> = ["Mafia"]
+}
+
 struct GameSummary: Decodable, Hashable, Identifiable {
     var id: String
     var type: String?
@@ -103,6 +109,8 @@ struct GameSummary: Decodable, Hashable, Identifiable {
 
     var playerCount: Int { players?.value ?? 0 }
     var setupTotal: Int { setup?.total?.value ?? 0 }
+    var isFinished: Bool { (status ?? "").caseInsensitiveCompare("Finished") == .orderedSame }
+    var reviewURL: URL { UMConfig.siteBase.appendingPathComponent("game/\(id)/review") }
     var isOpen: Bool { (status ?? "").caseInsensitiveCompare("Open") == .orderedSame }
     var isInProgress: Bool {
         let s = (status ?? "").lowercased()

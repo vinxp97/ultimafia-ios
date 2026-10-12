@@ -99,6 +99,21 @@ final class APIClient {
         }
     }
 
+    /// Finished games are cursor-paged by `endTime`: pass the oldest endTime seen as `last`.
+    func finishedGames(before last: Double?) async throws -> [GameSummary] {
+        var q = ["list": "finished", "lobby": "All"]
+        if let last { q["last"] = String(format: "%.0f", last) }
+        let data = try await request("GET", path: "game/list", query: q, body: nil)
+        guard let rows = try JSONSerialization.jsonObject(with: data) as? [Any] else {
+            throw UMError.message("Could not read finished games.")
+        }
+        return rows.compactMap { row in
+            guard JSONSerialization.isValidJSONObject(row),
+                  let rowData = try? JSONSerialization.data(withJSONObject: row) else { return nil }
+            return try? decoder.decode(GameSummary.self, from: rowData)
+        }
+    }
+
     func openCounts() async throws -> OpenCounts {
         try await get("game/openCounts")
     }

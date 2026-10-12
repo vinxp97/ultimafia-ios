@@ -10,6 +10,8 @@ struct UMBrowserItem: Identifiable, Hashable {
 
 struct UMInAppBrowser: View {
     let url: URL
+    /// Copy the app's ultimafia.com session cookies into the web view (e.g. game review needs login).
+    var shareSiteSession: Bool = false
     var onClose: () -> Void
 
     @State private var title = ""
@@ -51,7 +53,7 @@ struct UMInAppBrowser: View {
                         .zIndex(1)
                 }
                 #if canImport(WebKit)
-                UMBrowserWebView(url: url, title: $title, loading: $loading)
+                UMBrowserWebView(url: url, shareSiteSession: shareSiteSession, title: $title, loading: $loading)
                 #else
                 VStack(spacing: 12) {
                     Text("Can't open this page in-app.")
@@ -69,6 +71,7 @@ struct UMInAppBrowser: View {
 #if canImport(UIKit) && canImport(WebKit)
 private struct UMBrowserWebView: UIViewRepresentable {
     let url: URL
+    var shareSiteSession: Bool = false
     @Binding var title: String
     @Binding var loading: Bool
 
@@ -84,7 +87,18 @@ private struct UMBrowserWebView: UIViewRepresentable {
         web.allowsBackForwardNavigationGestures = true
         web.backgroundColor = .black
         web.isOpaque = false
-        web.load(URLRequest(url: url))
+        let request = URLRequest(url: url)
+        let siteHost = UMConfig.siteBase.host ?? "ultimafia.com"
+        if shareSiteSession, url.host == siteHost {
+            let cookies = (HTTPCookieStorage.shared.cookies ?? []).filter { siteHost.hasSuffix($0.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))) }
+            let store = config.websiteDataStore.httpCookieStore
+            Task { @MainActor in
+                for c in cookies { await store.setCookie(c) }
+                web.load(request)
+            }
+        } else {
+            web.load(request)
+        }
         return web
     }
 
@@ -123,6 +137,7 @@ private struct UMBrowserWebView: UIViewRepresentable {
 /// Non-UIKit platforms (macOS): open the link in the default browser instead of embedding it.
 private struct UMBrowserWebView: View {
     let url: URL
+    var shareSiteSession: Bool = false
     @Binding var title: String
     @Binding var loading: Bool
     @Environment(\.openURL) private var openURL

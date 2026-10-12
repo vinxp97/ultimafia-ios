@@ -11,6 +11,11 @@ final class AppModel {
     let lobby = "All"
     var openGames: [GameSummary] = []
     var inProgressGames: [GameSummary] = []
+    var finishedGames: [GameSummary] = []
+    var finishedHasMore = true
+    var reviewItem: UMBrowserItem?
+    @ObservationIgnored private var finishedCursor: Double?
+    @ObservationIgnored private var loadingFinished = false
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
@@ -138,6 +143,7 @@ final class AppModel {
         onlineUsers = []
         openGames = []
         inProgressGames = []
+        finishedGames = []
         path = []
     }
 
@@ -149,8 +155,31 @@ final class AppModel {
             openGames = (try await open).filter(\.isOpen)
             inProgressGames = try await progress
             onlineUsers = (try? await online) ?? onlineUsers
+            await loadFinished(reset: true)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadFinished(reset: Bool) async {
+        guard !loadingFinished else { return }
+        loadingFinished = true
+        defer { loadingFinished = false }
+        do {
+            let rows = try await APIClient.shared.finishedGames(before: reset ? nil : finishedCursor)
+            // Cursor from the raw page so filtered-out game types don't stall paging.
+            if let oldest = rows.compactMap(\.endTime).min() { finishedCursor = oldest }
+            let kept = rows.filter { UMGameTypes.reviewable.contains($0.type ?? "") }
+            if reset {
+                finishedGames = kept
+            } else {
+                let known = Set(finishedGames.map(\.id))
+                finishedGames += kept.filter { !known.contains($0.id) }
+            }
+            finishedHasMore = !rows.isEmpty
+        } catch {
+            if reset { finishedGames = [] }
+            finishedHasMore = false
         }
     }
 
