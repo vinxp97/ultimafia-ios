@@ -41,19 +41,20 @@ struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @State private var tab = "play"
     @State private var keyboardShown = false
+    @Namespace private var barNS
 
     private enum BarItem: String { case leave, back, youBack, lobby, game, create, you }
 
-    /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Lobby, Create, You.
-    /// Reviewing (Play tab): Back takes Leave's spot; seated keeps Game, else Create.
+    /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Host, Lobby, You.
+    /// Reviewing (Play tab): Back takes Leave's spot; seated keeps Game, else Host.
     private var items: [BarItem] {
         if tab == "you", !app.youPath.isEmpty {
-            return app.seatedGameId != nil ? [.youBack, .lobby, .game, .you] : [.youBack, .lobby, .create, .you]
+            return app.seatedGameId != nil ? [.youBack, .lobby, .game, .you] : [.youBack, .create, .lobby, .you]
         }
         if tab == "play", app.isOnReview {
-            return app.seatedGameId != nil ? [.back, .lobby, .game, .you] : [.back, .lobby, .create, .you]
+            return app.seatedGameId != nil ? [.back, .lobby, .game, .you] : [.back, .create, .lobby, .you]
         }
-        return app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.lobby, .create, .you]
+        return app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.create, .lobby, .you]
     }
 
     private var selected: BarItem {
@@ -130,16 +131,30 @@ struct MainTabs: View {
                             }
                         Text(title).font(.system(size: 10, weight: .medium))
                     }
-                    .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(on ? Color.accentColor : Color.primary.opacity(0.85))
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 6).padding(.bottom, 2)
-                    .contentShape(Rectangle())
+                    .padding(.vertical, 7)
+                    .background {
+                        // Selected pill inside the glass capsule, like the system iOS 26 tab bar.
+                        if on {
+                            Capsule().fill(Color.white.opacity(0.12))
+                                .matchedGeometryEffect(id: "umSelectedTab", in: barNS)
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .background(UMTheme.card.ignoresSafeArea(edges: .bottom))
+        .padding(4)
+        .animation(.snappy(duration: 0.25), value: selected)
+        .animation(.snappy(duration: 0.25), value: items)
+        // iOS 26 Liquid Glass (deployment target is 26.5, so no material fallback is needed).
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
     var body: some View {
@@ -160,6 +175,7 @@ struct MainTabs: View {
                 }
             }
             .animation(.snappy(duration: 0.28), value: showBar)
+            .background(UMTheme.bg.ignoresSafeArea())
             // Signed-in shell settled: warm Z's profile (credits link) at low priority.
             .task {
                 try? await Task.sleep(for: .seconds(8))
