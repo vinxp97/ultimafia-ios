@@ -66,7 +66,7 @@ struct UMInAppBrowser: View {
     }
 }
 
-#if canImport(WebKit)
+#if canImport(UIKit) && canImport(WebKit)
 private struct UMBrowserWebView: UIViewRepresentable {
     let url: URL
     @Binding var title: String
@@ -116,6 +116,26 @@ private struct UMBrowserWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             loading.wrappedValue = false
+        }
+    }
+}
+#else
+/// Non-UIKit platforms (macOS): open the link in the default browser instead of embedding it.
+private struct UMBrowserWebView: View {
+    let url: URL
+    @Binding var title: String
+    @Binding var loading: Bool
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Opening in your browser…").foregroundStyle(.secondary)
+            Button("Open Link") { openURL(url) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            loading = false
+            openURL(url)
         }
     }
 }
