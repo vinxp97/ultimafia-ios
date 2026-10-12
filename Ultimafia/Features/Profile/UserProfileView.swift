@@ -30,28 +30,10 @@ struct UserProfileView: View {
             }
         }
         .background(pageBackground)
-        .navigationTitle(displayName)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .toolbar(.visible, for: .navigationBar)
-        .toolbarBackground(UMTheme.card, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    if !app.path.isEmpty { app.path.removeLast() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                }
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                        app.path.removeAll()
-                    }
-                )
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
         .environment(\.openURL, OpenURLAction { url in
             let scheme = (url.scheme ?? "").lowercased()

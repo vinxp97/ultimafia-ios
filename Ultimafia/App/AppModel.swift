@@ -43,6 +43,35 @@ final class AppModel {
         return false
     }
 
+    /// True while a user profile is on top of the Play stack.
+    var isOnProfile: Bool {
+        if case .profile = path.last { return true }
+        return false
+    }
+
+    /// Replace the Play stack. Swapping a pushed screen for a different destination in a single
+    /// path write makes NavigationStack pop and push at once, which leaves a blank page; so pop
+    /// to the lobby first and push the new route on the next run loop.
+    func setPlayPath(_ newPath: [Route]) {
+        guard !path.isEmpty, path.first != newPath.first else { path = newPath; return }
+        path.removeAll()
+        guard !newPath.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.path.isEmpty else { return }
+            self.path = newPath
+        }
+    }
+
+    /// Fake "Lobby" tab on profile pages.
+    func goToLobby() {
+        path.removeAll()
+    }
+
+    /// Leaving the Play tab from a profile drops the profile pages so they don't linger.
+    func dropProfiles() {
+        while case .profile = path.last { path.removeLast() }
+    }
+
     var mentionBadge: Int {
         (seatedGameId != nil && game != nil && !isViewingGame) ? mentionCount : 0
     }
@@ -58,7 +87,7 @@ final class AppModel {
                 resumeSeatedGame()
             }
         } else if path.last != .setupSearch {
-            path = [.setupSearch]
+            setPlayPath([.setupSearch])
         }
     }
 
@@ -231,7 +260,7 @@ final class AppModel {
 
     func resumeGame(_ id: String, spectate: Bool = false) {
         if let session = game, session.gameId == id, session.spectate == spectate {
-            path = [.game(id, spectate: spectate)]
+            setPlayPath([.game(id, spectate: spectate)])
             if !session.connected, !session.finished {
                 Task { await session.start() }
             }
@@ -249,7 +278,7 @@ final class AppModel {
         }
         mentionCount = 0
         game = session
-        path = [.game(id, spectate: spectate)]
+        setPlayPath([.game(id, spectate: spectate)])
         Task { await session.start() }
     }
 

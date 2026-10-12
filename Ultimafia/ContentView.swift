@@ -47,6 +47,8 @@ struct MainTabs: View {
             get: { tab },
             set: { new in
                 if new == "play", tab == "play" { app.playTabReselected(); return }
+                if new == "lobby" { app.goToLobby(); tab = "play"; return }
+                if new != "play", new != "leave", tab == "play", app.isOnProfile { app.dropProfiles() }
                 guard new == "leave" else { tab = new; return }
                 if let session = app.game {
                     if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
@@ -57,6 +59,7 @@ struct MainTabs: View {
 
     private var playLabel: (title: String, icon: String) {
         guard app.seatedGameId != nil else { return ("Create", "plus.circle") }
+        if app.isOnProfile { return ("Game", "gamecontroller") }
         return app.isOnGameScreen ? ("Lobby", "list.bullet.rectangle") : ("Game", "gamecontroller")
     }
 
@@ -68,6 +71,11 @@ struct MainTabs: View {
                         .tabItem { Label("Leave", systemImage: "arrow.left") }
                         .tag("leave")
                         .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
+                }
+                if app.isOnProfile {
+                    Color.clear
+                        .tabItem { Label("Lobby", systemImage: "list.bullet.rectangle") }
+                        .tag("lobby")
                 }
                 LobbyView()
                     .tabItem { Label(playLabel.title, systemImage: playLabel.icon) }
