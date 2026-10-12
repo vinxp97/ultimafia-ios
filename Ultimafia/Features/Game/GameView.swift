@@ -62,7 +62,7 @@ private struct GameScreen: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.visible, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
