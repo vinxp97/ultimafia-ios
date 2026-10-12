@@ -13,8 +13,8 @@ struct LobbyView: View {
                     if app.isOnLobbyWhileSeated {
                         seatedBanner
                     }
-                    section("Open", games: app.openGames, empty: "No open games in this lobby.")
-                    section("In progress", games: app.inProgressGames, empty: "Nothing in progress.")
+                    section("Open", games: excludingSeated(app.openGames), empty: "No open games in this lobby.")
+                    section("In progress", games: excludingSeated(app.inProgressGames), empty: "Nothing in progress.")
                 }
                 .padding(16)
             }
@@ -121,6 +121,12 @@ struct LobbyView: View {
                 }
             }
         }
+    }
+
+    /// The seated game is pinned in the banner up top, so don't list it again below.
+    private func excludingSeated(_ games: [GameSummary]) -> [GameSummary] {
+        guard app.isOnLobbyWhileSeated, let id = app.seatedGameId else { return games }
+        return games.filter { $0.id != id }
     }
 
     private var seatedBanner: some View {
