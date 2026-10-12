@@ -83,6 +83,9 @@ private struct GameScreen: View {
             if displaced { onDetach() }
         }
         .task { await RoleCatalog.shared.load() }
+        // Entering a game or review collapses the bottom bar, like tapping Hide; restore it on the way out.
+        .onAppear { app.hideAppTabs = true }
+        .onDisappear { app.hideAppTabs = false }
     }
 
     private var errorBinding: Binding<Bool> {
