@@ -90,7 +90,7 @@ struct UMPlayerModerationBar: View {
         }
     }
 
-    private var content: some View {
+    @ViewBuilder private var content: some View {
         let blocked = app.isBlocked(player.userId)
         HStack(spacing: 10) {
             Button { showReport = true } label: {
