@@ -161,6 +161,7 @@ struct LobbyView: View {
                 eventsPerSet: session.setupEventsPerSet,
                 grouped: session.setupGrouped,
                 groupSizes: session.setupGroupSizes,
+                banishedPerSet: session.setupBanishedPerSet,
                 currentIndex: session.setupRolesetIndex
             )
         } else if let setup = app.seatedGameSummary?.setup {
@@ -272,7 +273,8 @@ struct LobbySetupStrip: View {
             events: bundle.events,
             eventsPerSet: bundle.eventsPerSet,
             grouped: bundle.grouped,
-            groupSizes: bundle.groupSizes
+            groupSizes: bundle.groupSizes,
+            banishedPerSet: bundle.banishedPerSet
         )
     }
 }

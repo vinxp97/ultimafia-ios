@@ -67,6 +67,8 @@ enum SetupRoleParse {
     struct Bundle {
         var rolesets: [[SetupRole]]
         var banished: [SetupRole]
+        /// Banished roles per roleset/role group (web pulls them into one pool; groups keep their slot).
+        var banishedPerSet: [[SetupRole]] = []
         var events: [SetupRole] = []
         var eventsPerSet: [[SetupRole]] = []
         /// Closed setups with `useRoleGroups`: each roleset is a group of `groupSizes[i]` slots.
@@ -111,7 +113,8 @@ enum SetupRoleParse {
             }
         }
         func sorted(_ map: [String: Int]) -> [SetupRole] {
-            map.map { SetupRole(raw: $0.key, count: $0.value) }.sorted { $0.name < $1.name }
+            map.map { SetupRole(raw: $0.key, count: $0.value) }
+                .sorted { $0.name != $1.name ? $0.name < $1.name : $0.raw < $1.raw }
         }
 
         var blob: Any? = rolesBlob
@@ -127,15 +130,18 @@ enum SetupRoleParse {
         var banishedMap: [String: Int] = [:]
         var eventMap: [String: Int] = [:]
         var eventsPerSet: [[SetupRole]] = []
+        var banishedPerSet: [[SetupRole]] = []
         var rolesets: [[SetupRole]] = []
         for dict in dicts {
             var map: [String: Int] = [:]
             var setEvents: [String: Int] = [:]
+            var setBanished: [String: Int] = [:]
             for (k, v) in dict {
                 let n = countVal(v)
                 guard n > 0 else { continue }
                 if isBanished(k) {
                     banishedMap[k, default: 0] += n
+                    setBanished[k, default: 0] += n
                 } else if isEvent(k) {
                     setEvents[k, default: 0] += n
                     eventMap[k, default: 0] += n
@@ -145,6 +151,7 @@ enum SetupRoleParse {
             }
             rolesets.append(sorted(map))
             eventsPerSet.append(sorted(setEvents))
+            banishedPerSet.append(sorted(setBanished))
         }
         let banished = sorted(banishedMap)
         let events = sorted(eventMap)
@@ -158,11 +165,12 @@ enum SetupRoleParse {
             return Bundle(rolesets: [roles], banished: banished, events: events, eventsPerSet: [events])
         }
 
-        if rolesets.isEmpty { rolesets = [[]]; eventsPerSet = [[]] }
+        if rolesets.isEmpty { rolesets = [[]]; eventsPerSet = [[]]; banishedPerSet = [[]] }
         let grouped = closed && useRoleGroups
         return Bundle(
             rolesets: rolesets,
             banished: banished,
+            banishedPerSet: banishedPerSet,
             events: events,
             eventsPerSet: eventsPerSet,
             grouped: grouped,
@@ -244,6 +252,7 @@ struct SetupPreviewStrip: View {
     var eventsPerSet: [[SetupRole]] = []
     var grouped: Bool = false
     var groupSizes: [Int] = []
+    var banishedPerSet: [[SetupRole]] = []
     /// Roleset index owned by the caller (in-game cycling); otherwise the strip cycles locally.
     var currentIndex: Int? = nil
 
@@ -278,20 +287,35 @@ struct SetupPreviewStrip: View {
     }
 
     private func size(_ i: Int) -> Int {
-        groupSizes.indices.contains(i) ? groupSizes[i] : rolesets[i].reduce(0) { $0 + $1.count }
+        if groupSizes.indices.contains(i) { return groupSizes[i] }
+        guard rolesets.indices.contains(i) else { return 0 }
+        return rolesets[i].reduce(0) { $0 + $1.count }
     }
 
-    /// Web labels multi-role groups A, B, C… in order, skipping single-role groups.
+    private func banishedIn(_ i: Int) -> [SetupRole] {
+        banishedPerSet.indices.contains(i) ? banishedPerSet[i] : []
+    }
+
+    /// Web Setup.jsx: every role group keeps its slot and size; multi-role (and empty) groups get
+    /// letters A, B, C… in order, single-role groups show that role's icon. A group made up only
+    /// of Banished roles (web leaves it as an empty lettered group) shows as a labelled
+    /// Banished group listing its roles.
     private var groupItems: [RoleGroupSelection] {
         var letter = 0
         var out: [RoleGroupSelection] = []
-        for (i, set) in rolesets.enumerated() where !set.isEmpty {
-            if set.count == 1 {
+        func nextLabel() -> String {
+            defer { letter += 1 }
+            return SetupRoleParse.groupLabels[min(letter, SetupRoleParse.groupLabels.count - 1)]
+        }
+        for (i, set) in rolesets.enumerated() {
+            let ban = banishedIn(i)
+            if set.isEmpty && ban.isEmpty { continue }
+            if set.isEmpty {
+                out.append(RoleGroupSelection(index: i, label: nextLabel(), size: size(i), roles: ban, banishedOnly: true))
+            } else if set.count == 1 {
                 out.append(RoleGroupSelection(index: i, label: nil, size: size(i), roles: set))
             } else {
-                let label = SetupRoleParse.groupLabels[min(letter, SetupRoleParse.groupLabels.count - 1)]
-                letter += 1
-                out.append(RoleGroupSelection(index: i, label: label, size: size(i), roles: set))
+                out.append(RoleGroupSelection(index: i, label: nextLabel(), size: size(i), roles: set))
             }
         }
         return out
@@ -330,7 +354,7 @@ struct SetupPreviewStrip: View {
                                 } label: {
                                     HStack(spacing: 4) {
                                         if let label = item.label {
-                                            RoleGroupBadge(label: label, size: iconSize)
+                                            RoleGroupBadge(label: label, size: iconSize, banished: item.banishedOnly)
                                         } else if let only = item.roles.first {
                                             RoleIconView(role: only.raw, gameType: gameType, size: iconSize)
                                         }
@@ -338,7 +362,7 @@ struct SetupPreviewStrip: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(item.label.map { "Role group \($0), \(item.size) slots" } ?? (item.roles.first?.name ?? ""))
+                                .accessibilityLabel(item.label.map { "Role group \($0)\(item.banishedOnly ? ", Banished" : ""), \(item.size) slots" } ?? (item.roles.first?.name ?? ""))
                             }
                         } else {
                             ForEach(roles) { role in
@@ -366,7 +390,10 @@ struct SetupPreviewStrip: View {
                             Button {
                                 showBanished = true
                             } label: {
-                                poolIcon(RoleArt.banishedPoolURL, fallback: "person.crop.circle.badge.xmark")
+                                HStack(spacing: 4) {
+                                    poolIcon(RoleArt.banishedPoolURL, fallback: "person.crop.circle.badge.xmark")
+                                    countText(banished.reduce(0) { $0 + $1.count }, force: false)
+                                }
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Banished pool")
@@ -382,7 +409,7 @@ struct SetupPreviewStrip: View {
             }
             .sheet(item: $selectedGroup) { item in
                 RolePoolSheet(
-                    title: "Group \(item.label ?? "") · \(item.size) \(item.size == 1 ? "slot" : "slots")",
+                    title: "Group \(item.label ?? "")\(item.banishedOnly ? " · Banished" : "") · \(item.size) \(item.size == 1 ? "slot" : "slots")",
                     gameType: gameType,
                     roles: item.roles,
                     otherRoles: otherRoles
@@ -426,6 +453,7 @@ struct RoleGroupSelection: Identifiable, Hashable {
     var label: String?
     var size: Int
     var roles: [SetupRole]
+    var banishedOnly = false
     var id: Int { index }
 }
 
@@ -433,6 +461,8 @@ struct RoleGroupSelection: Identifiable, Hashable {
 struct RoleGroupBadge: View {
     var label: String
     var size: CGFloat
+    /// Banished-only group: magenta outline like the web's Banished RoleBox.
+    var banished = false
 
     var body: some View {
         Text(label)
@@ -440,7 +470,8 @@ struct RoleGroupBadge: View {
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(RoundedRectangle(cornerRadius: 4).fill(UMTheme.elevated))
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(UMTheme.muted.opacity(0.6), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 4)
+                .stroke(banished ? Color(red: 1, green: 0, blue: 1) : UMTheme.muted.opacity(0.6), lineWidth: banished ? 1.5 : 1))
     }
 }
 
@@ -507,6 +538,7 @@ struct SetupRoleStrip: View {
             eventsPerSet: session.setupEventsPerSet,
             grouped: session.setupGrouped,
             groupSizes: session.setupGroupSizes,
+            banishedPerSet: session.setupBanishedPerSet,
             currentIndex: session.setupRolesetIndex
         )
     }

@@ -226,6 +226,7 @@ final class GameSession {
     var setupRolesets: [[SetupRole]] = []
     var setupRolesetIndex = 0
     var setupBanished: [SetupRole] = []
+    var setupBanishedPerSet: [[SetupRole]] = []
     var setupEvents: [SetupRole] = []
     var setupEventsPerSet: [[SetupRole]] = []
     var setupGrouped = false
@@ -2256,6 +2257,7 @@ final class GameSession {
         setupRolesetIndex = 0
         setupRoles = bundle.rolesets.first ?? []
         setupBanished = bundle.banished
+        setupBanishedPerSet = bundle.banishedPerSet
         setupEvents = bundle.events
         setupEventsPerSet = bundle.eventsPerSet
         setupGrouped = bundle.grouped

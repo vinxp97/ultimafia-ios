@@ -686,7 +686,9 @@ enum RoleArt {
         if let local = Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension) {
             return local
         }
-        return assetURL(path)
+        // Not bundled (added to the site after this build): load from the CDN.
+        // (Previously this called itself, recursing until the stack overflowed.)
+        return URL(string: cdn + path)
     }
 
     static var eventPoolURL: URL? {
