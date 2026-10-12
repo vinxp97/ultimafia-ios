@@ -347,8 +347,8 @@ final class AppModel {
             async let progress = APIClient.shared.gameList(list: "in progress", lobby: lobby)
             async let online = APIClient.shared.onlineUsers()
             let me = user?.id
-            openGames = (try await open).filter { $0.isOpen && $0.isReviewVisible(to: me) }
-            inProgressGames = (try await progress).filter { $0.isReviewVisible(to: me) }
+            openGames = (try await open).filter { $0.isOpen && $0.isReviewVisible(to: me) && !hostIsBlocked($0) }
+            inProgressGames = (try await progress).filter { $0.isReviewVisible(to: me) && !hostIsBlocked($0) }
             onlineUsers = (try? await online) ?? onlineUsers
             await loadFinished(reset: true)
         } catch {
@@ -405,7 +405,23 @@ final class AppModel {
         if case .review = path.last { path.removeLast() }
     }
 
+    /// Blocker side: hide games hosted by someone on your blockedUsers (GET user/info).
+    /// The blockee side needs a server field (no blockedBy exists yet).
+    func hostIsBlocked(_ summary: GameSummary) -> Bool {
+        isBlocked(summary.hostId)
+    }
+
+    /// Re-apply the block filter after a block/unblock without refetching.
+    func applyBlockFilterToLobby() {
+        openGames.removeAll { hostIsBlocked($0) }
+        inProgressGames.removeAll { hostIsBlocked($0) }
+    }
+
     func openGame(_ summary: GameSummary, spectate: Bool = false) {
+        guard !hostIsBlocked(summary) else {
+            errorMessage = "You blocked this game's host."
+            return
+        }
         resumeGame(summary.id, spectate: spectate)
     }
 

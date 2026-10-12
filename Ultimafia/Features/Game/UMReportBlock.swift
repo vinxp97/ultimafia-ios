@@ -43,6 +43,7 @@ enum UMModeration {
         if let i = list.firstIndex(of: userId) { list.remove(at: i) } else { list.append(userId) }
         u.blockedUsers = list
         app.user = u
+        app.applyBlockFilterToLobby()
     }
 }
 
