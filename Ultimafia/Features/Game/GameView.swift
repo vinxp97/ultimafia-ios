@@ -381,29 +381,31 @@ private struct ChatComposer: View {
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.2)) { context in
-            let cooling = (session.speakCooldownUntil ?? .distantPast) > context.date
-            VStack(alignment: .leading, spacing: 6) {
-            if !cooling, !nameSuggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(nameSuggestions, id: \.self) { name in
-                            Button { applySuggestion(name) } label: {
-                                Text(name)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(UMTheme.card, in: Capsule())
-                                    .overlay(Capsule().stroke(UMTheme.line, lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.white)
+        VStack(spacing: 0) {
+        if !session.isSpeakCoolingDown, !nameSuggestions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(nameSuggestions, id: \.self) { name in
+                        Button { applySuggestion(name) } label: {
+                            Text(name)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(UMTheme.card, in: Capsule())
+                                .overlay(Capsule().stroke(UMTheme.line, lineWidth: 1))
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
                     }
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
+            .background(UMTheme.elevated)
+        }
+        TimelineView(.periodic(from: .now, by: 0.2)) { context in
+            let cooling = (session.speakCooldownUntil ?? .distantPast) > context.date
             HStack(alignment: .center, spacing: 8) {
                 Button {
                     session.cycleSpeechOption()
@@ -448,8 +450,6 @@ private struct ChatComposer: View {
                     .disabled(cooling || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .tint(UMTheme.blood)
             }
-            }
-            .animation(.easeOut(duration: 0.15), value: nameSuggestions)
             .padding(10)
             .background(UMTheme.elevated)
             .onChange(of: cooling) { _, nowCooling in
@@ -464,6 +464,7 @@ private struct ChatComposer: View {
                     savedDraft = ""
                 }
             }
+        }
         }
         .bindKeyboardExpanded($keyboardExpanded)
     }
