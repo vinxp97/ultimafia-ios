@@ -1200,7 +1200,18 @@ private struct ChatRow: View {
 
 private struct GameTownPane: View {
     var session: GameSession
+    @Environment(AppModel.self) private var app
     @State private var pickingPlayerId: String?
+    /// Post-game only: the row whose Report/Block bar is open.
+    @State private var moderatingPlayerId: String?
+
+    /// Ended game still on screen, or a review; never yourself or anonymous (no userId) players.
+    private func canModerate(_ player: GamePlayer) -> Bool {
+        guard session.finished || session.isReview, let uid = player.userId, !uid.isEmpty else { return false }
+        if player.id == session.selfId { return false }
+        if let me = app.user?.id, me == uid { return false }
+        return true
+    }
 
     var body: some View {
         List {
@@ -1233,6 +1244,16 @@ private struct GameTownPane: View {
     }
 
     private func townRow(_ player: GamePlayer, dead: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            townRowContent(player, dead: dead)
+            if moderatingPlayerId == player.id && canModerate(player) {
+                UMPlayerModerationBar(player: player, gameId: session.gameId)
+            }
+        }
+        .listRowBackground(UMTheme.card)
+    }
+
+    private func townRowContent(_ player: GamePlayer, dead: Bool) -> some View {
         HStack(spacing: 10) {
             if session.isGameInProgress {
                 RoleGuessBadge(session: session, player: player) {
@@ -1261,8 +1282,16 @@ private struct GameTownPane: View {
                 }
             }
             Spacer()
+            if canModerate(player) {
+                Image(systemName: moderatingPlayerId == player.id ? "chevron.up" : "ellipsis")
+                    .foregroundStyle(UMTheme.muted)
+            }
         }
-        .listRowBackground(UMTheme.card)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard canModerate(player) else { return }
+            withAnimation(.snappy) { moderatingPlayerId = moderatingPlayerId == player.id ? nil : player.id }
+        }
     }
 
     private var pickingBinding: Binding<Bool> {
