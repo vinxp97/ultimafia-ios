@@ -73,6 +73,7 @@ struct EmoteText: View {
         let text: String?
         let url: URL?
         let large: Bool
+        var sticker: Bool = false
         let player: GamePlayer?
         let role: String?
     }
@@ -115,7 +116,7 @@ struct EmoteText: View {
             }
             .buttonStyle(.plain)
         } else if let url = piece.url {
-            AnimatedWebPView(url: url, showsPlaceholder: false, fitHeight: piece.large ? 28 : emoteSize)
+            AnimatedWebPView(url: url, showsPlaceholder: false, fitHeight: piece.sticker ? Self.stickerHeight : (piece.large ? 28 : emoteSize))
                 .fixedSize()
         } else {
             Text(piece.text ?? "")
@@ -145,7 +146,7 @@ struct EmoteText: View {
                 out.append(Piece(id: out.count, text: nil, url: nil, large: false, player: player, role: nil))
             } else if let url = mediaURL(for: word) {
                 flush()
-                out.append(Piece(id: out.count, text: nil, url: url, large: emoteOnly, player: nil, role: nil))
+                out.append(Piece(id: out.count, text: nil, url: url, large: emoteOnly, sticker: isSticker(word), player: nil, role: nil))
             } else {
                 if !buffer.isEmpty { buffer += " " }
                 buffer += word
@@ -182,6 +183,21 @@ struct EmoteText: View {
         let lower = name.lowercased()
         let hits = players.filter { $0.name.lowercased() == lower }
         return hits.count == 1 ? hits[0] : nil
+    }
+
+    /// About three lines of chat body text.
+    static var stickerHeight: CGFloat {
+        #if canImport(UIKit)
+        return (UIFont.preferredFont(forTextStyle: .body).lineHeight * 3).rounded()
+        #else
+        return 60
+        #endif
+    }
+
+    /// Site emotes win over stickers (matches web), so only a non-site token found in stickers counts.
+    private func isSticker(_ word: String) -> Bool {
+        let token = word.lowercased()
+        return !system && UMSiteEmote.url(forToken: token) == nil && customStickers[token] != nil
     }
 
     private func mediaURL(for word: String) -> URL? {

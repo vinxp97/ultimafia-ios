@@ -488,7 +488,57 @@ private struct ChatComposer: View {
     var chatFocused: FocusState<Bool>.Binding
     @State private var savedDraft = ""
     @AppStorage("um.showNameAutofill") private var showTabButton = true
+    @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
+    @Environment(AppModel.self) private var app
     @State private var keyboardExpanded = false
+
+    private struct MediaSuggestion: Identifiable {
+        var id: String { (isSticker ? "s" : "e") + code }
+        let code: String
+        let url: URL
+        let isSticker: Bool
+    }
+
+    /// Current word when it looks like `:x...` (colon then at least one letter).
+    private var colonToken: (query: String, range: Range<String.Index>)? {
+        guard let last = draft.last, !last.isWhitespace, !draft.hasPrefix("/") else { return nil }
+        let start = draft.lastIndex(where: { $0.isWhitespace }).map { draft.index(after: $0) } ?? draft.startIndex
+        let word = draft[start...]
+        guard word.hasPrefix(":"), word.count >= 2, word.dropFirst().first?.isLetter == true else { return nil }
+        var q = String(word.dropFirst()).lowercased()
+        if q.hasSuffix(":") { q.removeLast() }
+        return (q, start..<draft.endIndex)
+    }
+
+    /// Own custom emotes and stickers only. API data first, in-game self player maps as fallback.
+    private var mediaSuggestions: [MediaSuggestion] {
+        guard showEmoteAutocomplete, chatFocused.wrappedValue, let t = colonToken else { return [] }
+        let me = app.user?.id
+        let selfPlayer = me.flatMap { id in session.players.first { $0.userId == id || $0.id == id } }
+        let emotes = app.myCustomEmotes.isEmpty ? (selfPlayer?.customEmotes ?? [:]) : app.myCustomEmotes
+        let stickers = app.myCustomStickers.isEmpty ? (selfPlayer?.customStickers ?? [:]) : app.myCustomStickers
+        func ranked(_ map: [String: String], sticker: Bool) -> [MediaSuggestion] {
+            let items = map.compactMap { code, path -> (String, URL)? in
+                guard let url = UMMediaURL.resolve(path) else { return nil }
+                let bare = code.trimmingCharacters(in: CharacterSet(charactersIn: ":")).lowercased()
+                return bare.contains(t.query) ? (code, url) : nil
+            }
+            let bare: (String) -> String = { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":")).lowercased() }
+            return items.sorted { a, b in
+                let pa = bare(a.0).hasPrefix(t.query), pb = bare(b.0).hasPrefix(t.query)
+                return pa != pb ? pa : a.0 < b.0
+            }.map { MediaSuggestion(code: $0.0, url: $0.1, isSticker: sticker) }
+        }
+        return ranked(emotes, sticker: false) + ranked(stickers, sticker: true)
+    }
+
+    private func applyMedia(_ item: MediaSuggestion) {
+        guard let t = colonToken else { return }
+        var next = draft
+        next.replaceSubrange(t.range, with: item.code + " ")
+        draft = String(next.prefix(UMConfig.maxChatLength))
+        session.noteTyping()
+    }
 
     /// Last word of the draft (cursor is assumed at the end), keeping any leading @ or %.
     private var nameToken: (prefix: String, query: String, range: Range<String.Index>)? {
@@ -502,7 +552,7 @@ private struct ChatComposer: View {
     }
 
     private var nameSuggestions: [String] {
-        guard showTabButton, chatFocused.wrappedValue, let t = nameToken else { return [] }
+        guard showTabButton, chatFocused.wrappedValue, colonToken == nil, let t = nameToken else { return [] }
         var seen = Set<String>()
         return session.players.map(\.name).filter { name in
             name.lowercased().hasPrefix(t.query.lowercased())
@@ -521,7 +571,42 @@ private struct ChatComposer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if !session.isSpeakCoolingDown, !nameSuggestions.isEmpty {
+        let media = session.isSpeakCoolingDown ? [] : mediaSuggestions
+        if !media.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(media) { item in
+                        Button { applyMedia(item) } label: {
+                            HStack(spacing: 5) {
+                                AnimatedWebPView(url: item.url, showsPlaceholder: false, fitHeight: 20)
+                                    .fixedSize()
+                                Text(item.code)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                if item.isSticker {
+                                    Text("STICKER")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(UMTheme.blood.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                                }
+                            }
+                            .frame(height: 20)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(UMTheme.card, in: Capsule())
+                            .overlay(Capsule().stroke(item.isSticker ? UMTheme.blood.opacity(0.7) : UMTheme.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .accessibilityLabel(item.isSticker ? "Sticker \(item.code)" : "Emote \(item.code)")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .background(UMTheme.elevated)
+        } else if !session.isSpeakCoolingDown, !nameSuggestions.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(nameSuggestions, id: \.self) { name in

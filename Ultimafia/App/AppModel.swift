@@ -24,6 +24,9 @@ final class AppModel {
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
+    /// The signed-in user's own custom emotes/stickers (`:name:` -> media path), loaded once per session.
+    var myCustomEmotes: [String: String] = [:]
+    var myCustomStickers: [String: String] = [:]
     /// Set when returning to the seated game from the lobby (vs. a fresh join/review).
     var resumingFromLobby = false
     var showLeaveConfirm = false
@@ -134,6 +137,7 @@ final class AppModel {
             if info.id != nil {
                 user = info
                 startPresence()
+                Task { await self.loadMyCustomMedia() }
                 await refreshLobby()
                 resumeIfSeated()
             }
@@ -150,6 +154,7 @@ final class AppModel {
             guard info.id != nil else { throw UMError.message("Check your email to verify the account, then sign in.") }
             self.user = info
             self.startPresence()
+            Task { await self.loadMyCustomMedia() }
             if remember {
                 RememberedLogin.save(email: email, password: password)
             } else {
@@ -158,6 +163,22 @@ final class AppModel {
             await self.refreshLobby()
             self.resumeIfSeated()
         }
+    }
+
+    /// GET user/settings/data returns `customEmotes` / `customStickers` keyed by `:name:`.
+    func loadMyCustomMedia() async {
+        guard let data = try? await APIClient.shared.request("GET", path: "user/settings/data", query: [:], body: nil),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        func map(_ any: Any?) -> [String: String] {
+            guard let dict = any as? [String: Any] else { return [:] }
+            var out: [String: String] = [:]
+            for (key, value) in dict {
+                if let path = (value as? [String: Any])?["path"] as? String { out[key.lowercased()] = path }
+            }
+            return out
+        }
+        myCustomEmotes = map(obj["customEmotes"])
+        myCustomStickers = map(obj["customStickers"])
     }
 
     func signUp(email: String, password: String) async {
@@ -172,6 +193,8 @@ final class AppModel {
         stopPresence()
         await APIClient.shared.logout()
         user = nil
+        myCustomEmotes = [:]
+        myCustomStickers = [:]
         onlineUsers = []
         openGames = []
         inProgressGames = []
