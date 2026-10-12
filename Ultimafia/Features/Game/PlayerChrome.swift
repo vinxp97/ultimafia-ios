@@ -151,6 +151,8 @@ final class UMImageCache: @unchecked Sendable {
 struct AnimatedWebPView: View {
     let url: URL
     var showsPlaceholder: Bool = true
+    /// When set, renders at this height with width from the image's own aspect ratio (emotes).
+    var fitHeight: CGFloat? = nil
     @State private var frames: [UMPlatformImage] = []
     @State private var delays: [Double] = []
     @State private var index = 0
@@ -158,9 +160,18 @@ struct AnimatedWebPView: View {
     var body: some View {
         Group {
             if let image = frames.indices.contains(index) ? frames[index] : frames.first {
-                platformImage(image)
-                    .resizable()
-                    .scaledToFill()
+                if let h = fitHeight {
+                    platformImage(image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: h * Self.aspect(image), height: h)
+                } else {
+                    platformImage(image)
+                        .resizable()
+                        .scaledToFill()
+                }
+            } else if let h = fitHeight {
+                Color.clear.frame(width: h, height: h)
             } else if showsPlaceholder {
                 ProgressView().scaleEffect(0.6)
             } else {
@@ -177,6 +188,12 @@ struct AnimatedWebPView: View {
                 }
             }
         }
+    }
+
+    private static func aspect(_ image: UMPlatformImage) -> CGFloat {
+        let sz = image.size
+        guard sz.width > 0, sz.height > 0 else { return 1 }
+        return sz.width / sz.height
     }
 
     private func load() async {

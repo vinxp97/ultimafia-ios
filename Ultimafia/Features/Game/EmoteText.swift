@@ -115,9 +115,8 @@ struct EmoteText: View {
             }
             .buttonStyle(.plain)
         } else if let url = piece.url {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
-                .frame(width: piece.large ? 28 : emoteSize, height: piece.large ? 28 : emoteSize)
-                .clipped()
+            AnimatedWebPView(url: url, showsPlaceholder: false, fitHeight: piece.large ? 28 : emoteSize)
+                .fixedSize()
         } else {
             Text(piece.text ?? "")
                 .font(italic ? .body.italic() : .body)

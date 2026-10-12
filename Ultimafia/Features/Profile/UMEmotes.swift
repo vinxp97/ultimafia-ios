@@ -232,9 +232,8 @@ struct UMEmoteView: View {
 
     var body: some View {
         if let url = resolvedURL {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
-                .frame(width: size, height: size)
-                .clipped()
+            AnimatedWebPView(url: url, showsPlaceholder: false, fitHeight: size)
+                .fixedSize()
         } else {
             Text(token)
         }
@@ -327,7 +326,8 @@ func umHexColor(_ s: String) -> Color? {
 }
 
 /// Emote bitmaps sized for inline `Text(Image)`, so emotes flow and wrap with the text.
-/// Returns a transparent placeholder of the same size until the download lands (no reflow).
+/// Height is fixed; width follows the image's own aspect ratio. Until the download lands a
+/// square transparent placeholder is returned, and the view re-lays out once the image arrives.
 @MainActor @Observable
 final class UMInlineEmoteCache {
     static let shared = UMInlineEmoteCache()
@@ -352,12 +352,10 @@ final class UMInlineEmoteCache {
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               let source = UIImage(data: data) else { return }
         let side = Self.side
-        let scale = min(side / max(source.size.width, 1), side / max(source.size.height, 1))
-        let size = CGSize(width: source.size.width * scale, height: source.size.height * scale)
-        let canvas = CGSize(width: side, height: side)
-        images[url] = UIGraphicsImageRenderer(size: canvas).image { _ in
-            source.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2,
-                                   width: size.width, height: size.height))
+        let w = max(source.size.width, 1), h = max(source.size.height, 1)
+        let size = CGSize(width: (side * w / h).rounded(.up), height: side)
+        images[url] = UIGraphicsImageRenderer(size: size).image { _ in
+            source.draw(in: CGRect(origin: .zero, size: size))
         }
     }
 }
