@@ -198,6 +198,13 @@ struct FirebaseErrorBox: Decodable {
     var message: String?
 }
 
+/// Definite auth rejection: HTTP 401/403, Firebase invalid credentials, or /user/info not logged in.
+/// Distinct from network failures so saved accounts are only dropped when the server said no.
+struct UMAuthRejected: LocalizedError {
+    var message: String
+    var errorDescription: String? { message }
+}
+
 enum UMError: LocalizedError {
     case message(String)
     var errorDescription: String? {

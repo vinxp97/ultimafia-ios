@@ -123,8 +123,7 @@ final class UMImageCache: @unchecked Sendable {
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.urlCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 200 << 20,
-                                   directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                                       .appendingPathComponent("UMImages"))
+                                   directory: UMCacheLocation.images)
         // Uploads are `no-cache` + ETag: disk copy is revalidated with a cheap 304, so avatar
         // changes still show up; the in-memory frame cache keeps re-renders from flickering.
         config.requestCachePolicy = .useProtocolCachePolicy
@@ -148,6 +147,13 @@ final class UMImageCache: @unchecked Sendable {
         }
     }
     private let customKeys = UMLocked<Set<URL>>([])
+
+    /// You-tab clear: drop every decoded frame and the on-disk image responses.
+    func clearAll() {
+        memory.removeAllObjects()
+        customKeys.withLock { $0.removeAll() }
+        session.configuration.urlCache?.removeAllCachedResponses()
+    }
 
     func data(for url: URL) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }

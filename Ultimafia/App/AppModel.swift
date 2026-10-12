@@ -227,6 +227,9 @@ final class AppModel {
 
     /// Sign-in switcher: restore the saved cookie, verify with /user/info; else re-auth with the
     /// Keychain password; else prefill the email and ask for the password.
+    /// A definite rejection (401/403, Firebase bad credentials, /user/info not logged in) of what
+    /// was saved, including a session synced from another device, drops the saved account and its
+    /// Keychain items. Network errors keep everything and ask to retry.
     func switchToAccount(_ account: SavedAccount) async {
         if let current = user?.id {
             if current == account.id { return }
@@ -234,24 +237,52 @@ final class AppModel {
         }
         resetSessionState()
         await run {
-            if AccountStore.shared.restoreSession(for: account.id),
-               let info = try? await APIClient.shared.userInfo(), info.id == account.id {
-                await self.didSignIn(info, email: nil)
-                return
+            var hadSaved = false
+            var rejected = false
+            if AccountStore.shared.restoreSession(for: account.id) {
+                hadSaved = true
+                do {
+                    let info = try await APIClient.shared.userInfo()
+                    if info.id == account.id {
+                        await self.didSignIn(info, email: nil)
+                        return
+                    }
+                    rejected = true // not logged in, or the cookie belongs to someone else
+                } catch is UMAuthRejected {
+                    rejected = true
+                } catch {
+                    AccountStore.clearCookies()
+                    throw Self.retryError(error)
+                }
+                AccountStore.shared.clearSession(account.id)
+                AccountStore.clearCookies()
             }
-            AccountStore.shared.clearSession(account.id)
-            AccountStore.clearCookies()
             if let email = account.email, let password = AccountStore.shared.password(for: account.id) {
+                hadSaved = true
                 do {
                     try await self.authenticate(email: email, password: password)
                     return
+                } catch is UMAuthRejected {
+                    rejected = true
                 } catch {
-                    AccountStore.shared.clearPassword(account.id)
+                    // Couldn't check the password (offline, server error): keep everything.
+                    AccountStore.clearCookies()
+                    throw Self.retryError(error)
                 }
             }
             self.loginPrefillEmail = account.email ?? ""
-            throw UMError.message("Session for \(account.name) expired. Enter the password to sign back in.")
+            if hadSaved && rejected {
+                AccountStore.shared.remove(account.id)
+                throw UMError.message("Your saved sign-in for \(account.name) expired. Please sign in again.")
+            }
+            throw UMError.message("Enter the password for \(account.name) to sign back in.")
         }
+    }
+
+    /// Network failures get a retry hint; other non-auth errors pass through unchanged.
+    private static func retryError(_ error: Error) -> Error {
+        guard error is URLError else { return error }
+        return UMError.message("Couldn't reach Ultimafia (\(error.localizedDescription)). Check your connection and tap the account to try again.")
     }
 
     func removeSavedAccount(_ id: String) {

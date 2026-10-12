@@ -71,7 +71,7 @@ enum ReadyBell {
     }
 
     private static func fileURL() async -> URL? {
-        let dest = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-urgent.mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
         guard let remote = URL(string: "https://ultimafia.com/audio/urgent.mp3") else { return nil }
@@ -304,7 +304,7 @@ enum GameMusic {
 
     private static func fileURL(_ path: String) async -> URL? {
         let safe = path.replacingOccurrences(of: "/", with: "-")
-        let dest = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-\(safe).mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
         guard let remote = URL(string: "https://ultimafia.com/audio/\(path).mp3") else { return nil }

@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 /// On-disk store for custom *user* assets only (custom emotes, stickers, avatars under
-/// ultimafia.com/uploads). Lives in Caches/UMCustomAssets so it can be cleared without touching
+/// ultimafia.com/uploads). Lives in Application Support/UMCache/UMCustomAssets so it can be cleared without touching
 /// bundled role icons, fonts, sounds or site emotes.
 ///
 /// Device-wide by design: keyed only by asset URL, never by account, so every saved account
@@ -12,9 +12,7 @@ import CryptoKit
 actor UMCustomAssetCache {
     static let shared = UMCustomAssetCache()
 
-    nonisolated static let directory: URL = FileManager.default
-        .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("UMCustomAssets", isDirectory: true)
+    nonisolated static let directory: URL = UMCacheLocation.customAssets
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default

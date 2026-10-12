@@ -24,10 +24,7 @@ final class UMNameFonts {
     @ObservationIgnored private var started = false
 
     private var cacheDir: URL {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("UMNameFonts", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+        UMCacheLocation.nameFonts
     }
 
     func loadIfNeeded() {

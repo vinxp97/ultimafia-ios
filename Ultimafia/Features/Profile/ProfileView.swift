@@ -105,12 +105,12 @@ struct ProfileView: View {
                     }
                 }
                 Section {
-                    Button("Clear Custom Asset Cache", role: .destructive) { confirmClearCache = true }
+                    Button("Clear Cached Media", role: .destructive) { confirmClearCache = true }
                         .listRowBackground(UMTheme.card)
                 } header: {
                     Text("Storage")
                 } footer: {
-                    Text(clearedMessage ?? "Custom emotes, stickers and avatars saved on this device: \(Self.mb(cacheBytes)).")
+                    Text(clearedMessage ?? "Avatars, custom emotes/stickers, images, fonts and sounds saved on this device (shared by all accounts): \(Self.mb(cacheBytes)).")
                 }
                 Section {
                     HStack {
@@ -140,20 +140,24 @@ struct ProfileView: View {
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("You")
             // Web asks before silencing alerts; declining leaves them at 10%.
-            .task { cacheBytes = UMCustomAssetCache.diskBytes() }
+            .task { cacheBytes = UMCacheLocation.bytes() }
             .task(id: app.user?.id) { await loadTrophies() }
             .sheet(item: $selectedTrophy) { UMTrophyDetailSheet(trophy: $0) }
-            .confirmationDialog("Clear custom asset cache?", isPresented: $confirmClearCache, titleVisibility: .visible) {
+            .confirmationDialog("Clear cached media?", isPresented: $confirmClearCache, titleVisibility: .visible) {
                 Button("Clear", role: .destructive) {
                     Task {
-                        let freed = await UMCustomAssetCache.shared.clear()
-                        UMImageCache.shared.evictCustomUserAssets()
+                        let freed = UMCacheLocation.bytes()
+                        await UMCustomAssetCache.shared.clear()
+                        UMImageCache.shared.clearAll()
+                        for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds] {
+                            try? FileManager.default.removeItem(at: dir)
+                        }
                         cacheBytes = 0
-                        clearedMessage = "Cleared \(Self.mb(freed)) of custom emotes, stickers and avatars."
+                        clearedMessage = "Cleared \(Self.mb(freed)) of cached media."
                     }
                 }
             } message: {
-                Text("Removes saved custom emotes, stickers and avatars. They'll download again when needed. Role icons, fonts, sounds and site emotes are kept, and saved accounts, sign-ins and settings aren't affected.")
+                Text("Removes cached avatars, custom emotes and stickers, images, fonts and sounds for all accounts. They download again when needed. Saved accounts, sign-ins, emote order and settings are kept.")
             }
             .alert("Disable alert sounds?", isPresented: $confirmMuteAlerts) {
                 Button("Disable", role: .destructive) {}

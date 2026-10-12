@@ -183,19 +183,28 @@ extension LoginView {
     }
 }
 
-/// Saved accounts, newest first. Tap to switch; long-press to remove from this device.
+/// Saved accounts in the user's order. Tap to switch; long-press to remove; Edit to reorder.
 struct SavedAccountsRow: View {
     @Environment(AppModel.self) private var app
+    @State private var editing = false
     private var store: AccountStore { .shared }
 
     var body: some View {
         let accounts = store.sorted
         if !accounts.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Saved accounts")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(UMTheme.muted)
-                    .padding(.horizontal, 24)
+                HStack {
+                    Text("Saved accounts")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(UMTheme.muted)
+                    Spacer()
+                    if accounts.count > 1 {
+                        Button("Edit") { editing = true }
+                            .font(.caption.weight(.semibold))
+                            .disabled(app.isBusy)
+                    }
+                }
+                .padding(.horizontal, 24)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 16) {
                         ForEach(accounts) { account in
@@ -224,6 +233,47 @@ struct SavedAccountsRow: View {
                 }
             }
             .padding(.bottom, 12)
+            .sheet(isPresented: $editing) { SavedAccountsEditor() }
+        }
+    }
+}
+
+/// Standard iOS edit list: drag handles to reorder, swipe/minus to remove from this device.
+struct SavedAccountsEditor: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [SavedAccount] = AccountStore.shared.sorted
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(items) { account in
+                        HStack(spacing: 12) {
+                            UMAvatarView(player: account.player, size: 36)
+                            PlayerNameView(player: account.player, fontSize: 15)
+                                .lineLimit(1)
+                        }
+                        .listRowBackground(UMTheme.card)
+                    }
+                    .onMove { from, to in
+                        items.move(fromOffsets: from, toOffset: to)
+                        AccountStore.shared.setOrder(items.map(\.id))
+                    }
+                    .onDelete { offsets in
+                        for i in offsets { app.removeSavedAccount(items[i].id) }
+                        items.remove(atOffsets: offsets)
+                    }
+                } footer: {
+                    Text("This order is used on the sign-in screen and syncs through iCloud.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .background(UMTheme.bg)
+            .navigationTitle("Saved Accounts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }

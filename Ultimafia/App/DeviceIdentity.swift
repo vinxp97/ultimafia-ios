@@ -15,11 +15,22 @@ enum DeviceIdentity {
 
     /// Generated once and kept in the Keychain, which usually survives app reinstall.
     static var installId: String {
+        migrateLocalOnlyOnce()
         if let data = UMKeychain.get(service: service, account: "installId"),
            let id = String(data: data, encoding: .utf8), !id.isEmpty { return id }
         let id = UUID().uuidString
-        UMKeychain.set(Data(id.utf8), service: service, account: "installId")
+        UMKeychain.set(Data(id.utf8), service: service, account: "installId", synced: false)
         return id
+    }
+
+    /// Re-store an install ID that predates the sync change as explicitly device-only.
+    private static func migrateLocalOnlyOnce() {
+        let key = "um.device.installIdLocalOnly.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        if let data = UMKeychain.get(service: service, account: "installId") {
+            UMKeychain.set(data, service: service, account: "installId", synced: false)
+        }
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     static var vendorId: String? { UIDevice.current.identifierForVendor?.uuidString }

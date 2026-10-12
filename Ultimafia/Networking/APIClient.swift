@@ -52,7 +52,7 @@ final class APIClient {
         guard let http = response as? HTTPURLResponse else { throw UMError.message("No response.") }
         if http.statusCode == 401 || http.statusCode == 403 {
             let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unauthorized"
-            throw UMError.message(text.isEmpty ? "Not signed in." : text)
+            throw UMAuthRejected(message: text.isEmpty ? "Not signed in." : text)
         }
         if http.statusCode >= 400 {
             let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)

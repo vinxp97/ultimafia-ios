@@ -8,7 +8,7 @@ enum FirebaseAuth {
             "returnSecureToken": true,
         ]
         let result: FirebaseSignIn = try await post("signInWithPassword", body: body)
-        if let msg = result.error?.message { throw UMError.message(firebaseMessage(msg)) }
+        if let msg = result.error?.message { throw error(for: msg) }
         guard let token = result.idToken, !token.isEmpty else {
             throw UMError.message("Sign in failed.")
         }
@@ -53,11 +53,23 @@ enum FirebaseAuth {
         if http.statusCode >= 400 {
             if let err = try? JSONDecoder().decode(FirebaseSignIn.self, from: data),
                let msg = err.error?.message {
-                throw UMError.message(firebaseMessage(msg))
+                throw error(for: msg)
             }
             throw UMError.message("Auth failed (\(http.statusCode)).")
         }
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Credential rejections become UMAuthRejected; everything else stays a plain error.
+    private static func error(for code: String) -> Error {
+        let base = code.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? code
+        switch base {
+        case "EMAIL_NOT_FOUND", "INVALID_LOGIN_CREDENTIALS", "INVALID_PASSWORD", "USER_DISABLED",
+             "INVALID_EMAIL", "INVALID_CREDENTIAL":
+            return UMAuthRejected(message: firebaseMessage(base))
+        default:
+            return UMError.message(firebaseMessage(code))
+        }
     }
 
     private static func firebaseMessage(_ code: String) -> String {
