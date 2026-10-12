@@ -71,6 +71,16 @@ struct VoteMeeting: Identifiable, Hashable {
     var multi: Bool = false
     var members: [VoteMember] = []
     var itemName: String?
+    /// Web useAction: instant (unless instantButChangeable) or noUnvote meetings lock after voting.
+    var instant: Bool = false
+    var instantButChangeable: Bool = false
+    var noUnvote: Bool = false
+    var playerHasVoted: Bool = false
+
+    /// Web `notClickable` lock-after-vote clause.
+    func lockedAfterVote(selfId: String?) -> Bool {
+        ((instant && !instantButChangeable) || noUnvote) && !selections(of: selfId).isEmpty
+    }
 
     var isVoteKick: Bool { name == "Vote Kick" }
 
@@ -770,6 +780,8 @@ final class GameSession {
         if !isViewingLive { viewLivePhase() }
         let meeting = meetings.first(where: { $0.id == meetingId })
         let already = meeting?.selections(of: selfId).contains(selection) == true
+        // Server `targets` is authoritative (Meeting.generateTargets / getMeetingInfo); text input is free-form.
+        if let meeting, meeting.inputType != "text", !already, !meeting.targets.contains(selection) { return }
         if already, meeting?.canUnvote != false {
             socket.send("unvote", object: [
                 "meetingId": meetingId,
@@ -1480,7 +1492,7 @@ final class GameSession {
             var can = obj["canVote"] as? Bool
             if let selfId, let me = memberList.first(where: { $0.id == selfId }) {
                 amMember = true
-                can = me.canVote
+                if can == nil { can = me.canVote }
             }
             let canVote = (can ?? (amMember && voting)) && amMember && !spectate
             let name = (obj["name"] as? String) ?? "Vote"
@@ -1502,7 +1514,11 @@ final class GameSession {
                 votesInvisible: boolValue(obj["votesInvisible"]),
                 multi: boolValue(obj["multi"]),
                 members: memberList,
-                itemName: obj["itemName"] as? String
+                itemName: obj["itemName"] as? String,
+                instant: boolValue(obj["instant"]),
+                instantButChangeable: boolValue(obj["instantButChangeable"]),
+                noUnvote: boolValue(obj["noUnvote"]),
+                playerHasVoted: boolValue(obj["playerHasVoted"])
             )
             let meetingName = name.lowercased()
             if meetingName.contains("mafia") || meetingName.contains("cult") {
@@ -1513,7 +1529,17 @@ final class GameSession {
             nextVotes.removeAll { $0.id == id }
             nextVotes.append(meeting)
         }
-        meetings = nextVotes
+        // JSON objects decode unordered; keep meetings where they already were so the Act tab
+        // switcher order doesn't shuffle between updates (new meetings go last).
+        let prior = Dictionary(meetings.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        meetings = nextVotes.enumerated().sorted { a, b in
+            switch (prior[a.element.id], prior[b.element.id]) {
+            case let (x?, y?): return x < y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return a.offset < b.offset
+            }
+        }.map(\.element)
         snapshotLiveMeetings()
         maybeNotifyKicks(nextVotes)
         speechChannels = nextSpeech.filter { $0.name != "Spectator Meeting" || spectate }
@@ -1559,7 +1585,7 @@ final class GameSession {
             var can = obj["canVote"] as? Bool
             if let selfId, let me = memberList.first(where: { $0.id == selfId }) {
                 amMember = true
-                can = me.canVote
+                if can == nil { can = me.canVote }
             }
             let name = (obj["name"] as? String) ?? "Vote"
             nextVotes.append(VoteMeeting(
@@ -1579,7 +1605,11 @@ final class GameSession {
                 votesInvisible: boolValue(obj["votesInvisible"]),
                 multi: boolValue(obj["multi"]),
                 members: memberList,
-                itemName: obj["itemName"] as? String
+                itemName: obj["itemName"] as? String,
+                instant: boolValue(obj["instant"]),
+                instantButChangeable: boolValue(obj["instantButChangeable"]),
+                noUnvote: boolValue(obj["noUnvote"]),
+                playerHasVoted: boolValue(obj["playerHasVoted"])
             ))
         }
         return nextVotes

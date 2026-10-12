@@ -1125,9 +1125,22 @@ private struct GameTownPane: View {
 
 private struct GameActPane: View {
     var session: GameSession
+    /// Chosen meeting per phase (live and review), so updates don't jump the selection.
+    @State private var selectedByPhase: [Int: String] = [:]
 
+    /// Server/web order (meetings arrive in the game's meeting order).
     private var actMeetings: [VoteMeeting] {
         session.meetingsForViewing.filter { !$0.isVoteKick }
+    }
+
+    private var phaseKey: Int { session.isViewingLive ? session.currentPhaseId : session.viewingPhaseId }
+
+    /// Stable selection; default is the first meeting still needing your vote (web Game.jsx
+    /// picks `!playerHasVoted && voting && canVote`), else the first meeting.
+    private var selected: VoteMeeting? {
+        let list = actMeetings
+        if let id = selectedByPhase[phaseKey], let m = list.first(where: { $0.id == id }) { return m }
+        return list.first { $0.canVote && !$0.playerHasVoted && $0.selections(of: session.selfId).isEmpty } ?? list.first
     }
 
     var body: some View {
@@ -1137,14 +1150,43 @@ private struct GameActPane: View {
                     Text(emptyCopy)
                         .foregroundStyle(UMTheme.muted)
                         .padding(16)
-                }
-                ForEach(actMeetings) { meeting in
-                    MeetingBlock(session: session, meeting: meeting)
+                } else if actMeetings.count == 1, let only = actMeetings.first {
+                    MeetingBlock(session: session, meeting: only)
+                } else {
+                    meetingSwitcher
+                    if let meeting = selected {
+                        MeetingBlock(session: session, meeting: meeting)
+                            .id(meeting.id)
+                    }
                 }
             }
             .padding(16)
         }
         .pointerScrolling()
+    }
+
+    private var meetingSwitcher: some View {
+        let binding = Binding<String>(
+            get: { selected?.id ?? "" },
+            set: { selectedByPhase[phaseKey] = $0 }
+        )
+        return ScrollView(.horizontal, showsIndicators: false) {
+            Picker("Meeting", selection: binding) {
+                ForEach(actMeetings) { m in
+                    Text(switcherTitle(m)).tag(m.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
+        .accessibilityLabel("Choose meeting")
+    }
+
+    /// Dot marks a live meeting still waiting on your vote.
+    private func switcherTitle(_ m: VoteMeeting) -> String {
+        let needs = session.isViewingLive && m.canVote && m.selections(of: session.selfId).isEmpty
+        let title = m.name == m.actionName ? m.name : m.actionName
+        return needs ? "• " + title : title
     }
 
     private var emptyCopy: String {
@@ -1154,14 +1196,6 @@ private struct GameActPane: View {
     }
 }
 
-private struct ActVoteRow: Identifiable {
-    var id: String
-    var title: String
-    var isVoter: Bool
-    var canBeTarget: Bool
-    var theirVote: String
-    var votesOnThem: Int
-}
 
 private struct MeetingBlock: View {
     var session: GameSession
@@ -1172,34 +1206,19 @@ private struct MeetingBlock: View {
         session.isViewingLive && meeting.canVote && !session.spectate
     }
 
-    private var rows: [ActVoteRow] {
-        var out: [ActVoteRow] = []
-        var seen = Set<String>()
-        for member in meeting.members {
-            seen.insert(member.id)
-            let sel = meeting.selections(of: member.id)
-            let their = sel.map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", ")
-            out.append(ActVoteRow(
-                id: member.id,
-                title: session.displayVoter(member.id, meeting: meeting),
-                isVoter: member.canVote,
-                canBeTarget: meeting.targets.contains(member.id),
-                theirVote: their,
-                votesOnThem: meeting.count(for: member.id)
-            ))
+    /// Web useAction `notClickable`.
+    private var locked: Bool { meeting.lockedAfterVote(selfId: session.selfId) }
+
+    /// Members who have voted, with their picks (read-only, above the options).
+    /// Hidden when the server marks votes invisible.
+    private var voterLines: [(id: String, who: String, picks: String)] {
+        guard !meeting.votesInvisible else { return [] }
+        var ids = meeting.members.map(\.id).filter { !meeting.selections(of: $0).isEmpty }
+        for (voter, _) in meeting.ballot where !ids.contains(voter) { ids.append(voter) }
+        return ids.map { id in
+            (id, session.displayVoter(id, meeting: meeting),
+             meeting.selections(of: id).map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", "))
         }
-        for target in meeting.targets where !seen.contains(target) {
-            seen.insert(target)
-            out.append(ActVoteRow(
-                id: target,
-                title: session.voteLabel(target, meeting: meeting),
-                isVoter: false,
-                canBeTarget: true,
-                theirVote: "",
-                votesOnThem: meeting.count(for: target)
-            ))
-        }
-        return out
     }
 
     var body: some View {
@@ -1231,11 +1250,16 @@ private struct MeetingBlock: View {
                         .tint(UMTheme.blood)
                     }
                 }
-            } else if meeting.inputType == "player" || meeting.inputType.isEmpty {
-                ForEach(rows) { row in
-                    playerRow(row)
-                }
             } else {
+                // Options are exactly the server's `targets` (web ActionSelect), never the member list.
+                ForEach(voterLines, id: \.id) { line in
+                    HStack(spacing: 4) {
+                        Text(line.who).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text("votes").font(.subheadline).foregroundStyle(UMTheme.muted)
+                        Text(line.picks).font(.subheadline.weight(.semibold))
+                            .foregroundStyle(UMTheme.roleMention).lineLimit(1)
+                    }
+                }
                 ForEach(meeting.targets, id: \.self) { target in
                     targetRow(target)
                 }
@@ -1300,46 +1324,12 @@ private struct MeetingBlock: View {
         return w + "ed"
     }
 
-    private func playerRow(_ row: ActVoteRow) -> some View {
-        let mine = meeting.selections(of: session.selfId).contains(row.id)
-        let canTap = clickable && row.canBeTarget
-        return Button {
-            guard canTap else { return }
-            session.vote(meetingId: meeting.id, selection: row.id)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(row.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                if row.isVoter {
-                    Text("votes")
-                        .font(.subheadline)
-                        .foregroundStyle(UMTheme.muted)
-                    if !row.theirVote.isEmpty {
-                        Text(row.theirVote)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(UMTheme.roleMention)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                Text("\(row.votesOnThem)")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(mine ? UMTheme.village : UMTheme.muted)
-            }
-            .lineLimit(1)
-            .padding(10)
-            .background(mine ? UMTheme.blood.opacity(0.35) : UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.plain)
-        .disabled(!canTap)
-    }
-
     private func targetRow(_ target: String) -> some View {
         let mine = meeting.selections(of: session.selfId).contains(target)
         let count = meeting.count(for: target)
+        let canTap = clickable && !locked
         return Button {
-            guard clickable else { return }
+            guard canTap else { return }
             session.vote(meetingId: meeting.id, selection: target)
         } label: {
             HStack {
@@ -1358,7 +1348,7 @@ private struct MeetingBlock: View {
             .background(mine ? UMTheme.blood.opacity(0.35) : UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-        .disabled(!clickable)
+        .disabled(!canTap)
     }
 }
 
