@@ -95,7 +95,9 @@ struct UMAvatarView: View {
     var body: some View {
         Group {
             if hasAvatar, let userId, !userId.isEmpty, let url = UMAvatarURL.live(userId: userId) {
-                AnimatedWebPView(url: url)
+                // Site "Disable Animated Avatars": other users' avatars show a still first frame.
+                let prefs = UMViewerPrefs.shared
+                AnimatedWebPView(url: url, freeze: prefs.disableAnimatedAvatars && userId != prefs.myUserId)
             } else {
                 UMDefaultAvatarView(name: name)
             }
@@ -197,6 +199,8 @@ struct AnimatedWebPView: View {
     var showsPlaceholder: Bool = true
     /// When set, renders at this height with width from the image's own aspect ratio (emotes).
     var fitHeight: CGFloat? = nil
+    /// Show only the first frame (no animation loop).
+    var freeze: Bool = false
     @State private var frames: [UMPlatformImage] = []
     @State private var delays: [Double] = []
     @State private var index = 0
@@ -227,8 +231,9 @@ struct AnimatedWebPView: View {
         .onReceive(NotificationCenter.default.publisher(for: UMImageCache.didPurge)) { note in
             if let urls = note.userInfo?["urls"] as? [URL], urls.contains(url) { revision += 1 }
         }
-        .task(id: "\(url.absoluteString)#\(revision)") {
+        .task(id: "\(url.absoluteString)#\(revision)#\(freeze)") {
             await load()
+            if freeze { index = 0; return }
             while !Task.isCancelled, frames.count > 1 {
                 let delay = delays.indices.contains(index) ? delays[index] : 0.1
                 try? await Task.sleep(nanoseconds: UInt64(max(delay, 0.04) * 1_000_000_000))
@@ -479,7 +484,7 @@ struct PlayerNameView: View {
 extension GamePlayer {
     /// Web: only the name (player list + chat nameplates) gets `name-font-<key>`; message text never does.
     func displayFont(size: CGFloat) -> Font {
-        let key = (nameFont ?? "default").lowercased()
+        let key = UMViewerPrefs.shared.ignoreNameFonts ? "default" : (nameFont ?? "default").lowercased()
         if key != "default", let ps = UMNameFonts.shared.postScriptName(for: key) {
             // Roboto faces are variable (default Regular); other faces carry their own fixed weight.
             return .custom(ps, fixedSize: size).weight(key == "slab" || key == "mono" ? .semibold : .regular)
@@ -488,6 +493,6 @@ extension GamePlayer {
     }
 
     var bodyColor: Color {
-        umNameFill(textColorHex)
+        umNameFill(UMViewerPrefs.shared.ignoreTextColor ? nil : textColorHex)
     }
 }

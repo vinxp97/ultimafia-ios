@@ -3,7 +3,9 @@ import Observation
 
 @Observable
 final class AppModel {
-    var user: UserInfo?
+    var user: UserInfo? {
+        didSet { UMViewerPrefs.shared.apply(user: user) }
+    }
     var isRestoring = true
     var isBusy = false
     var errorMessage: String?

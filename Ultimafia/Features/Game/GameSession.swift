@@ -1107,7 +1107,8 @@ final class GameSession {
         case "death":
             if let id = stringValue(data) { markDead(id, dead: true) }
         case "deathSounds":
-            if !isQuiet {
+            // Site: "Ignore all Death Sounds" skips every custom death sound (default SFX unaffected).
+            if !isQuiet, !UMViewerPrefs.shared.ignoreDeathSounds {
                 GameSFX.playRemoteQueue(stringList(data))
             }
         case "revival":

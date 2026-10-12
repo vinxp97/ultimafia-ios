@@ -83,6 +83,8 @@ final class AdvancedSettingsModel {
         values[prop] = value
         do {
             try await APIClient.shared.postStatus("user/settings/update", json: ["prop": prop, "value": value])
+            // Viewer prefs the app honors apply immediately (and persist) once the server accepts them.
+            if UMViewerPrefs.keys.contains(prop), let b = value as? Bool { UMViewerPrefs.shared.set(prop, b) }
             await after?()
         } catch {
             values[prop] = old
@@ -492,10 +494,12 @@ private struct SiteSettingsTab: View {
                           info: "Turn off the snow effect during December (holiday season)")
             SettingToggle(model: model, title: "Disable All Media Autoplay", prop: "disableMediaAutoplay",
                           info: "When enabled, profile and family media players will not autoplay for you, even if the owner turned autoplay on.")
+        }
+        } // UMWebsiteOnlySettings.show
+        Section {
             SettingToggle(model: model, title: "Disable Animated Avatars", prop: "disableAnimatedAvatars",
                           info: "When enabled, other users' GIF/WebP avatars are shown as a still first frame.")
         }
-        } // UMWebsiteOnlySettings.show
     }
 }
 
@@ -729,10 +733,10 @@ private struct GameSettingsTab: View {
                           disabled: !(user?.owns("avatarShape") ?? false), after: refresh)
         }
         Section("Display") {
+            SettingToggle(model: model, title: "Ignore Custom Text Color", prop: "ignoreTextColor")
+            SettingToggle(model: model, title: "Ignore Custom Name Font", prop: "ignoreNameFonts",
+                          info: "When enabled, all usernames use the default font. Name colors and animations are unchanged.")
             if UMWebsiteOnlySettings.show {
-                SettingToggle(model: model, title: "Ignore Custom Text Color", prop: "ignoreTextColor")
-                SettingToggle(model: model, title: "Ignore Custom Name Font", prop: "ignoreNameFonts",
-                              info: "When enabled, all usernames use the default font. Name colors and animations are unchanged.")
                 SettingToggle(model: model, title: "Accessible Name Colors", prop: "accessibleNameColors",
                               info: "Shows each player's custom name color in a circle beside their name. Names and message text use black or white for readability based on your theme.")
             }
@@ -766,10 +770,8 @@ private struct GameSettingsTab: View {
                 }
                 .listRowBackground(UMTheme.card)
             }
-            if UMWebsiteOnlySettings.show {
-                SettingToggle(model: model, title: "Ignore all Death Sounds", prop: "ignoreDeathSounds",
-                              info: "When enabled, you will not hear custom death sounds from other players in games.")
-            }
+            SettingToggle(model: model, title: "Ignore all Death Sounds", prop: "ignoreDeathSounds",
+                          info: "When enabled, you will not hear custom death sounds from other players in games.")
         }
         Section {
             NavigationLink("Order Custom Emojis & Stickers") { CustomMediaOrderView() }
