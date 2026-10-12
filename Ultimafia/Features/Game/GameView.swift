@@ -1040,7 +1040,14 @@ private struct ChatRow: View {
                     )
                     Group {
                         if let player {
-                            PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                            HStack(spacing: 0) {
+                                PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                                if session.reviewSenderDead(line) {
+                                    Text(" (dead)")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(UMTheme.deadName)
+                                }
+                            }
                         } else {
                             Text(line.senderId == "anonymous" ? "Anonymous" : line.senderName)
                                 .font(.subheadline.weight(.semibold))
@@ -1153,7 +1160,14 @@ private struct ChatRow: View {
             if line.isQuote {
                 quoteAuthorLabel
             } else if let player {
-                PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                HStack(spacing: 0) {
+                                PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                                if session.reviewSenderDead(line) {
+                                    Text(" (dead)")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(UMTheme.deadName)
+                                }
+                            }
             } else {
                 Text(line.senderId == "anonymous" ? "Anonymous" : line.senderName)
                     .font(.subheadline.weight(.semibold))

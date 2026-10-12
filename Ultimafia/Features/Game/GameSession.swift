@@ -442,6 +442,12 @@ final class GameSession {
         return deadByPhase[viewingPhaseId] ?? deadIds
     }
 
+    /// Review only: sender is in the dead set of the phase the line belongs to (per-phase map).
+    func reviewSenderDead(_ line: ChatLine) -> Bool {
+        guard isReview, let phase = line.fromState, phase >= 0 || phase == -2 else { return false }
+        return deadByPhase[phase]?.contains(line.senderId) ?? false
+    }
+
     var villagePlayers: [GamePlayer] {
         let ordered = orderedPlayers(players)
         if currentPhaseId < 0, !finished {

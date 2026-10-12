@@ -8,6 +8,8 @@ enum UMTheme {
     static let village = Color(red: 0.45, green: 0.72, blue: 0.45)
     static let mafia = Color(red: 0.85, green: 0.28, blue: 0.28)
     static let muted = Color.white.opacity(0.55)
+    /// Web .user-name.dead color (#bd4c4c).
+    static let deadName = Color(red: 0xbd/255, green: 0x4c/255, blue: 0x4c/255)
     static let roleMention = Color(red: 0.98, green: 0.82, blue: 0.22)
     static let line = Color.white.opacity(0.08)
 }
