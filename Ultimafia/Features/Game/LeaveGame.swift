@@ -26,9 +26,10 @@ struct LeaveGameButton: View {
     }
 }
 
-/// Confirm sheet styled like the ready check. In-progress games lock Leave for 5s.
+/// Web LeaveGameDialog equivalent. Leave locks while participation is required.
 struct LeaveConfirmOverlay: View {
-    var inProgress: Bool
+    var warning: String?
+    var lockSeconds: Double
     var onStay: () -> Void
     var onLeave: () -> Void
     @State private var unlockAt = Date()
@@ -39,13 +40,18 @@ struct LeaveConfirmOverlay: View {
                 .ignoresSafeArea()
                 .onTapGesture(perform: onStay)
             VStack(spacing: 16) {
-                Text("Leave Game?")
-                    .font(.title2.weight(.bold))
-                Text(inProgress
-                     ? "This game is in progress. If you leave, you may be penalized."
-                     : "Are you sure you want to leave this game?")
+                Text("Just when I thought I was out...")
+                    .font(.title3.weight(.bold))
+                    .multilineTextAlignment(.center)
+                Text("Are you sure you want to leave?")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.9))
+                if let warning {
+                    Text(warning)
+                        .font(.footnote.weight(.bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(UMTheme.mafia)
+                }
                 TimelineView(.periodic(from: .now, by: 0.2)) { context in
                     let left = max(0, unlockAt.timeIntervalSince(context.date))
                     HStack(spacing: 12) {
@@ -67,6 +73,6 @@ struct LeaveConfirmOverlay: View {
             .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 18))
             .padding(28)
         }
-        .onAppear { unlockAt = inProgress ? Date().addingTimeInterval(5) : Date() }
+        .onAppear { unlockAt = Date().addingTimeInterval(lockSeconds) }
     }
 }

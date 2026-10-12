@@ -157,6 +157,18 @@ final class GameSession {
     var selfId: String?
     var hostId: String?
     var finished = false
+    var rankedGame = false
+    var competitiveGame = false
+    var graveyardParticipation = false
+
+    /// Mirrors web Game.jsx: dialog only when participating in a live (non-pregame/postgame) game.
+    var leaveNeedsConfirm: Bool {
+        !spectate && !finished && currentPhaseId >= 0 && players.contains { $0.id == selfId }
+    }
+    var participationRequired: Bool {
+        guard let id = selfId else { return false }
+        return !deadIds.contains(id) || graveyardParticipation
+    }
     var players: [GamePlayer] = []
     var messages: [ChatLine] = []
     var meetings: [VoteMeeting] = []
@@ -872,6 +884,12 @@ final class GameSession {
             if let id = stringValue(data) {
                 selfId = id
                 adoptKnownRolesForSelf()
+            }
+        case "options":
+            if let o = data as? [String: Any] {
+                rankedGame = (o["ranked"] as? Bool) ?? rankedGame
+                competitiveGame = (o["competitive"] as? Bool) ?? competitiveGame
+                graveyardParticipation = (o["graveyardParticipation"] as? Bool) ?? graveyardParticipation
             }
         case "setup":
             applySetup(data)

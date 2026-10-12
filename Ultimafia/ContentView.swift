@@ -57,11 +57,17 @@ struct MainTabs: View {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
                 RoleRevealOverlay(session: session)
                 if !app.hideAppTabs && !app.path.isEmpty && !app.showLeaveConfirm {
-                    LeaveGameButton { app.showLeaveConfirm = true }
+                    LeaveGameButton {
+                        if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
+                    }
                 }
                 if app.showLeaveConfirm {
                     LeaveConfirmOverlay(
-                        inProgress: session.currentPhaseId >= 0 && !session.finished,
+                        warning: session.participationRequired
+                            ? ((session.rankedGame || session.competitiveGame)
+                               ? "YOU WILL BE PENALISED FOR LEAVING" : "Your participation is still required")
+                            : nil,
+                        lockSeconds: session.participationRequired ? 5 : 0,
                         onStay: { app.showLeaveConfirm = false },
                         onLeave: {
                             app.showLeaveConfirm = false
