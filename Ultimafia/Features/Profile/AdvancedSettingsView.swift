@@ -116,6 +116,10 @@ struct AdvancedSettingsView: View {
     @State private var model = AdvancedSettingsModel()
 
     var body: some View {
+        umBody.umKeyboardDismissBar()
+    }
+
+    @ViewBuilder private var umBody: some View {
         VStack(spacing: 0) {
             tabBar
             List {

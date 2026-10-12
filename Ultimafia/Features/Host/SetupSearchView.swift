@@ -16,6 +16,10 @@ struct SetupSearchView: View {
     @State private var hosting: SetupInfo?
 
     var body: some View {
+        umBody.umKeyboardDismissBar()
+    }
+
+    @ViewBuilder private var umBody: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 filterChips

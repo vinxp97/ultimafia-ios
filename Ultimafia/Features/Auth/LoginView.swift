@@ -42,6 +42,10 @@ struct LoginView: View {
     }
 
     var body: some View {
+        umBody.umKeyboardDismissBar()
+    }
+
+    @ViewBuilder private var umBody: some View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 12) {

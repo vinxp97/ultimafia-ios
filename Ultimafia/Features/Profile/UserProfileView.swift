@@ -1013,6 +1013,10 @@ struct ProfileCommentsView: View {
     private let siteReact = [":)", ":(", "<3", ":star:", ":fufu:", ":doge:", ":bump:", ":rawr:", ":zzz:"]
 
     var body: some View {
+        umBody.umKeyboardDismissBar()
+    }
+
+    @ViewBuilder private var umBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Comments")
                 .font(.headline)

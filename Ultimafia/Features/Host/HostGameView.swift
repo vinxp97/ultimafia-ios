@@ -9,6 +9,10 @@ struct HostGameView: View {
     @State private var error: String?
 
     var body: some View {
+        umBody.umKeyboardDismissBar()
+    }
+
+    @ViewBuilder private var umBody: some View {
         NavigationStack {
             Form {
                 Section {
