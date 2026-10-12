@@ -40,6 +40,7 @@ final class AppModel {
     enum Route: Hashable {
         case game(String, spectate: Bool)
         case profile(id: String, name: String)
+        case family(id: String, name: String)
         case setupSearch
         case review(String)
     }
@@ -52,8 +53,10 @@ final class AppModel {
 
     /// True while a user profile is on top of the Play stack.
     var isOnProfile: Bool {
-        if case .profile = path.last { return true }
-        return false
+        switch path.last {
+        case .profile, .family: return true
+        default: return false
+        }
     }
 
     /// Replace the Play stack. Swapping a pushed screen for a different destination in a single
@@ -77,7 +80,12 @@ final class AppModel {
 
     /// Leaving the Play tab from a profile drops the profile pages so they don't linger.
     func dropProfiles() {
-        while case .profile = path.last { path.removeLast() }
+        while let last = path.last {
+            switch last {
+            case .profile, .family: path.removeLast()
+            default: return
+            }
+        }
     }
 
     var mentionBadge: Int {
@@ -438,6 +446,10 @@ final class AppModel {
     func stopPresence() {
         presenceTask?.cancel()
         presenceTask = nil
+    }
+
+    func openFamily(id: String, name: String) {
+        path.append(.family(id: id, name: name))
     }
 
     func openProfile(id: String, name: String) {

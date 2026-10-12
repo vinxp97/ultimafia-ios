@@ -253,6 +253,9 @@ struct UserProfileView: View {
             let id = umDictString(fam, "id")
             let name = umDictString(fam, "name")
             let has = umDictBool(fam, "avatar")
+            Button {
+                if !id.isEmpty { app.openFamily(id: id, name: name) }
+            } label: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Member of")
                     .font(.caption.italic())
@@ -269,6 +272,9 @@ struct UserProfileView: View {
                         .lineLimit(2)
                 }
             }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the family page")
         }
     }
 
@@ -1274,7 +1280,7 @@ struct ProfileCommentsView: View {
     }
 }
 
-private struct ProfileMediaEmbed: View {
+struct ProfileMediaEmbed: View {
     var raw: String
     var autoplay: Bool
 

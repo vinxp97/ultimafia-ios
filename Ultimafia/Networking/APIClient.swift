@@ -144,6 +144,15 @@ final class APIClient {
         return obj
     }
 
+    /// GET /api/family/:familyId/profile (routes/family.js).
+    func familyProfile(_ id: String) async throws -> [String: Any] {
+        let any = try await jsonObject("family/\(id)/profile")
+        guard let obj = any as? [String: Any] else {
+            throw UMError.message("Could not read family.")
+        }
+        return obj
+    }
+
     func jsonObject(_ path: String, query: [String: String] = [:]) async throws -> Any {
         let data = try await request("GET", path: path, query: query, body: nil)
         return try JSONSerialization.jsonObject(with: data)

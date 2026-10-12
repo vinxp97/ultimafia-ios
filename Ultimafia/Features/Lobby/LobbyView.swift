@@ -43,6 +43,8 @@ struct LobbyView: View {
                     GameView()
                 case .profile(let id, let name):
                     UserProfileView(userId: id, userName: name)
+                case .family(let id, let name):
+                    FamilyView(familyId: id, familyName: name)
                 case .setupSearch:
                     SetupSearchView()
                 case .review:
