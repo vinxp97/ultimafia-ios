@@ -415,10 +415,31 @@ struct BanishedPoolSheet: View {
 }
 
 struct RoleDetailsSheet: View {
-    var roleRaw: String
     var gameType: String
     var otherRoles: [String]
+    /// The role being shown; "See also" chips swap it in place.
+    @State private var roleRaw: String
     @Environment(\.dismiss) private var dismiss
+
+    init(roleRaw: String, gameType: String, otherRoles: [String]) {
+        self.gameType = gameType
+        self.otherRoles = otherRoles
+        _roleRaw = State(initialValue: roleRaw)
+    }
+
+    /// "See also: Quack (Mafia), Witch Doctor (Cult)." -> ["Quack", "Witch Doctor"]
+    static func seeAlsoNames(_ line: String) -> [String]? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.lowercased().hasPrefix("see also") else { return nil }
+        var rest = trimmed.dropFirst("see also".count).drop { $0 == ":" || $0 == " " }
+        if rest.hasSuffix(".") { rest = rest.dropLast() }
+        let names = rest.split(separator: ",").map { part -> String in
+            var name = part.trimmingCharacters(in: .whitespaces)
+            if let paren = name.range(of: " (", options: .backwards) { name = String(name[..<paren.lowerBound]) }
+            return name
+        }.filter { !$0.isEmpty }
+        return names.isEmpty ? nil : names
+    }
 
     var body: some View {
         let details = RoleCatalog.shared.details(roleRaw: roleRaw, gameType: gameType, otherRoles: otherRoles)
@@ -449,9 +470,13 @@ struct RoleDetailsSheet: View {
                             .padding(.vertical, 20)
                     }
                     ForEach(Array(details.lines.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.body)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if let names = Self.seeAlsoNames(line) {
+                            seeAlsoRow(names)
+                        } else {
+                            Text(line)
+                                .font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     if !details.modifiers.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -513,6 +538,33 @@ struct RoleDetailsSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
+    }
+
+    private func seeAlsoRow(_ names: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("See also")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(UMTheme.muted)
+            ForEach(names, id: \.self) { name in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { roleRaw = name }
+                } label: {
+                    HStack(spacing: 6) {
+                        RoleIconView(role: name, gameType: gameType, size: 20)
+                        Text(name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(UMTheme.roleMention)
+                        if let a = RoleCatalog.shared.alignment(of: name, gameType: gameType) {
+                            Text("(\(a))")
+                                .font(.subheadline)
+                                .foregroundStyle(alignmentColor(a))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the \(name) role")
+            }
+        }
     }
 
     private func alignmentColor(_ alignment: String) -> Color {
