@@ -1222,9 +1222,7 @@ private struct GameTownPane: View {
     /// Ended game still on screen, or a review; never yourself or anonymous (no userId) players.
     private func canModerate(_ player: GamePlayer) -> Bool {
         guard session.finished || session.isReview, let uid = player.userId, !uid.isEmpty else { return false }
-        if player.id == session.selfId { return false }
-        if let me = app.user?.id, me == uid { return false }
-        return true
+        return !app.isSelf(player, selfSeatId: session.selfId)
     }
 
     var body: some View {

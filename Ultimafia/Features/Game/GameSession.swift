@@ -709,6 +709,13 @@ final class GameSession {
             let users = obj["users"] as? [Any] ?? []
             let left = Set(obj["left"] as? [String] ?? [])
             let anon = boolValue(obj["anonymousGame"])
+            // playerIdMap (seat id -> user id) is authoritative when present; users[] can be misaligned.
+            let idMap: [String: String] = {
+                if let m = obj["playerIdMap"] as? [String: String] { return m }
+                if let s = obj["playerIdMap"] as? String,
+                   let m = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [String: String] { return m }
+                return [:]
+            }()
             var blobs: [[String: Any]] = []
             for (i, id) in ids.enumerated() {
                 let user = users.indices.contains(i) ? users[i] as? [String: Any] : nil
@@ -721,7 +728,7 @@ final class GameSession {
                     "settings": settings,
                     "left": left.contains(id),
                 ]
-                if let uid = user?["id"] as? String { blob["userId"] = uid }
+                if let uid = idMap[id] ?? (user?["id"] as? String) { blob["userId"] = uid }
                 blobs.append(blob)
             }
             handle("players", blobs)

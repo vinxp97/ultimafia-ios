@@ -37,6 +37,7 @@ enum UMModeration {
     /// Toggles block on the server, then mirrors the new state into `app.user`.
     @MainActor
     static func toggleBlock(userId: String, app: AppModel) async throws {
+        guard !app.isSelf(userId: userId) else { throw UMError.message("You cannot block yourself.") }
         try await APIClient.shared.postStatus("user/block", json: ["user": userId])
         guard var u = app.user else { return }
         var list = u.blockedUsers ?? []
@@ -48,6 +49,23 @@ enum UMModeration {
 }
 
 extension AppModel {
+    /// You, by every id we have: seat id, the player's account id vs the active session user,
+    /// and (safety net for misaligned review data) the account name.
+    func isSelf(_ player: GamePlayer, selfSeatId: String? = nil) -> Bool {
+        if let seat = selfSeatId, !seat.isEmpty, player.id == seat { return true }
+        if let me = user?.id, !me.isEmpty {
+            if player.userId == me || player.id == me { return true }
+        }
+        if let myName = user?.name, !myName.isEmpty,
+           player.name.caseInsensitiveCompare(myName) == .orderedSame { return true }
+        return false
+    }
+
+    func isSelf(userId: String?) -> Bool {
+        guard let userId, !userId.isEmpty, let me = user?.id else { return false }
+        return userId == me
+    }
+
     func isBlocked(_ userId: String?) -> Bool {
         guard let userId else { return false }
         return user?.blockedUsers?.contains(userId) ?? false
@@ -65,6 +83,14 @@ struct UMPlayerModerationBar: View {
     @State private var resultMessage: String?
 
     var body: some View {
+        if app.isSelf(player) || app.isSelf(userId: player.userId) {
+            EmptyView()
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         let blocked = app.isBlocked(player.userId)
         HStack(spacing: 10) {
             Button { showReport = true } label: {
@@ -99,7 +125,7 @@ struct UMPlayerModerationBar: View {
     }
 
     private func toggle() {
-        guard let uid = player.userId else { return }
+        guard let uid = player.userId, !app.isSelf(player), !app.isSelf(userId: uid) else { return }
         let wasBlocked = app.isBlocked(uid)
         busy = true
         Task {
@@ -117,6 +143,8 @@ struct UMPlayerModerationBar: View {
 struct UMReportSheet: View {
     var player: GamePlayer
     var gameId: String
+    @Environment(AppModel.self) private var app
+    private var isSelfTarget: Bool { app.isSelf(player) || app.isSelf(userId: player.userId) }
     @Environment(\.dismiss) private var dismiss
     @State private var violations: [String] = []
     @State private var rule = ""
@@ -160,7 +188,7 @@ struct UMReportSheet: View {
                             Spacer()
                         }
                     }
-                    .disabled(rule.isEmpty || sending || player.userId == nil)
+                    .disabled(rule.isEmpty || sending || player.userId == nil || isSelfTarget)
                 } footer: {
                     if let e = errorText {
                         Text(e).foregroundStyle(.red)
@@ -203,6 +231,7 @@ struct UMReportSheet: View {
 
     private func submit() {
         guard let uid = player.userId else { return }
+        guard !isSelfTarget else { errorText = "You can't report yourself."; return }
         sending = true
         errorText = nil
         Task {
