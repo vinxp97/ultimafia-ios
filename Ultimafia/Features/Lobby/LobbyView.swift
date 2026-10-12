@@ -13,7 +13,7 @@ struct LobbyView: View {
                     if app.isOnLobbyWhileSeated {
                         seatedBanner
                     }
-                    section("Open", games: excludingSeated(app.openGames), empty: "No open games in this lobby.")
+                    section("Open", games: excludingSeated(app.openGames), empty: "No open games right now.")
                     section("In progress", games: excludingSeated(app.inProgressGames), empty: "Nothing in progress.")
                 }
                 .padding(16)
@@ -41,11 +41,12 @@ struct LobbyView: View {
 
     private var playHeader: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text("Play")
+            Text("Ultimafia Mobile")
                 .font(.largeTitle.weight(.bold))
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(.white)
-                .fixedSize()
-            lobbyPicker
+                .lineLimit(1)
+            Spacer(minLength: 0)
             Button {
                 Task { await app.refreshLobby() }
             } label: {
@@ -85,39 +86,6 @@ struct LobbyView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                }
-            }
-        }
-    }
-
-    private var lobbyPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(UMConfig.lobbies, id: \.self) { lobby in
-                    let selected = app.lobby == lobby
-                    let count = app.openCounts[lobby] ?? 0
-                    Button {
-                        app.lobby = lobby
-                        Task { await app.refreshLobby() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(lobby)
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.caption2.weight(.bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(UMTheme.blood.opacity(selected ? 1 : 0.35), in: Capsule())
-                            }
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(selected ? UMTheme.elevated : UMTheme.card, in: Capsule())
-                        .overlay(Capsule().stroke(selected ? UMTheme.blood : UMTheme.line, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
                 }
             }
         }

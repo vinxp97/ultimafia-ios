@@ -7,10 +7,10 @@ final class AppModel {
     var isRestoring = true
     var isBusy = false
     var errorMessage: String?
-    var lobby = "Main"
+    /// The lobby list shows every lobby; the web API treats "All" as no lobby filter.
+    let lobby = "All"
     var openGames: [GameSummary] = []
     var inProgressGames: [GameSummary] = []
-    var openCounts: [String: Int] = [:]
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
@@ -123,11 +123,9 @@ final class AppModel {
         do {
             async let open = APIClient.shared.gameList(list: "open", lobby: lobby)
             async let progress = APIClient.shared.gameList(list: "in progress", lobby: lobby)
-            async let counts = APIClient.shared.openCounts()
             async let online = APIClient.shared.onlineUsers()
             openGames = (try await open).filter(\.isOpen)
             inProgressGames = try await progress
-            openCounts = (try await counts).countValues
             onlineUsers = (try? await online) ?? onlineUsers
         } catch {
             errorMessage = error.localizedDescription

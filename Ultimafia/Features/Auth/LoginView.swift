@@ -44,9 +44,14 @@ struct LoginView: View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 12) {
-                Image(systemName: "theatermasks.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(UMTheme.blood)
+                Image("AppLogo")
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 108, height: 108)
+                    .clipShape(RoundedRectangle(cornerRadius: 108 * 0.2237, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
+                    .accessibilityLabel("Ultimafia")
                 Text("ULTIMAFIA")
                     .font(.system(.largeTitle, design: .serif).weight(.bold))
                     .tracking(2)
