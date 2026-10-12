@@ -68,7 +68,7 @@ private struct GameScreen: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            GamePanelPicker(selectedPanel: $selectedPanel)
+            GamePanelPicker(session: session, selectedPanel: $selectedPanel)
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .toolbar(app.hideAppTabs || session.isReview ? .hidden : .automatic, for: .tabBar)
@@ -152,19 +152,40 @@ private struct GameHeader: View {
 }
 
 private struct GamePanelPicker: View {
+    var session: GameSession
     @Binding var selectedPanel: Int
     @Environment(AppModel.self) private var app
+    @State private var showGuides = false
 
     var body: some View {
         HStack(spacing: 4) {
             tabBtn("Village", 1, "person.3")
             tabBtn("Chat", 0, "text.bubble")
             tabBtn("Act", 2, "hand.raised")
+            if session.setupId != nil { guidesBtn }
             hideBtn
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .background(UMTheme.card)
+        .sheet(isPresented: $showGuides) {
+            if let id = session.setupId {
+                GuidesView(setupId: id, setupName: session.setupName, gameType: session.setupGameType,
+                           otherRoles: session.guessableRoles.map(\.raw))
+            }
+        }
+    }
+
+    private var guidesBtn: some View {
+        Button { showGuides = true } label: {
+            Label("Guides", systemImage: "book")
+                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(UMTheme.muted)
+        .accessibilityLabel("Setup guides")
     }
 
     private var hideBtn: some View {

@@ -475,10 +475,32 @@ private func umGetTotalGames(_ any: Any?) -> Int {
 }
 
 
-private struct UMMarkdownView: View {
+struct UMMarkdownView: View {
     var text: String
+    /// When set, role names render like in-game chat mentions (yellow + icon, tap for details).
+    var roleGameType: String? = nil
+    var otherRoles: [String] = []
+
+    @State private var selectedRole: UMRoleMentionItem?
 
     var body: some View {
+        if roleGameType != nil {
+            content
+                .environment(\.openURL, OpenURLAction { url in
+                    guard url.scheme == UMRoleMentionItem.scheme else { return .systemAction }
+                    let name = url.host(percentEncoded: false) ?? url.path(percentEncoded: false)
+                    selectedRole = UMRoleMentionItem(name: name.removingPercentEncoding ?? name)
+                    return .handled
+                })
+                .sheet(item: $selectedRole) { item in
+                    RoleDetailsSheet(roleRaw: item.name, gameType: roleGameType ?? "Mafia", otherRoles: otherRoles)
+                }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
                 switch chunk {
@@ -662,6 +684,9 @@ private struct UMMarkdownView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        } else if let type = roleGameType {
+            umRoleMentionText(styledInline(s, headingLevel: headingLevel), gameType: type)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(styledInline(s, headingLevel: headingLevel))
                 .fixedSize(horizontal: false, vertical: true)
