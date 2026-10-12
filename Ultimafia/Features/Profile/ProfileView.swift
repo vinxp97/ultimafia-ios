@@ -168,7 +168,7 @@ struct ProfileView: View {
                         let freed = UMCacheLocation.bytes()
                         await UMCustomAssetCache.shared.clear()
                         UMImageCache.shared.clearAll()
-                        for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds] {
+                        for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds, UMDevProfileCache.directory] {
                             try? FileManager.default.removeItem(at: dir)
                         }
                         cacheBytes = 0

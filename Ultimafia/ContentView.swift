@@ -160,6 +160,13 @@ struct MainTabs: View {
                 }
             }
             .animation(.snappy(duration: 0.28), value: showBar)
+            // Signed-in shell settled: warm Z's profile (credits link) at low priority.
+            .task {
+                try? await Task.sleep(for: .seconds(8))
+                await Task.detached(priority: .background) {
+                    await UMDevProfileCache.prefetchIfNeeded()
+                }.value
+            }
             .onChange(of: tab, initial: true) { old, new in
                 app.activeTab = new
                 // Leaving You pops its stack, so coming back shows the You root.

@@ -432,6 +432,22 @@ struct UserProfileView: View {
     }
 
     private func load() async {
+        // Stale-while-revalidate for prefetched profiles (Z): show the cached copy now,
+        // refresh quietly; a failed refresh keeps the cached copy on screen.
+        if UMDevProfileCache.isCached(userId) {
+            if blob.isEmpty, let cached = UMDevProfileCache.cachedProfile() {
+                blob = cached
+                loading = false
+            }
+            if !blob.isEmpty {
+                if let data = try? await APIClient.shared.request("GET", path: "user/\(userId)/profile", query: [:], body: nil),
+                   let fresh = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    UMDevProfileCache.store(data)
+                    blob = fresh
+                }
+                return
+            }
+        }
         loading = true
         error = nil
         do {
