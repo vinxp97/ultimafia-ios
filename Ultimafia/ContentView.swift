@@ -72,7 +72,6 @@ struct MainTabs: View {
                 LobbyView()
                     .tabItem { Label(playLabel.title, systemImage: playLabel.icon) }
                     .tag("play")
-                    .badge(app.seatedGameId == nil ? 0 : 1)
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
                 ProfileView()
                     .tabItem { Label("You", systemImage: "person") }
