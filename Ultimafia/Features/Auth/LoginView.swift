@@ -159,7 +159,7 @@ struct LoginView: View {
 
             Spacer()
             SavedAccountsRow()
-            Text("Companion App to Ultimafia.com")
+            Text("Ultimafia.com Companion App")
                 .font(.caption2)
                 .foregroundStyle(UMTheme.muted)
                 .padding(.bottom, 24)
