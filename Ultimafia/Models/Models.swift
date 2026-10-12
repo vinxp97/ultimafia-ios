@@ -12,6 +12,30 @@ struct UserInfo: Decodable, Hashable {
     var isDonor: Bool?
     var rank: FlexString?
     var email: String?
+    var settings: JSONValue?
+    var itemsOwned: JSONValue?
+
+    /// The user's own cosmetics as a GamePlayer, so the You tab reuses chat's name/avatar styling.
+    var cosmeticPlayer: GamePlayer {
+        let st = settings?.asAny as? [String: Any] ?? [:]
+        let items = itemsOwned?.asAny as? [String: Any] ?? [:]
+        // Same rule as server User.js: square only if the Square item is owned.
+        let ownsSquare = (items["avatarShape"] as? Double ?? 0) > 0 || (items["avatarShape"] as? Bool ?? false)
+        var p = GamePlayer(
+            id: id ?? "me",
+            name: name ?? "Unknown",
+            userId: id,
+            avatar: avatar ?? false,
+            nameColorHex: umColorString(st["nameColor"]),
+            nameFont: st["nameFont"] as? String,
+            animatedNameColor: st["animatedNameColor"] as? String,
+            nameGradientColorA: umColorString(st["nameGradientColorA"]),
+            nameGradientColorB: umColorString(st["nameGradientColorB"]),
+            nameGradientColorC: umColorString(st["nameGradientColorC"])
+        )
+        p.squareAvatar = ownsSquare && (st["gameAvatarShape"] as? String) == "square"
+        return p
+    }
 
     var csrfToken: String? {
         let s = csrf?.value ?? ""

@@ -151,11 +151,8 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                 }
-                .buttonStyle(.plain)
-                .background(UMTheme.blood, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(.white)
+                .buttonStyle(UMPrimaryButtonStyle())
                 .disabled(!canSubmit)
-                .opacity(canSubmit ? 1 : 0.6)
 
             }
             .padding(.horizontal, 24)
@@ -176,5 +173,21 @@ struct LoginView: View {
         .onChange(of: rememberMe) { _, on in
             if !on { RememberedLogin.clear() }
         }
+    }
+}
+
+
+/// Full-width filled button: the whole rounded shape is the hit target, with pressed/disabled states.
+struct UMPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .background(UMTheme.blood, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.6)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

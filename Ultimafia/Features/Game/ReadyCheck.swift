@@ -47,7 +47,7 @@ enum ReadyBell {
     }
 
     static func applyVolume() {
-        player?.volume = GameAudio.sfx
+        player?.volume = GameAudio.alert
     }
 
     @MainActor
@@ -58,7 +58,7 @@ enum ReadyBell {
         do {
             let next = try AVAudioPlayer(contentsOf: url)
             next.numberOfLoops = -1
-            next.volume = GameAudio.sfx
+            next.volume = GameAudio.alert
             next.prepareToPlay()
             next.play()
             player = next
@@ -90,6 +90,11 @@ enum GameAudio {
     static let sfxKey = "um.sfxVolume"
     static let deathKey = "um.deathSoundVolume"
     static let musicKey = "um.musicVolume"
+    /// Web settings.pregameMusicVolume: "music/Pregame*" tracks.
+    static let pregameMusicKey = "um.pregameMusicVolume"
+    /// Web settings.importantVolume ("Alert Volume"): bell, urgent (ready check), vegPing.
+    static let alertKey = "um.alertVolume"
+    static let alertSounds: Set<String> = ["bell", "urgent", "vegPing"]
 
     static func volume(_ key: String) -> Float {
         guard UserDefaults.standard.object(forKey: key) != nil else { return 1 }
@@ -99,15 +104,18 @@ enum GameAudio {
     static var sfx: Float { volume(sfxKey) }
     static var death: Float { volume(deathKey) }
     static var music: Float { volume(musicKey) }
+    static var pregameMusic: Float { volume(pregameMusicKey) }
+    static var alert: Float { volume(alertKey) }
 }
 
 enum GameSFX {
     private static var playing: [AVAudioPlayer] = []
+    private static var alertPlayers = Set<ObjectIdentifier>()
     private static var deathPlaying: [AVAudioPlayer] = []
     private static let localNames: Set<String> = ["bell", "gunshot", "ping"]
 
     static func applyVolume() {
-        playing.forEach { $0.volume = GameAudio.sfx }
+        playing.forEach { $0.volume = alertPlayers.contains(ObjectIdentifier($0)) ? GameAudio.alert : GameAudio.sfx }
     }
 
     static func applyDeathVolume() {
@@ -126,13 +134,14 @@ enum GameSFX {
     }
 
     static func play(_ name: String) {
+        let alert = GameAudio.alertSounds.contains(name)
         if let url = bundledURL(name) {
-            playFile(url)
+            playFile(url, alert: alert)
             return
         }
         Task { @MainActor in
             guard let url = await fileURL(name) else { return }
-            playFile(url)
+            playFile(url, alert: alert)
         }
     }
 
@@ -147,14 +156,16 @@ enum GameSFX {
     }
 
     @MainActor
-    private static func playFile(_ url: URL) {
+    private static func playFile(_ url: URL, alert: Bool = false) {
         activateSession()
         do {
             let next = try AVAudioPlayer(contentsOf: url)
-            next.volume = GameAudio.sfx
+            next.volume = alert ? GameAudio.alert : GameAudio.sfx
             next.prepareToPlay()
             next.play()
             playing.removeAll { !$0.isPlaying }
+            alertPlayers = alertPlayers.filter { id in playing.contains { ObjectIdentifier($0) == id } }
+            if alert { alertPlayers.insert(ObjectIdentifier(next)) }
             playing.append(next)
         } catch {}
     }
@@ -263,7 +274,11 @@ enum GameMusic {
     }
 
     static func applyVolume() {
-        player?.volume = GameAudio.music
+        player?.volume = volume(for: current)
+    }
+
+    private static func volume(for path: String?) -> Float {
+        (path ?? "").hasPrefix("music/Pregame") ? GameAudio.pregameMusic : GameAudio.music
     }
 
     @MainActor
@@ -274,7 +289,7 @@ enum GameMusic {
         do {
             let next = try AVAudioPlayer(contentsOf: url)
             next.numberOfLoops = -1
-            next.volume = GameAudio.music
+            next.volume = volume(for: path)
             next.prepareToPlay()
             next.play()
             player?.stop()

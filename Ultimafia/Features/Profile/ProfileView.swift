@@ -9,44 +9,23 @@ struct ProfileView: View {
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
     @AppStorage("um.sfxVolume") private var sfxVolume = 1.0
     @AppStorage("um.deathSoundVolume") private var deathSoundVolume = 1.0
+    @AppStorage(GameAudio.pregameMusicKey) private var pregameMusicVolume = 1.0
+    @AppStorage(GameAudio.alertKey) private var alertVolume = 1.0
+    @State private var confirmMuteAlerts = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    let me = app.user?.cosmeticPlayer
                     HStack(spacing: 14) {
-                        UMAvatarView(
-                            userId: app.user?.id,
-                            hasAvatar: app.user?.avatar ?? false,
-                            name: app.user?.name ?? "",
-                            size: 52
-                        )
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(app.user?.name ?? "Unknown")
-                                .font(.title3.weight(.bold))
-                            Text(app.user?.id ?? "")
-                                .font(.caption.monospaced())
-                                .foregroundStyle(UMTheme.muted)
+                        if let me {
+                            UMAvatarView(player: me, size: 52)
+                            PlayerNameView(player: me, fontSize: 20)
                         }
                     }
                     .padding(.vertical, 8)
                     .listRowBackground(UMTheme.card)
-                }
-                if app.seatedGameId != nil {
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(app.seatedSetupName)
-                                .font(.headline)
-                            Text(app.seatedPhaseLabel)
-                                .font(.subheadline)
-                                .foregroundStyle(UMTheme.muted)
-                            HStack {
-                                Button("Return to Game") { app.resumeSeatedGame() }
-                                Button("Leave", role: .destructive) { app.leaveActiveGame() }
-                            }
-                        }
-                        .listRowBackground(UMTheme.card)
-                    }
                 }
                 Section("Chat") {
                     Picker("Message layout", selection: $chatLayout) {
@@ -75,6 +54,14 @@ struct ProfileView: View {
                     volumeRow("Death Sound Volume", $deathSoundVolume) {
                         GameSFX.applyDeathVolume()
                     }
+                    volumeRow("Pregame Music Volume", $pregameMusicVolume) {
+                        GameMusic.applyVolume()
+                    }
+                    volumeRow("Alert Volume", $alertVolume) {
+                        if alertVolume == 0 { confirmMuteAlerts = true }
+                        GameSFX.applyVolume()
+                        ReadyBell.applyVolume()
+                    }
                 }
                 Section("Status") {
                     row("Coins", "\(app.user?.coins?.value ?? 0)")
@@ -94,6 +81,13 @@ struct ProfileView: View {
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("You")
+            // Web asks before silencing alerts; declining leaves them at 10%.
+            .alert("Disable alert sounds?", isPresented: $confirmMuteAlerts) {
+                Button("Disable", role: .destructive) {}
+                Button("Keep at 10%", role: .cancel) { alertVolume = 0.1 }
+            } message: {
+                Text("You won't be alerted when a game starts or when you're about to be kicked for inactivity.")
+            }
         }
     }
 
