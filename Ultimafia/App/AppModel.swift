@@ -516,7 +516,11 @@ final class AppModel {
     }
 
     func openFamily(id: String, name: String) {
-        path.append(.family(id: id, name: name))
+        if activeTab == "you" {
+            youPath.append(.family(id: id, name: name))
+        } else {
+            path.append(.family(id: id, name: name))
+        }
     }
 
     /// You tab's own stack (profiles pushed from the You page). Popped when leaving/re-selecting You.

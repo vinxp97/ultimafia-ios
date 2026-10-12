@@ -965,7 +965,7 @@ private struct FamilySettingsTab: View {
             let id = s("id")
             Section {
                 Button {
-                    app.setPlayPath([.family(id: id, name: s("name"))])
+                    app.openFamily(id: id, name: s("name"))
                 } label: {
                     HStack {
                         Text(b("isLeader") ? "You are the leader of" : "You are a member of").foregroundStyle(UMTheme.muted)

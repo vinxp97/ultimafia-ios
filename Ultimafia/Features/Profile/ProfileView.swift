@@ -149,6 +149,8 @@ struct ProfileView: View {
                 switch route {
                 case .profile(let id, let name):
                     UMYouPushedProfile(userId: id, userName: name)
+                case .family(let id, let name):
+                    UMYouBackBar { FamilyView(familyId: id, familyName: name) }
                 default:
                     EmptyView()
                 }
@@ -229,7 +231,17 @@ struct UMYouPushedProfile: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        UserProfileView(userId: userId, userName: userName)
+        UMYouBackBar { UserProfileView(userId: userId, userName: userName) }
+    }
+}
+
+/// Visible "‹ Back" over a screen pushed on the You stack.
+struct UMYouBackBar<Content: View>: View {
+    @ViewBuilder var content: Content
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        content
             .safeAreaInset(edge: .top, spacing: 0) {
                 HStack {
                     Button {
