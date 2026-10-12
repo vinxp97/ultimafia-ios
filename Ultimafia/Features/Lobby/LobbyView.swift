@@ -6,9 +6,11 @@ struct LobbyView: View {
     var body: some View {
         @Bindable var app = app
         NavigationStack(path: $app.path) {
+            ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     playHeader
+                        .id("lobby-top")
                     onlineStrip
                     if app.isOnLobbyWhileSeated {
                         seatedBanner
@@ -28,6 +30,13 @@ struct LobbyView: View {
                 .padding(16)
             }
             .pointerScrolling()
+            .onChange(of: app.lobbyScrollToTop) { _, _ in
+                // Wait for any pop back to the lobby to finish before scrolling.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation { proxy.scrollTo("lobby-top", anchor: .top) }
+                }
+            }
+            }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)

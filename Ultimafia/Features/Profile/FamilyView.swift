@@ -52,7 +52,16 @@ struct FamilyView: View {
         let n = str(blob, "name")
         return n.isEmpty ? (familyName.isEmpty ? "Family" : familyName) : n
     }
-    private var members: [[String: Any]] { blob["members"] as? [[String: Any]] ?? [] }
+    /// Family.jsx: stable sort of the server's member order (join order) by role rank
+    /// leader 0, officer 1, member/unknown 2.
+    private var members: [[String: Any]] {
+        let raw = blob["members"] as? [[String: Any]] ?? []
+        let rank = ["leader": 0, "officer": 1, "member": 2]
+        return raw.enumerated().sorted { a, b in
+            let ra = rank[str(a.element, "role")] ?? 2, rb = rank[str(b.element, "role")] ?? 2
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
+    }
 
     private func str(_ o: [String: Any], _ k: String) -> String {
         if let s = o[k] as? String { return s }

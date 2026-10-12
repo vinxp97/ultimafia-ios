@@ -432,6 +432,11 @@ private struct GameChatPane: View {
                 .onChange(of: session.viewingPhaseId) { _, _ in
                     markAllSeen()
                     unreadCount = 0
+                    if session.reviewScrollTopPending {
+                        session.reviewScrollTopPending = false
+                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
+                        return
+                    }
                     stickToBottom = true
                     jumpToLatest(proxy: proxy)
                 }
@@ -448,6 +453,10 @@ private struct GameChatPane: View {
                         stickToBottom = false
                         DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
                         recomputeUnread()
+                    } else if session.isReview && session.reviewScrollTopPending {
+                        session.reviewScrollTopPending = false
+                        markAllSeen()
+                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
                     } else {
                         markAllSeen()
                         stickToBottom = true

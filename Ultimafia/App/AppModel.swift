@@ -24,6 +24,8 @@ final class AppModel {
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
+    /// Bumped whenever the user returns to the Lobby; LobbyView scrolls to the top on change.
+    var lobbyScrollToTop = 0
     /// Full-screen flows (setup search) that hide the app bar regardless of the game collapse state.
     var suppressAppBar = false
     /// The signed-in user's own custom emotes/stickers (`:name:` -> media path), loaded once per session.
@@ -84,6 +86,7 @@ final class AppModel {
     func goToLobby() {
         hideAppTabs = false
         path.removeAll()
+        lobbyScrollToTop += 1
     }
 
     /// Leaving the Play tab from a profile drops the profile pages so they don't linger.

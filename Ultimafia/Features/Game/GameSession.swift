@@ -282,6 +282,8 @@ final class GameSession {
     private var typingIn: String?
     /// Set once the draft starts with "/"; no typing indicator is sent until a normal message goes out.
     var typingSuppressed = false
+    /// Review just opened: the chat should start at the top of the first phase, not the end.
+    var reviewScrollTopPending = false
     /// Brief inline hint for an invalid slash command (shown above the composer).
     var slashHint: String?
     private var typingIdleTask: Task<Void, Never>?
@@ -692,6 +694,11 @@ final class GameSession {
             finished = true
             stateName = "Review"
             loaded = true
+            // Open on the first phase after pregame (Day 1 / Night 1), chat scrolled to its top.
+            if let first = sortedPhases.first(where: { $0.id >= 0 }) ?? sortedPhases.first {
+                reviewScrollTopPending = true
+                viewPhase(first.id)
+            }
         } catch {
             errorMessage = error.localizedDescription
             onReviewUnavailable?()

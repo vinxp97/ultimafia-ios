@@ -62,7 +62,7 @@ struct MainTabs: View {
             }
         case .lobby:
             tab = "play"
-            if !app.path.isEmpty { app.goToLobby() }
+            if !app.path.isEmpty { app.goToLobby() } else { app.lobbyScrollToTop += 1 }
         case .game:
             let fromYou = tab == "you"
             tab = "play"
