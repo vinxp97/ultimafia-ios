@@ -46,12 +46,18 @@ struct MainTabs: View {
         Binding(
             get: { tab },
             set: { new in
+                if new == "play", tab == "play" { app.playTabReselected(); return }
                 guard new == "leave" else { tab = new; return }
                 if let session = app.game {
                     if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
                 }
             }
         )
+    }
+
+    private var playLabel: (title: String, icon: String) {
+        guard app.seatedGameId != nil else { return ("Play", "theatermasks") }
+        return app.isOnGameScreen ? ("Lobby", "list.bullet.rectangle") : ("Game", "gamecontroller")
     }
 
     var body: some View {
@@ -64,7 +70,7 @@ struct MainTabs: View {
                         .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
                 }
                 LobbyView()
-                    .tabItem { Label("Play", systemImage: "theatermasks") }
+                    .tabItem { Label(playLabel.title, systemImage: playLabel.icon) }
                     .tag("play")
                     .badge(app.seatedGameId == nil ? 0 : 1)
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)

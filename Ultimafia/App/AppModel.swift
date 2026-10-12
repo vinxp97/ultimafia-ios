@@ -21,6 +21,28 @@ final class AppModel {
     enum Route: Hashable {
         case game(String, spectate: Bool)
         case profile(id: String, name: String)
+        case setupSearch
+    }
+
+    /// True while the in-game screen is on top of the Play stack.
+    var isOnGameScreen: Bool {
+        if case .game = path.last { return true }
+        return false
+    }
+
+    /// Play tab re-tap: game screen -> lobby (stay seated), lobby while seated -> game,
+    /// otherwise open setup search.
+    func playTabReselected() {
+        if seatedGameId != nil {
+            if isOnGameScreen {
+                hideAppTabs = false
+                path.removeAll()
+            } else {
+                resumeSeatedGame()
+            }
+        } else if path.last != .setupSearch {
+            path = [.setupSearch]
+        }
     }
 
     var isSignedIn: Bool { user?.id != nil }

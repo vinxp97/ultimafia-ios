@@ -34,6 +34,8 @@ struct LobbyView: View {
                     GameView()
                 case .profile(let id, let name):
                     UserProfileView(userId: id, userName: name)
+                case .setupSearch:
+                    SetupSearchView()
                 }
             }
         }

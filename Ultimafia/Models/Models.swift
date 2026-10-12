@@ -40,6 +40,11 @@ enum UMText {
     }
 }
 
+struct SetupCreator: Decodable, Hashable {
+    var id: String?
+    var name: String?
+}
+
 struct SetupInfo: Decodable, Hashable, Identifiable {
     var id: String
     var name: String?
@@ -49,6 +54,10 @@ struct SetupInfo: Decodable, Hashable, Identifiable {
     var count: [String: Int]?
     var roles: JSONValue?
     var useRoleGroups: Bool?
+    var ranked: Bool?
+    var competitive: Bool?
+    var featured: Bool?
+    var creator: SetupCreator?
 
     var displayName: String {
         let raw = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
