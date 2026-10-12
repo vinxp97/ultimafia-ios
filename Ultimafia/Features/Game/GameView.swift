@@ -84,7 +84,14 @@ private struct GameScreen: View {
         }
         .task { await RoleCatalog.shared.load() }
         // Entering a game or review collapses the bottom bar, like tapping Hide; restore it on the way out.
-        .onAppear { app.hideAppTabs = true }
+        .onAppear {
+            app.hideAppTabs = true
+            if !session.isReview {
+                app.isViewingGame = true
+                app.mentionCount = 0
+            }
+        }
+        .onDisappear { if !session.isReview { app.isViewingGame = false } }
         .onDisappear { app.hideAppTabs = false }
     }
 

@@ -15,6 +15,10 @@ final class AppModel {
     var finishedHasMore = true
     /// Finished-game replay. Kept apart from `game` so it never counts as seated.
     var reviewSession: GameSession?
+    /// Pings received while seated but away from the game screen; shown on the Game tab.
+    var mentionCount = 0
+    /// Live game screen actually on screen (set by GameView appear/disappear, covers tab switches).
+    var isViewingGame = false
     @ObservationIgnored private var finishedCursor: Double?
     @ObservationIgnored private var loadingFinished = false
     var path: [Route] = []
@@ -35,6 +39,10 @@ final class AppModel {
     var isOnGameScreen: Bool {
         if case .game = path.last { return true }
         return false
+    }
+
+    var mentionBadge: Int {
+        (seatedGameId != nil && game != nil && !isViewingGame) ? mentionCount : 0
     }
 
     /// Play tab re-tap: game screen -> lobby (stay seated), lobby while seated -> game,
@@ -168,17 +176,24 @@ final class AppModel {
         loadingFinished = true
         defer { loadingFinished = false }
         do {
-            let rows = try await APIClient.shared.finishedGames(before: reset ? nil : finishedCursor)
-            // Cursor from the raw page so filtered-out game types don't stall paging.
-            if let oldest = rows.compactMap(\.endTime).min() { finishedCursor = oldest }
-            let kept = rows.filter { UMGameTypes.reviewable.contains($0.type ?? "") }
-            if reset {
-                finishedGames = kept
-            } else {
-                let known = Set(finishedGames.map(\.id))
-                finishedGames += kept.filter { !known.contains($0.id) }
-            }
-            finishedHasMore = !rows.isEmpty
+            // A page can be all non-reviewable types; keep paging (bounded) so the
+            // spinner row doesn't sit visible with nothing new to trigger it again.
+            var attempts = 0
+            repeat {
+                attempts += 1
+                let rows = try await APIClient.shared.finishedGames(before: reset ? nil : finishedCursor)
+                // Cursor from the raw page so filtered-out game types don't stall paging.
+                if let oldest = rows.compactMap(\.endTime).min() { finishedCursor = oldest }
+                let kept = rows.filter { UMGameTypes.reviewable.contains($0.type ?? "") }
+                if reset && attempts == 1 {
+                    finishedGames = kept
+                } else {
+                    let known = Set(finishedGames.map(\.id))
+                    finishedGames += kept.filter { !known.contains($0.id) }
+                }
+                finishedHasMore = !rows.isEmpty
+                if !kept.isEmpty { break }
+            } while finishedHasMore && attempts < 4 && !reset
         } catch {
             if reset { finishedGames = [] }
             finishedHasMore = false
@@ -225,6 +240,11 @@ final class AppModel {
             game?.disconnectWithoutLeaving()
         }
         let session = GameSession(gameId: id, spectate: spectate)
+        session.onMention = { [weak self] in
+            guard let self, !self.isViewingGame else { return }
+            self.mentionCount += 1
+        }
+        mentionCount = 0
         game = session
         path = [.game(id, spectate: spectate)]
         Task { await session.start() }

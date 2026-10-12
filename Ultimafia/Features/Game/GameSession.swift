@@ -982,7 +982,12 @@ final class GameSession {
         case "message":
             if var line = parseMessage(data) {
                 line.fromState = currentPhaseId
+                let isNew = !seenMessageIds.contains(line.id)
                 appendLine(line)
+                if isNew, !isQuiet, mentionsSelf(line) {
+                    GameSFX.play("ping")
+                    onMention?()
+                }
             }
         case "quote":
             if var line = parseQuote(data) {
@@ -1176,6 +1181,22 @@ final class GameSession {
         messages.sort { $0.time < $1.time }
         adoptKnownRolesForSelf()
         persistRoleMarks()
+    }
+
+    /// Fired for each live chat message that pings this player (see `mentionsSelf`).
+    @ObservationIgnored var onMention: (() -> Void)?
+
+    /// Web Game.jsx rule: tokens matching /@[\w-]*/ in a live "message" event; a ping is an
+    /// exact (case-sensitive) "@<my in-game name>" or any token starting with "@every".
+    /// Only seated players get pings. Unlike web, the app ignores the user's own messages.
+    private func mentionsSelf(_ line: ChatLine) -> Bool {
+        guard !line.isServer, let selfId, line.senderId != selfId,
+              let me = players.first(where: { $0.id == selfId }) else { return false }
+        guard let re = try? NSRegularExpression(pattern: "@[\\w-]*") else { return false }
+        let text = line.content as NSString
+        let tokens = re.matches(in: line.content, range: NSRange(location: 0, length: text.length))
+            .map { text.substring(with: $0.range) }
+        return tokens.contains("@" + me.name) || tokens.contains { $0.hasPrefix("@every") }
     }
 
     private func appendLine(_ line: ChatLine) {

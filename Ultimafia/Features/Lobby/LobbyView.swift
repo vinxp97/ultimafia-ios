@@ -7,7 +7,7 @@ struct LobbyView: View {
         @Bindable var app = app
         NavigationStack(path: $app.path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     playHeader
                     onlineStrip
                     if app.isOnLobbyWhileSeated {
@@ -17,9 +17,12 @@ struct LobbyView: View {
                     section("In progress", games: excludingSeated(app.inProgressGames), empty: "Nothing in progress.")
                     section("Finished", games: app.finishedGames, empty: "No finished games.")
                     if app.finishedHasMore, !app.finishedGames.isEmpty {
-                        Button("Load more") { Task { await app.loadFinished(reset: false) } }
-                            .frame(maxWidth: .infinity)
+                        // Infinite scroll: the lazy stack only builds this row near the bottom.
+                        ProgressView()
                             .tint(UMTheme.blood)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .onAppear { Task { await app.loadFinished(reset: false) } }
                     }
                 }
                 .padding(16)

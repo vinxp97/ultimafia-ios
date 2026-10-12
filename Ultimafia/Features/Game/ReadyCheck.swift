@@ -104,7 +104,7 @@ enum GameAudio {
 enum GameSFX {
     private static var playing: [AVAudioPlayer] = []
     private static var deathPlaying: [AVAudioPlayer] = []
-    private static let localNames: Set<String> = ["bell", "gunshot"]
+    private static let localNames: Set<String> = ["bell", "gunshot", "ping"]
 
     static func applyVolume() {
         playing.forEach { $0.volume = GameAudio.sfx }
