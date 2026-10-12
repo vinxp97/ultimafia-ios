@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 enum UMEmotes {
     struct Info {
@@ -288,5 +289,75 @@ struct UMFlowLayout: Layout {
             rowH = max(rowH, size.height)
         }
         return (CGSize(width: min(maxW, max(width, 0)), height: y + rowH), origins)
+    }
+}
+
+/// Site-exact emote splitting for markdown: a word is an emote only when it equals a site emote
+/// key (case-insensitive), e.g. `:gun:`. Plain words like "gun" stay text, as on the website.
+/// Spacing is preserved exactly.
+func umStrictEmoteParts(_ raw: String) -> [UMInlinePart] {
+    var out: [UMInlinePart] = []
+    var textBuf = ""
+    for (idx, tok) in raw.split(separator: " ", omittingEmptySubsequences: false).enumerated() {
+        if idx > 0 { textBuf += " " }
+        if let info = UMEmotes.all[tok.lowercased()] {
+            if !textBuf.isEmpty { out.append(.text(textBuf)); textBuf = "" }
+            out.append(.emote(info))
+        } else {
+            textBuf += tok
+        }
+    }
+    if !textBuf.isEmpty { out.append(.text(textBuf)) }
+    return out
+}
+
+/// `#RGB`, `#RRGGBB` or `#RRGGBBAA`, the only forms the site's {color:} accepts.
+func umHexColor(_ s: String) -> Color? {
+    guard s.hasPrefix("#") else { return nil }
+    var hex = String(s.dropFirst())
+    guard [3, 6, 8].contains(hex.count), hex.allSatisfy(\.isHexDigit) else { return nil }
+    if hex.count == 3 { hex = hex.map { "\($0)\($0)" }.joined() }
+    if hex.count == 6 { hex += "FF" }
+    guard let v = UInt64(hex, radix: 16) else { return nil }
+    return Color(.sRGB,
+                 red: Double((v >> 24) & 0xFF) / 255,
+                 green: Double((v >> 16) & 0xFF) / 255,
+                 blue: Double((v >> 8) & 0xFF) / 255,
+                 opacity: Double(v & 0xFF) / 255)
+}
+
+/// Emote bitmaps sized for inline `Text(Image)`, so emotes flow and wrap with the text.
+/// Returns a transparent placeholder of the same size until the download lands (no reflow).
+@MainActor @Observable
+final class UMInlineEmoteCache {
+    static let shared = UMInlineEmoteCache()
+    static let side: CGFloat = 20
+
+    private(set) var images: [URL: UIImage] = [:]
+    @ObservationIgnored private var inflight: Set<URL> = []
+    @ObservationIgnored private lazy var blank: UIImage = {
+        UIGraphicsImageRenderer(size: CGSize(width: Self.side, height: Self.side)).image { _ in }
+    }()
+
+    func image(for url: URL) -> UIImage {
+        if let hit = images[url] { return hit }
+        if !inflight.contains(url) {
+            inflight.insert(url)
+            Task { await load(url) }
+        }
+        return blank
+    }
+
+    private func load(_ url: URL) async {
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let source = UIImage(data: data) else { return }
+        let side = Self.side
+        let scale = min(side / max(source.size.width, 1), side / max(source.size.height, 1))
+        let size = CGSize(width: source.size.width * scale, height: source.size.height * scale)
+        let canvas = CGSize(width: side, height: side)
+        images[url] = UIGraphicsImageRenderer(size: canvas).image { _ in
+            source.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2,
+                                   width: size.width, height: size.height))
+        }
     }
 }

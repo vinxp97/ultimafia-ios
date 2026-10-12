@@ -482,6 +482,8 @@ struct UMMarkdownView: View {
     var otherRoles: [String] = []
 
     @State private var selectedRole: UMRoleMentionItem?
+    @State private var spoilersRevealed = false
+    @State private var emoteCache = UMInlineEmoteCache.shared
 
     var body: some View {
         if roleGameType != nil {
@@ -531,10 +533,15 @@ struct UMMarkdownView: View {
         case image(URL, link: URL?)
     }
 
+    /// Block structure of the site's markdown (react-markdown v8, plain CommonMark, no GFM).
     private enum Block {
         case heading(Int, String)
-        case listItem(String)
-        case paragraph(String)
+        /// `marker` is "•" for bullets or "3." for ordered items; `depth` is the nesting level.
+        case listItem(marker: String, depth: Int, text: String)
+        case paragraph(String, centered: Bool)
+        case quote(String)
+        case code(String)
+        case rule
     }
 
     @ViewBuilder
@@ -544,14 +551,36 @@ struct UMMarkdownView: View {
                 switch block {
                 case .heading(let level, let t):
                     richLine(t, headingLevel: level)
-                case .listItem(let t):
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("•")
+                case .listItem(let marker, let depth, let t):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(marker)
                             .foregroundStyle(.white)
+                            .monospacedDigit()
                         richLine(t, headingLevel: nil)
                     }
-                case .paragraph(let t):
+                    .padding(.leading, CGFloat(depth) * 18)
+                case .paragraph(let t, let centered):
+                    if centered {
+                        richLine(t, headingLevel: nil, alignment: .center)
+                    } else {
+                        richLine(t, headingLevel: nil)
+                    }
+                case .quote(let t):
                     richLine(t, headingLevel: nil)
+                        .padding(.leading, 10)
+                        .overlay(alignment: .leading) {
+                            Rectangle().fill(UMTheme.muted.opacity(0.6)).frame(width: 3)
+                        }
+                case .code(let t):
+                    Text(t)
+                        .font(.system(.footnote, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                case .rule:
+                    Divider().overlay(UMTheme.line)
                 }
             }
         }
@@ -610,39 +639,122 @@ struct UMMarkdownView: View {
         return out.isEmpty ? [.text(text)] : out
     }
 
+    // MARK: Block parsing
+
     private func blocks(from raw: String) -> [Block] {
-        let cleaned = preprocess(raw)
-        let lines = cleaned.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lines = preprocess(raw).components(separatedBy: "\n")
         var out: [Block] = []
         var i = 0
         while i < lines.count {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { i += 1; continue }
+
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                let fence = String(trimmed.prefix(3))
+                var body: [String] = []
                 i += 1
+                while i < lines.count, !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix(fence) {
+                    body.append(lines[i]); i += 1
+                }
+                i += 1
+                out.append(.code(body.joined(separator: "\n")))
                 continue
             }
+            if isRule(trimmed) { out.append(.rule); i += 1; continue }
             if let heading = parseHeading(trimmed) {
-                out.append(.heading(heading.0, heading.1))
-                i += 1
+                out.append(.heading(heading.0, heading.1)); i += 1; continue
+            }
+            if trimmed.hasPrefix(">") {
+                var parts: [String] = []
+                while i < lines.count {
+                    let t = lines[i].trimmingCharacters(in: .whitespaces)
+                    guard t.hasPrefix(">") else { break }
+                    parts.append(String(t.dropFirst()).trimmingCharacters(in: .whitespaces))
+                    i += 1
+                }
+                out.append(.quote(joinSoft(parts)))
                 continue
             }
             if let item = parseListItem(trimmed) {
-                out.append(.listItem(item))
+                let depth = indentWidth(line) / 2
+                var parts = [item.text]
+                var rawParts = [line]
                 i += 1
+                // Lazy continuation: following non-blank lines that don't start a new block belong to the item.
+                while i < lines.count {
+                    let t = lines[i].trimmingCharacters(in: .whitespaces)
+                    if t.isEmpty || startsBlock(t) { break }
+                    parts.append(t); rawParts.append(lines[i]); i += 1
+                }
+                out.append(.listItem(marker: item.marker, depth: min(depth, 4), text: joinSoft(parts, raw: rawParts)))
                 continue
             }
             var parts = [trimmed]
+            var rawParts = [line]
             i += 1
+            var setext: Int?
             while i < lines.count {
                 let t = lines[i].trimmingCharacters(in: .whitespaces)
                 if t.isEmpty { break }
-                if parseHeading(t) != nil || parseListItem(t) != nil { break }
-                parts.append(t)
-                i += 1
+                if !t.isEmpty, t.allSatisfy({ $0 == "=" }) { setext = 1; i += 1; break }
+                if t.count >= 2, t.allSatisfy({ $0 == "-" }) { setext = 2; i += 1; break }
+                if startsBlock(t) { break }
+                parts.append(t); rawParts.append(lines[i]); i += 1
             }
-            out.append(.paragraph(parts.joined(separator: " ")))
+            let text = joinSoft(parts, raw: rawParts)
+            if let setext {
+                out.append(.heading(setext, text))
+            } else if let inner = centeredBody(text) {
+                out.append(.paragraph(inner, centered: true))
+            } else {
+                out.append(.paragraph(text, centered: false))
+            }
         }
         return out
+    }
+
+    private func startsBlock(_ t: String) -> Bool {
+        parseHeading(t) != nil || parseListItem(t) != nil || isRule(t)
+            || t.hasPrefix(">") || t.hasPrefix("```") || t.hasPrefix("~~~")
+    }
+
+    /// CommonMark: a single newline is a soft break (space); two trailing spaces or a trailing
+    /// backslash make a hard break.
+    private func joinSoft(_ parts: [String], raw: [String]? = nil) -> String {
+        var out = ""
+        for (idx, part) in parts.enumerated() {
+            var p = part
+            if idx > 0 {
+                let prevRaw = raw?[idx - 1] ?? parts[idx - 1]
+                let hard = prevRaw.hasSuffix("  ") || parts[idx - 1].hasSuffix("\\")
+                if hard, out.hasSuffix("\\") { out.removeLast() }
+                out += hard ? "\n" : " "
+            }
+            if idx == parts.count - 1, p.hasSuffix("\\"), !p.hasSuffix("\\\\") { p.removeLast() }
+            out += p
+        }
+        return out
+    }
+
+    private func indentWidth(_ line: String) -> Int {
+        var n = 0
+        for ch in line {
+            if ch == " " { n += 1 } else if ch == "\t" { n += 4 } else { break }
+        }
+        return n
+    }
+
+    private func isRule(_ t: String) -> Bool {
+        let s = t.replacingOccurrences(of: " ", with: "")
+        guard s.count >= 3, let c = s.first, "-*_".contains(c) else { return false }
+        return s.allSatisfy { $0 == c }
+    }
+
+    private func centeredBody(_ t: String) -> String? {
+        guard t.hasPrefix("{center}"), t.hasSuffix("{/center}") else { return nil }
+        let inner = String(t.dropFirst(8).dropLast(9))
+        return inner.contains("{center}") ? nil : inner
     }
 
     private func parseHeading(_ s: String) -> (Int, String)? {
@@ -651,53 +763,123 @@ struct UMMarkdownView: View {
         for ch in s {
             if ch == "#" { n += 1 } else { break }
         }
-        guard n >= 1, n <= 6, n < s.count else { return nil }
+        guard n >= 1, n <= 6 else { return nil }
         let rest = s.dropFirst(n)
-        guard rest.first == " " || rest.first == "\t" else { return nil }
-        return (n, rest.trimmingCharacters(in: .whitespaces))
+        guard rest.isEmpty || rest.first == " " || rest.first == "\t" else { return nil }
+        var body = rest.trimmingCharacters(in: .whitespaces)
+        // Optional closing #s.
+        while body.hasSuffix("#") { body.removeLast() }
+        return (n, body.trimmingCharacters(in: .whitespaces))
     }
 
-    private func parseListItem(_ s: String) -> String? {
-        for prefix in ["- ", "* ", "+ "] {
-            if s.hasPrefix(prefix) {
-                return String(s.dropFirst(prefix.count))
-            }
+    private func parseListItem(_ s: String) -> (marker: String, text: String)? {
+        for prefix in ["- ", "* ", "+ "] where s.hasPrefix(prefix) {
+            return ("•", String(s.dropFirst(prefix.count)))
         }
         var i = s.startIndex
-        var sawDigit = false
-        while i < s.endIndex, s[i].isNumber {
-            sawDigit = true
+        var digits = ""
+        while i < s.endIndex, s[i].isASCII, s[i].isNumber, digits.count < 9 {
+            digits.append(s[i])
             i = s.index(after: i)
         }
-        guard sawDigit, i < s.endIndex, s[i] == "." else { return nil }
+        guard !digits.isEmpty, i < s.endIndex, s[i] == "." || s[i] == ")" else { return nil }
         let after = s.index(after: i)
         guard after < s.endIndex, s[after] == " " else { return nil }
-        return String(s[s.index(after: after)...])
+        return ("\(Int(digits) ?? 1).", String(s[s.index(after: after)...]))
     }
 
-    @ViewBuilder
-    private func richLine(_ s: String, headingLevel: Int?) -> some View {
-        let parts = umEmoteParts(s)
-        if parts.contains(where: { if case .emote = $0 { return true }; return false }) {
-            UMFlowLayout(spacing: 4) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                    switch part {
-                    case .text(let t):
-                        Text(styledInline(t, headingLevel: headingLevel))
-                    case .emote(let info):
-                        AnimatedWebPView(url: info.url, showsPlaceholder: false)
-                            .frame(width: 22, height: 22)
-                    }
+    // MARK: Inline rendering
+
+    /// One wrapping `Text`: emotes and role icons are inline images inside the text run, so long
+    /// lines wrap normally (separate image views in a flow layout made each text piece one
+    /// unwrapped line, which ran off-screen).
+    private func richLine(_ s: String, headingLevel: Int?, alignment: TextAlignment = .leading) -> some View {
+        richText(s, headingLevel: headingLevel)
+            .multilineTextAlignment(alignment)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: alignment == .center ? .center : .leading)
+            .onTapGesture { if s.contains("||") { spoilersRevealed.toggle() } }
+    }
+
+    private func richText(_ s: String, headingLevel: Int?) -> Text {
+        var out = Text("")
+        for part in umStrictEmoteParts(s) {
+            switch part {
+            case .emote(let info):
+                let image = emoteCache.image(for: info.url)
+                out = Text("\(out)\(Text(Image(uiImage: image)).baselineOffset(-4))")
+            case .text(let t):
+                for seg in styleSegments(t) {
+                    var attr = styledInline(seg.text, headingLevel: headingLevel)
+                    applyStyle(seg.style, to: &attr)
+                    let piece = (roleGameType.map { umRoleMentionText(attr, gameType: $0) }) ?? Text(attr)
+                    out = Text("\(out)\(piece)")
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else if let type = roleGameType {
-            umRoleMentionText(styledInline(s, headingLevel: headingLevel), gameType: type)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(styledInline(s, headingLevel: headingLevel))
-                .fixedSize(horizontal: false, vertical: true)
+        }
+        return out
+    }
+
+    private enum InlineStyle {
+        case plain
+        case color(Color)
+        case size(CGFloat)
+        case spoiler
+        case mention
+    }
+
+    /// Splits the site's custom inline tokens: ||spoiler||, {color:#hex}…{/color},
+    /// {size:N}…{/size}, inline {center}…{/center}, and @!Tag / @:User pings.
+    private func styleSegments(_ s: String) -> [(text: String, style: InlineStyle)] {
+        let pattern = #"\|\|(.+?)\|\||\{color:([^}]+)\}(.+?)\{/color\}|\{size:([^}]+)\}(.+?)\{/size\}|\{center\}(.+?)\{/center\}|@[!:]([\w-]+)"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [(s, .plain)] }
+        let ns = s as NSString
+        var out: [(String, InlineStyle)] = []
+        var cursor = 0
+        func group(_ m: NSTextCheckingResult, _ i: Int) -> String? {
+            let r = m.range(at: i)
+            return r.location == NSNotFound ? nil : ns.substring(with: r)
+        }
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            if m.range.location > cursor {
+                out.append((ns.substring(with: NSRange(location: cursor, length: m.range.location - cursor)), .plain))
+            }
+            if let t = group(m, 1) {
+                out.append((t, .spoiler))
+            } else if let c = group(m, 2), let t = group(m, 3) {
+                out.append((t, umHexColor(c.trimmingCharacters(in: .whitespaces)).map { .color($0) } ?? .plain))
+            } else if let z = group(m, 4), let t = group(m, 5) {
+                let n = Int(z.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "px", with: ""))
+                out.append((t, n.map { .size(CGFloat(max(8, min(72, $0)))) } ?? .plain))
+            } else if let t = group(m, 6) {
+                out.append((t, .plain))
+            } else if let name = group(m, 7) {
+                out.append(("@" + name, .mention))
+            }
+            cursor = m.range.location + m.range.length
+        }
+        if cursor < ns.length { out.append((ns.substring(from: cursor), .plain)) }
+        return out.isEmpty ? [(s, .plain)] : out
+    }
+
+    private func applyStyle(_ style: InlineStyle, to attr: inout AttributedString) {
+        switch style {
+        case .plain:
+            break
+        case .color(let c):
+            for run in attr.runs where run.link == nil { attr[run.range].foregroundColor = c }
+        case .size(let pt):
+            attr.font = .system(size: pt)
+        case .spoiler:
+            if !spoilersRevealed {
+                attr.foregroundColor = UMTheme.blood
+                attr.backgroundColor = UMTheme.blood
+            } else {
+                attr.backgroundColor = Color.white.opacity(0.08)
+            }
+        case .mention:
+            attr.inlinePresentationIntent = .stronglyEmphasized
+            attr.foregroundColor = umLinkBlue
         }
     }
 
@@ -739,19 +921,17 @@ struct UMMarkdownView: View {
         return paint(parsed)
     }
 
+    /// Normalizes incoming content: CRLF/CR newlines, tabs, zero-width/nbsp noise, and raw HTML.
+    /// The site (react-markdown without rehype-raw) never renders HTML, so tags are dropped
+    /// here; `<br>` becomes a line break and `<p>`/`<div>` boundaries become paragraph breaks.
     private func preprocess(_ s: String) -> String {
-        var t = s
-        t = umRegexReplace(t, #"\{color:[^}]+\}(.+?)\{\/color\}"#, "$1")
-        t = umRegexReplace(t, #"\{size:[^}]+\}(.+?)\{\/size\}"#, "$1")
-        t = umRegexReplace(t, #"\{center\}(.+?)\{\/center\}"#, "$1")
-        t = umRegexReplace(t, #"\{color:[^}]*\}"#, "")
-        t = umRegexReplace(t, #"\{size:[^}]*\}"#, "")
-        t = umRegexReplace(t, #"\{center\}"#, "")
-        t = umRegexReplace(t, #"\{\/color\}"#, "")
-        t = umRegexReplace(t, #"\{\/size\}"#, "")
-        t = umRegexReplace(t, #"\{\/center\}"#, "")
-        t = t.replacingOccurrences(of: "||", with: "")
-        t = t.replacingOccurrences(of: "\r\n", with: "\n")
+        var t = s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        t = t.replacingOccurrences(of: "\u{00A0}", with: " ")
+        t = t.replacingOccurrences(of: "\u{200B}", with: "").replacingOccurrences(of: "\u{FEFF}", with: "")
+        t = umRegexReplace(t, #"(?i)<br\s*/?>"#, "  \n")
+        t = umRegexReplace(t, #"(?i)</?(p|div)(\s[^>]*)?>"#, "\n\n")
+        t = umRegexReplace(t, #"</?[A-Za-z][A-Za-z0-9-]*(\s[^<>]*)?/?>"#, "")
+        t = umRegexReplace(t, #"<!--.*?-->"#, "")
         return t
     }
 
