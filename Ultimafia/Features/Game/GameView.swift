@@ -505,6 +505,8 @@ private struct GameChatPane: View {
 }
 
 private struct ChatComposer: View {
+    /// Mirrors keyboard visibility from will* notifications (drives the chevron icon).
+    @State private var keyboardShown = false
     var session: GameSession
     @Binding var draft: String
     var chatFocused: Binding<Bool>
@@ -838,14 +840,26 @@ private struct ChatComposer: View {
                 Button {
                     chatFocused.wrappedValue.toggle()
                 } label: {
-                    Image(systemName: chatFocused.wrappedValue ? "chevron.down" : "chevron.up")
+                    // Icon follows keyboardWillShow/WillHide (fires before the slide begins) and swaps
+                    // with no transition of its own, so it rides the same keyboard animation as the bar.
+                    Image(systemName: keyboardShown ? "chevron.down" : "chevron.up")
+                        .contentTransition(.identity)
+                        .transaction { $0.animation = nil }
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(UMTheme.muted)
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(chatFocused.wrappedValue ? "Hide keyboard" : "Show keyboard")
+                .accessibilityLabel(keyboardShown ? "Hide keyboard" : "Show keyboard")
+                #if canImport(UIKit)
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                    keyboardShown = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                    keyboardShown = false
+                }
+                #endif
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

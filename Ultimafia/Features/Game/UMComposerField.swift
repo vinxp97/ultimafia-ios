@@ -64,7 +64,7 @@ struct UMComposerField: UIViewRepresentable {
         if isFocused, !tv.isFirstResponder, enabled, tv.window != nil {
             DispatchQueue.main.async { tv.becomeFirstResponder() }
         } else if !isFocused, tv.isFirstResponder {
-            DispatchQueue.main.async { tv.resignFirstResponder() }
+            tv.resignFirstResponder()
         }
     }
 
