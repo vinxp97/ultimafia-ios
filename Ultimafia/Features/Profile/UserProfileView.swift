@@ -106,6 +106,12 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 0) {
             hero
             VStack(alignment: .leading, spacing: 12) {
+                let trophies = UMTrophy.list(from: blob)
+                if !trophies.isEmpty {
+                    outlinedCard {
+                        UMTrophyRow(trophies: trophies)
+                    }
+                }
                 if !string("bio").isEmpty {
                     outlinedCard {
                         UMMarkdownView(text: string("bio"))

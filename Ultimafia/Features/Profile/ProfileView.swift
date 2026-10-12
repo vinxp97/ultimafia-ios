@@ -17,6 +17,8 @@ struct ProfileView: View {
     @State private var confirmClearCache = false
     @State private var cacheBytes: Int64 = 0
     @State private var clearedMessage: String?
+    @State private var trophies: [UMTrophy] = []
+    @State private var selectedTrophy: UMTrophy?
 
     var body: some View {
         NavigationStack {
@@ -50,6 +52,24 @@ struct ProfileView: View {
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)
+                }
+                if !trophies.isEmpty {
+                    Section("Trophies") {
+                        ForEach(trophies) { t in
+                            Button { selectedTrophy = t } label: {
+                                HStack(spacing: 12) {
+                                    UMTrophyIcon(trophy: t, size: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(t.name).foregroundStyle(.white)
+                                        Text(t.awardedAt.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "Date unknown")
+                                            .font(.caption)
+                                            .foregroundStyle(UMTheme.muted)
+                                    }
+                                }
+                            }
+                            .listRowBackground(UMTheme.card)
+                        }
+                    }
                 }
                 Section {
                     NavigationLink("Custom Emojis & Stickers") { CustomMediaOrderView() }
@@ -121,6 +141,8 @@ struct ProfileView: View {
             .navigationTitle("You")
             // Web asks before silencing alerts; declining leaves them at 10%.
             .task { cacheBytes = UMCustomAssetCache.diskBytes() }
+            .task(id: app.user?.id) { await loadTrophies() }
+            .sheet(item: $selectedTrophy) { UMTrophyDetailSheet(trophy: $0) }
             .confirmationDialog("Clear custom asset cache?", isPresented: $confirmClearCache, titleVisibility: .visible) {
                 Button("Clear", role: .destructive) {
                     Task {
@@ -170,4 +192,11 @@ struct ProfileView: View {
         }
         .listRowBackground(UMTheme.card)
     }
+
+    private func loadTrophies() async {
+        guard let id = app.user?.id, !id.isEmpty,
+              let blob = try? await APIClient.shared.userProfile(id) else { return }
+        trophies = UMTrophy.list(from: blob)
+    }
+
 }

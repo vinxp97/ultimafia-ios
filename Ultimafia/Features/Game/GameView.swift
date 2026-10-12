@@ -511,24 +511,52 @@ private struct ChatComposer: View {
         let isSticker: Bool
     }
 
-    /// Current word when it's a bare `:` (show everything) or `:x...` (colon then a letter).
-    private var colonToken: (query: String, range: Range<String.Index>)? {
+    /// Current word when it starts with `:` (emoji) or `;` (sticker), bare or followed by a letter/digit.
+    /// Only a token start counts, so `hi;` or `a;b` never trigger.
+    private var mediaToken: (query: String, sticker: Bool, range: Range<String.Index>)? {
         guard let last = draft.last, !last.isWhitespace, !draft.hasPrefix("/") else { return nil }
         let start = draft.lastIndex(where: { $0.isWhitespace }).map { draft.index(after: $0) } ?? draft.startIndex
         let word = draft[start...]
-        guard word.hasPrefix(":"), word.count == 1 || word.dropFirst().first?.isLetter == true else { return nil }
+        guard let trigger = word.first, trigger == ":" || trigger == ";" else { return nil }
+        guard word.count == 1 || word.dropFirst().first.map({ $0.isLetter || $0.isNumber }) == true else { return nil }
         var q = String(word.dropFirst()).lowercased()
-        if q.hasSuffix(":") { q.removeLast() }
-        return (q, start..<draft.endIndex)
+        if q.last == trigger { q.removeLast() }
+        return (q, trigger == ";", start..<draft.endIndex)
+    }
+
+    private var selfPlayer: GamePlayer? {
+        guard let me = app.user?.id else { return nil }
+        return session.players.first { $0.userId == me || $0.id == me }
+    }
+
+    private var stickerMap: [String: String] {
+        app.myCustomStickers.isEmpty ? (selfPlayer?.customStickers ?? [:]) : app.myCustomStickers
+    }
+
+    nonisolated private static func bareCode(_ code: String) -> String {
+        code.trimmingCharacters(in: CharacterSet(charactersIn: ":;")).lowercased()
+    }
+
+    /// Rewrites whole-token `;name;` to `:name:` when `name` is one of the user's stickers (case-insensitive,
+    /// like the site's word match). Anything else, including prose semicolons, is left as typed.
+    nonisolated static func rewriteStickerTokens(_ text: String, stickerNames: Set<String>) -> String {
+        guard !stickerNames.isEmpty, text.contains(";"),
+              let re = try? NSRegularExpression(pattern: "(?<!\\S);([^\\s;]+);(?!\\S)") else { return text }
+        let ns = text as NSString
+        var out = text
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let name = ns.substring(with: m.range(at: 1))
+            guard stickerNames.contains(name.lowercased()), let r = Range(m.range, in: out) else { continue }
+            out.replaceSubrange(r, with: ":\(name):")
+        }
+        return out
     }
 
     /// Own custom emotes and stickers only. API data first, in-game self player maps as fallback.
     private var mediaSuggestions: [MediaSuggestion] {
-        guard showEmoteAutocomplete, chatFocused.wrappedValue, let t = colonToken else { return [] }
+        guard showEmoteAutocomplete, chatFocused.wrappedValue, let t = mediaToken else { return [] }
         let me = app.user?.id
-        let selfPlayer = me.flatMap { id in session.players.first { $0.userId == id || $0.id == id } }
         let emotes = app.myCustomEmotes.isEmpty ? (selfPlayer?.customEmotes ?? [:]) : app.myCustomEmotes
-        let stickers = app.myCustomStickers.isEmpty ? (selfPlayer?.customStickers ?? [:]) : app.myCustomStickers
         let rank = EmoteOrderStore.shared.rank(for: me)
         func ranked(_ map: [String: String], sticker: Bool) -> [MediaSuggestion] {
             let items = map.compactMap { code, path -> (String, URL)? in
@@ -546,13 +574,14 @@ private struct ChatComposer: View {
                 return ia != ib ? ia < ib : a.0 < b.0
             }.map { MediaSuggestion(code: $0.0, url: $0.1, isSticker: sticker) }
         }
-        return ranked(emotes, sticker: false) + ranked(stickers, sticker: true)
+        return t.sticker ? ranked(stickerMap, sticker: true) : ranked(emotes, sticker: false)
     }
 
     private func applyMedia(_ item: MediaSuggestion) {
-        guard let t = colonToken else { return }
+        guard let t = mediaToken else { return }
         var next = draft
-        next.replaceSubrange(t.range, with: item.code + " ")
+        let bare = Self.bareCode(item.code)
+        next.replaceSubrange(t.range, with: (item.isSticker ? ";\(bare);" : ":\(bare):") + " ")
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
     }
@@ -569,7 +598,7 @@ private struct ChatComposer: View {
     }
 
     private var nameSuggestions: [String] {
-        guard showTabButton, chatFocused.wrappedValue, colonToken == nil, let t = nameToken else { return [] }
+        guard showTabButton, chatFocused.wrappedValue, mediaToken == nil, let t = nameToken else { return [] }
         var seen = Set<String>()
         return session.players.map(\.name).filter { name in
             name.lowercased().hasPrefix(t.query.lowercased())
@@ -755,7 +784,7 @@ private struct ChatComposer: View {
 
     private func send() {
         guard !session.isSpeakCoolingDown else { return }
-        let text = draft
+        let text = Self.rewriteStickerTokens(draft, stickerNames: Set(stickerMap.keys.map(Self.bareCode)))
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         session.stopTyping()
         if session.speak(text) {
