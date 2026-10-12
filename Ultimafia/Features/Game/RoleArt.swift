@@ -679,29 +679,39 @@ enum RoleArt {
         "Mafia-X-Shot": "modifiers/x-shot.png",
     ]
 
+    /// Bundled copy first (RoleIcons/, path with "/" -> "__"), CDN for icons added after this build.
+    static func assetURL(_ path: String) -> URL? {
+        let flat = path.replacingOccurrences(of: "/", with: "__")
+        let ns = flat as NSString
+        if let local = Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension) {
+            return local
+        }
+        return assetURL(path)
+    }
+
     static var banishedPoolURL: URL? {
-        URL(string: cdn + "roles/banished-vivid.png")
+        assetURL("roles/banished-vivid.png")
     }
 
     static func roleURL(gameType: String, name: String) -> URL? {
         let key = "\(umRoleToken(gameType))-\(umRoleToken(name))"
         guard let path = rolePaths[key] else { return nil }
-        return URL(string: cdn + path)
+        return assetURL(path)
     }
 
     static func modifierURL(gameType: String, name: String) -> URL? {
         let key = "\(umRoleToken(gameType))-\(umRoleToken(name))"
         guard let path = modifierPaths[key] else { return nil }
-        return URL(string: cdn + path)
+        return assetURL(path)
     }
 
     static func badgeURL(modifierCount: Int) -> URL? {
         switch modifierCount {
-        case 2: return URL(string: cdn + "modifiers/modified-twice.png")
-        case 3: return URL(string: cdn + "modifiers/modified-thrice.png")
-        case 4: return URL(string: cdn + "modifiers/modified-fourfold.png")
-        case 5: return URL(string: cdn + "modifiers/modified-quintuple.png")
-        case let n where n >= 6: return URL(string: cdn + "modifiers/modified-sextuple.png")
+        case 2: return assetURL("modifiers/modified-twice.png")
+        case 3: return assetURL("modifiers/modified-thrice.png")
+        case 4: return assetURL("modifiers/modified-fourfold.png")
+        case 5: return assetURL("modifiers/modified-quintuple.png")
+        case let n where n >= 6: return assetURL("modifiers/modified-sextuple.png")
         default: return nil
         }
     }

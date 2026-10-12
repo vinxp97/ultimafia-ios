@@ -56,7 +56,7 @@ struct MainTabs: View {
     }
 
     private var playLabel: (title: String, icon: String) {
-        guard app.seatedGameId != nil else { return ("Play", "theatermasks") }
+        guard app.seatedGameId != nil else { return ("Create", "plus.circle") }
         return app.isOnGameScreen ? ("Lobby", "list.bullet.rectangle") : ("Game", "gamecontroller")
     }
 
