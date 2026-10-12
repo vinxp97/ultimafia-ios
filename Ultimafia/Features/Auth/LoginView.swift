@@ -159,7 +159,7 @@ struct LoginView: View {
 
             Spacer()
             SavedAccountsRow()
-            Text("Talks to ultimafia.com. Same account as the website.")
+            Text("Companion App to Ultimafia.com")
                 .font(.caption2)
                 .foregroundStyle(UMTheme.muted)
                 .padding(.bottom, 24)
