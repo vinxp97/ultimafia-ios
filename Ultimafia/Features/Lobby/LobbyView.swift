@@ -59,7 +59,7 @@ struct LobbyView: View {
                 .scaledToFit()
                 .frame(maxHeight: 44, alignment: .leading)
                 .accessibilityHidden(true)
-            Text("MOBILE")
+            Text("Mobile")
                 .font(.title3.weight(.heavy))
                 .tracking(1.5)
                 .foregroundStyle(.white)
