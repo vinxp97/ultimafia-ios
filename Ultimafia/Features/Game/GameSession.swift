@@ -680,7 +680,7 @@ final class GameSession {
             token = info.token
             socket.connect(port: info.port.value)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UMFriendlyError.message(for: error)
         }
     }
 
@@ -747,7 +747,7 @@ final class GameSession {
                 viewPhase(first.id)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UMFriendlyError.message(for: error)
             onReviewUnavailable?()
         }
     }

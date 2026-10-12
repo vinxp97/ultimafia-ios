@@ -51,12 +51,10 @@ final class APIClient {
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UMError.message("No response.") }
         if http.statusCode == 401 || http.statusCode == 403 {
-            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unauthorized"
-            throw UMAuthRejected(message: text.isEmpty ? "Not signed in." : text)
+            throw UMAuthRejected(message: UMFriendlyError.serverText(data: data, status: http.statusCode, fallback: "Not signed in."))
         }
         if http.statusCode >= 400 {
-            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw UMError.message(text?.isEmpty == false ? text! : "Request failed (\(http.statusCode)).")
+            throw UMError.message(UMFriendlyError.serverText(data: data, status: http.statusCode, fallback: "Request failed (\(http.statusCode))."))
         }
         return data
     }
@@ -90,9 +88,8 @@ final class APIClient {
         guard let http = response as? HTTPURLResponse else { throw UMError.message("No response.") }
         if http.statusCode == 413 { throw UMError.message("File too large for the server.") }
         if http.statusCode >= 400 {
-            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             // Upload 401/403s are usually shop/perk gating, not sign-in loss: surface as a plain message.
-            throw UMError.message(text?.isEmpty == false ? text! : "Upload failed (\(http.statusCode)).")
+            throw UMError.message(UMFriendlyError.serverText(data: data, status: http.statusCode, fallback: "Upload failed (\(http.statusCode))."))
         }
         return data
     }
@@ -272,7 +269,7 @@ final class APIClient {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .prefix(80) ?? ""
         if snippet.hasPrefix("<") || snippet.lowercased().contains("<!doctype") {
-            return "Got a web page instead of JSON from /\(path). Check the request URL."
+            return "Ultimafia sent an unexpected response. Try again in a moment."
         }
         if snippet.isEmpty {
             return "Empty response from /\(path)."

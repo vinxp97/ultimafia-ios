@@ -133,7 +133,7 @@ struct UMPlayerModerationBar: View {
                 try await UMModeration.toggleBlock(userId: uid, app: app)
                 resultMessage = wasBlocked ? "User unblocked." : "User blocked."
             } catch {
-                resultMessage = error.localizedDescription
+                resultMessage = UMFriendlyError.message(for: error)
             }
             busy = false
         }
@@ -239,7 +239,7 @@ struct UMReportSheet: View {
                 try await UMModeration.sendReport(gameId: gameId, userId: uid, rule: rule, description: details)
                 sent = true
             } catch {
-                errorText = error.localizedDescription
+                errorText = UMFriendlyError.message(for: error)
             }
             sending = false
         }

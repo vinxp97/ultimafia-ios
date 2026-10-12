@@ -21,9 +21,9 @@ struct FamilyView: View {
                     .tint(UMTheme.blood)
                     .frame(maxWidth: .infinity, minHeight: 180)
             } else if let error {
-                Text(error)
-                    .foregroundStyle(UMTheme.muted)
-                    .padding()
+                UMLoadErrorView(title: "Couldn't load family.", detail: error) {
+                    Task { await load() }
+                }
             } else {
                 familyBody
             }
@@ -313,7 +313,7 @@ struct FamilyView: View {
         do {
             blob = try await APIClient.shared.familyProfile(familyId)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
         loading = false
     }

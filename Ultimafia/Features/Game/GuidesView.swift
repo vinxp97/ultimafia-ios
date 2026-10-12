@@ -69,7 +69,9 @@ struct GuidesView: View {
                     if loading {
                         ProgressView().tint(UMTheme.blood).frame(maxWidth: .infinity).padding()
                     } else if let error {
-                        Text(error).foregroundStyle(UMTheme.mafia)
+                        UMLoadErrorView(title: "Couldn't load guides.", detail: error) {
+                            Task { await load() }
+                        }
                     } else if guides.isEmpty {
                         Text("No guides for this setup yet.").foregroundStyle(UMTheme.muted)
                             .frame(maxWidth: .infinity).padding()
@@ -191,7 +193,7 @@ struct GuidesView: View {
                         guides.sort(by: SetupGuide.ranks)
                     }
                 }
-                voteError = error.localizedDescription
+                voteError = UMFriendlyError.message(for: error)
             }
         }
     }
@@ -204,7 +206,7 @@ struct GuidesView: View {
             guides = try await APIClient.shared.setupGuides(setupId: setupId)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
     }
 }

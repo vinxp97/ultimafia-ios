@@ -91,7 +91,7 @@ struct HostGameView: View {
             dismiss()
             app.resumeGame(id)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
     }
 }

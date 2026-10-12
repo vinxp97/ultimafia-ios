@@ -360,7 +360,7 @@ final class AppModel {
             onlineUsers = (try? await online) ?? onlineUsers
             await loadFinished(reset: true)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UMFriendlyError.message(for: error)
         }
     }
 
@@ -546,6 +546,6 @@ final class AppModel {
         errorMessage = nil
         defer { isBusy = false }
         do { try await work() }
-        catch { errorMessage = error.localizedDescription }
+        catch { errorMessage = UMFriendlyError.message(for: error) }
     }
 }

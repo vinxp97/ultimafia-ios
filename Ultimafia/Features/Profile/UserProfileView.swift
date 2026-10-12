@@ -22,9 +22,9 @@ struct UserProfileView: View {
                     .tint(UMTheme.blood)
                     .frame(maxWidth: .infinity, minHeight: 180)
             } else if let error {
-                Text(error)
-                    .foregroundStyle(UMTheme.muted)
-                    .padding()
+                UMLoadErrorView(title: "Couldn't load profile.", detail: error) {
+                    Task { await load() }
+                }
             } else {
                 profileBody
             }
@@ -453,7 +453,7 @@ struct UserProfileView: View {
         do {
             blob = try await APIClient.shared.userProfile(userId)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
         loading = false
     }
@@ -1216,7 +1216,7 @@ struct ProfileCommentsView: View {
             maxPage = result.maxPage
             page = result.page
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
         loading = false
     }
@@ -1231,7 +1231,7 @@ struct ProfileCommentsView: View {
             draft = ""
             await load(page: 1)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
         posting = false
     }

@@ -24,8 +24,10 @@ struct SetupSearchView: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 filterChips
                 searchField
-                if let error {
-                    Text(error).font(.footnote).foregroundStyle(UMTheme.mafia)
+                if let error, !loading {
+                    UMLoadErrorView(title: "Couldn't load setups.", detail: error) {
+                        Task { await load(reset: true) }
+                    }
                 }
                 ForEach(Array(setups.enumerated()), id: \.element.id) { index, setup in
                     SetupSearchCard(setup: setup) { hosting = setup }
@@ -124,7 +126,7 @@ struct SetupSearchView: View {
         } catch {
             if (error as? URLError)?.code == .cancelled { return }
             guard gen == generation else { return }
-            self.error = error.localizedDescription
+            self.error = UMFriendlyError.message(for: error)
         }
     }
 }
