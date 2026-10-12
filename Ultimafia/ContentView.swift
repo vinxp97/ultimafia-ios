@@ -39,39 +39,28 @@ struct ContentView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
-    @State private var tab = "play"
 
     var body: some View {
         ZStack {
-            TabView(selection: $tab) {
-                if app.game != nil {
-                    Color.clear
-                        .tabItem { Label("Leave", systemImage: "arrow.left") }
-                        .tag("leave")
-                        .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
-                }
+            TabView {
                 LobbyView()
                     .tabItem { Label("Play", systemImage: "theatermasks") }
-                    .tag("play")
                     .badge(app.seatedGameId == nil ? 0 : 1)
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
                 ProfileView()
                     .tabItem { Label("You", systemImage: "person") }
-                    .tag("you")
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
             }
             .toolbarBackground(UMTheme.card, for: .tabBar)
-            .onChange(of: tab) { old, new in
-                guard new == "leave" else { return }
-                tab = old == "leave" ? "play" : old
-                if let session = app.game {
-                    if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
-                }
-            }
 
             if let session = app.game {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
                 RoleRevealOverlay(session: session)
+                if !app.hideAppTabs && !app.path.isEmpty && !app.showLeaveConfirm {
+                    LeaveGameButton {
+                        if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
+                    }
+                }
                 if app.showLeaveConfirm {
                     LeaveConfirmOverlay(
                         warning: session.participationRequired
