@@ -8,7 +8,6 @@ struct GameView: View {
     var review = false
     @State private var draft = ""
     @State private var selectedPanel = 0
-    @State private var didAppearOnce = false
     @FocusState private var chatFocused: Bool
 
     var body: some View {
@@ -42,6 +41,7 @@ struct GameView: View {
 
 private struct GameScreen: View {
     @Environment(AppModel.self) private var app
+    @State private var didAppearOnce = false
     var session: GameSession
     @Binding var draft: String
     @Binding var selectedPanel: Int
