@@ -271,7 +271,7 @@ struct UMCreditsFooter: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 0) {
-                Text("App Developed by UltiMafia User ")
+                Text("App Developed by ")
                 Button(Self.devName) {
                     app.youPath.append(.profile(id: Self.devUserId, name: Self.devName))
                 }
@@ -280,7 +280,7 @@ struct UMCreditsFooter: View {
                 .foregroundStyle(UMTheme.blood)
                 .accessibilityHint("Opens Z's profile")
             }
-            Text("© 2026 UltiMafia Mobile - VCCC LLC - All Rights Reserved")
+            Text("UltiMafia © \(String(Calendar.current.component(.year, from: Date()))) - VCCC LLC - All Rights Reserved")
         }
         .font(.caption2)
         .foregroundStyle(UMTheme.muted)
