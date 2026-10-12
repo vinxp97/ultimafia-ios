@@ -146,6 +146,11 @@ enum GuessTapResult {
 
 @Observable
 final class GameSession {
+    /// Chat scroll state kept across leaving the game screen (lobby round-trip).
+    @ObservationIgnored var chatSeenLineIds: Set<String> = []
+    @ObservationIgnored var chatAnchorId: String?
+    @ObservationIgnored var chatPinnedToBottom = true
+    @ObservationIgnored var chatHasOpened = false
     let gameId: String
     let spectate: Bool
     /// Read-only replay of a finished game from `/game/:id/review/data`: no socket, no sounds.

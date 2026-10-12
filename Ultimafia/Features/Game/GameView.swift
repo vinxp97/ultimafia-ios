@@ -228,7 +228,10 @@ private struct GameChatPane: View {
     }
 
     /// Every line that has ever been on screen (or was already there when the chat opened).
-    @State private var seenLineIds: Set<String> = []
+    private var seenLineIds: Set<String> {
+        get { session.chatSeenLineIds }
+        nonmutating set { session.chatSeenLineIds = newValue }
+    }
 
     private func markAllSeen() {
         seenLineIds.formUnion(chatLines.map(\.id))
@@ -282,6 +285,7 @@ private struct GameChatPane: View {
                         buffer.scheduled = false
                         guard buffer.pending != visibleLineIds else { return }
                         visibleLineIds = buffer.pending
+                        session.chatAnchorId = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
                         recomputeUnread()
                     }
                 }
@@ -395,9 +399,21 @@ private struct GameChatPane: View {
                     }
                 }
                 .onAppear {
-                    markAllSeen()
-                    stickToBottom = true
-                    jumpToLatest(proxy: proxy)
+                    // Returning from the lobby: restore position and keep unseen messages unseen.
+                    if session.chatHasOpened, !session.chatPinnedToBottom, let anchor = session.chatAnchorId,
+                       chatLines.contains(where: { $0.id == anchor }) {
+                        stickToBottom = false
+                        DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
+                        recomputeUnread()
+                    } else {
+                        markAllSeen()
+                        stickToBottom = true
+                        jumpToLatest(proxy: proxy)
+                    }
+                    session.chatHasOpened = true
+                }
+                .onChange(of: stickToBottom) { _, pinned in
+                    session.chatPinnedToBottom = pinned
                 }
             }
         }
