@@ -5,13 +5,23 @@ import UIKit
 
 struct GameView: View {
     @Environment(AppModel.self) private var app
+    var review = false
     @State private var draft = ""
     @State private var selectedPanel = 0
     @FocusState private var chatFocused: Bool
 
     var body: some View {
         Group {
-            if let session = app.game {
+            if review, let session = app.reviewSession {
+                GameScreen(
+                    session: session,
+                    draft: $draft,
+                    selectedPanel: $selectedPanel,
+                    chatFocused: $chatFocused,
+                    onLeave: { app.closeReview() },
+                    onDetach: { app.closeReview() }
+                )
+            } else if !review, let session = app.game {
                 GameScreen(
                     session: session,
                     draft: $draft,
@@ -40,7 +50,7 @@ private struct GameScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            GameHeader(session: session)
+            GameHeader(session: session, onClose: session.isReview ? onLeave : nil)
             SetupRoleStrip(session: session)
             Divider().overlay(UMTheme.line)
             Group {
@@ -61,7 +71,7 @@ private struct GameScreen: View {
             GamePanelPicker(selectedPanel: $selectedPanel)
         }
         .background(UMTheme.bg.ignoresSafeArea())
-        .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
+        .toolbar(app.hideAppTabs || session.isReview ? .hidden : .automatic, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
@@ -85,16 +95,30 @@ private struct GameScreen: View {
 
 private struct GameHeader: View {
     var session: GameSession
+    var onClose: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            Circle()
-                .fill(session.connected ? UMTheme.village : UMTheme.mafia)
-                .frame(width: 8, height: 8)
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to games")
+                Text("REVIEW")
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(UMTheme.blood.opacity(0.25), in: Capsule())
+                    .foregroundStyle(UMTheme.blood)
+            } else {
+                Circle()
+                    .fill(session.connected ? UMTheme.village : UMTheme.mafia)
+                    .frame(width: 8, height: 8)
+            }
             Text(session.setupName ?? session.gameType ?? "Game")
                 .font(.headline)
                 .lineLimit(1)
-            if session.finished {
+            if session.finished, !session.isReview {
                 Text("Finished")
                     .font(.caption)
                     .foregroundStyle(UMTheme.muted)

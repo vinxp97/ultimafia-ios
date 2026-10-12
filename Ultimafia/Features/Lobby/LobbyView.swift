@@ -34,9 +34,6 @@ struct LobbyView: View {
                 await app.refreshLobby()
                 app.startPresence()
             }
-            .fullScreenCover(item: Bindable(app).reviewItem) { item in
-                UMInAppBrowser(url: item.url, shareSiteSession: true) { app.reviewItem = nil }
-            }
             .navigationDestination(for: AppModel.Route.self) { route in
                 switch route {
                 case .game:
@@ -45,6 +42,8 @@ struct LobbyView: View {
                     UserProfileView(userId: id, userName: name)
                 case .setupSearch:
                     SetupSearchView()
+                case .review:
+                    GameView(review: true)
                 }
             }
         }
@@ -224,7 +223,7 @@ struct GameRow: View {
                             .buttonStyle(.bordered)
                     }
                 } else if game.isFinished {
-                    Button("Review") { app.reviewItem = UMBrowserItem(url: game.reviewURL) }
+                    Button("Review") { app.openReview(game.id) }
                         .buttonStyle(.bordered)
                 } else {
                     Button("Spectate") { app.openGame(game, spectate: true) }

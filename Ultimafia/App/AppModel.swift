@@ -13,7 +13,8 @@ final class AppModel {
     var inProgressGames: [GameSummary] = []
     var finishedGames: [GameSummary] = []
     var finishedHasMore = true
-    var reviewItem: UMBrowserItem?
+    /// Finished-game replay. Kept apart from `game` so it never counts as seated.
+    var reviewSession: GameSession?
     @ObservationIgnored private var finishedCursor: Double?
     @ObservationIgnored private var loadingFinished = false
     var path: [Route] = []
@@ -27,6 +28,7 @@ final class AppModel {
         case game(String, spectate: Bool)
         case profile(id: String, name: String)
         case setupSearch
+        case review(String)
     }
 
     /// True while the in-game screen is on top of the Play stack.
@@ -181,6 +183,18 @@ final class AppModel {
             if reset { finishedGames = [] }
             finishedHasMore = false
         }
+    }
+
+    func openReview(_ id: String) {
+        let session = GameSession(gameId: id, spectate: true, review: true)
+        reviewSession = session
+        path.append(.review(id))
+        Task { await session.start() }
+    }
+
+    func closeReview() {
+        reviewSession = nil
+        if case .review = path.last { path.removeLast() }
     }
 
     func openGame(_ summary: GameSummary, spectate: Bool = false) {

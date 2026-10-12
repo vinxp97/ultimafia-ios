@@ -148,6 +148,10 @@ enum GuessTapResult {
 final class GameSession {
     let gameId: String
     let spectate: Bool
+    /// Read-only replay of a finished game from `/game/:id/review/data`: no socket, no sounds.
+    let isReview: Bool
+    /// Sound/notification side effects are muted while replaying history or reviewing.
+    private var isQuiet: Bool { ingestingHistory || isReview }
 
     var connected = false
     var loaded = false
@@ -165,7 +169,7 @@ final class GameSession {
 
     /// Mirrors web Game.jsx: dialog only when participating in a live (non-pregame/postgame) game.
     var leaveNeedsConfirm: Bool {
-        !spectate && !finished && currentPhaseId >= 0 && players.contains { $0.id == selfId }
+        !isReview && !spectate && !finished && currentPhaseId >= 0 && players.contains { $0.id == selfId }
     }
     var participationRequired: Bool {
         guard let id = selfId else { return false }
@@ -266,9 +270,10 @@ final class GameSession {
     private var kickWindowNotified = false
     private var lastTalkMeetingId: String?
 
-    init(gameId: String, spectate: Bool) {
+    init(gameId: String, spectate: Bool, review: Bool = false) {
         self.gameId = gameId
-        self.spectate = spectate
+        self.spectate = spectate || review
+        self.isReview = review
         socket.onEvent = { [weak self] name, data in
             self?.handle(name, data)
         }
@@ -334,7 +339,7 @@ final class GameSession {
     }
 
     var showComposer: Bool {
-        guard !spectate, isViewingLive else { return false }
+        guard !isReview, !spectate, isViewingLive else { return false }
         return canTalk || speechChannels.contains(where: { $0.canTalk })
     }
 
@@ -592,6 +597,7 @@ final class GameSession {
     }
 
     func start() async {
+        if isReview { await loadReview(); return }
         guard !leftByServer else { return }
         guard !connected, !isStarting else { return }
         isStarting = true
@@ -603,6 +609,61 @@ final class GameSession {
             hostId = info.hostId
             token = info.token
             socket.connect(port: info.port.value)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Mirrors web Game.jsx review mode: feed the stored game through the same handlers the
+    /// socket uses (setup, options, players, history), then mark it finished.
+    private func loadReview() async {
+        guard !loaded else { return }
+        do {
+            let data = try await APIClient.shared.request("GET", path: "game/\(gameId)/review/data", query: [:], body: nil)
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw UMError.message("Could not read this game.")
+            }
+            if boolValue(obj["broken"]) { throw UMError.message("Game not found.") }
+            gameType = obj["type"] as? String
+            if let setup = obj["setup"] { handle("setup", setup) }
+            handle("options", [
+                "lobby": obj["lobby"] ?? NSNull(),
+                "ranked": obj["ranked"] ?? false,
+                "competitive": obj["competitive"] ?? false,
+                "spectating": obj["spectating"] ?? false,
+                "anonymousGame": obj["anonymousGame"] ?? false,
+                "graveyardParticipation": obj["graveyardParticipation"] ?? false,
+            ])
+            let ids = obj["players"] as? [String] ?? []
+            let names = obj["names"] as? [Any] ?? []
+            let users = obj["users"] as? [Any] ?? []
+            let left = Set(obj["left"] as? [String] ?? [])
+            let anon = boolValue(obj["anonymousGame"])
+            var blobs: [[String: Any]] = []
+            for (i, id) in ids.enumerated() {
+                let user = users.indices.contains(i) ? users[i] as? [String: Any] : nil
+                var settings = user?["settings"] as? [String: Any] ?? [:]
+                if anon { settings["gameAvatarShape"] = "circle" }
+                var blob: [String: Any] = [
+                    "id": id,
+                    "name": (names.indices.contains(i) ? names[i] as? String : nil) ?? "Player",
+                    "avatar": user?["avatar"] ?? false,
+                    "settings": settings,
+                    "left": left.contains(id),
+                ]
+                if let uid = user?["id"] as? String { blob["userId"] = uid }
+                blobs.append(blob)
+            }
+            handle("players", blobs)
+            if let raw = obj["history"] as? String,
+               let hist = try? JSONSerialization.jsonObject(with: Data(raw.utf8)) {
+                handle("history", hist)
+            } else if let hist = obj["history"] {
+                handle("history", hist)
+            }
+            finished = true
+            stateName = "Review"
+            loaded = true
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -982,15 +1043,15 @@ final class GameSession {
         case "reveal":
             applyReveal(data)
         case "gunshot":
-            if !ingestingHistory { GameSFX.play("gunshot") }
+            if !isQuiet { GameSFX.play("gunshot") }
         case "audio":
-            if !ingestingHistory, let name = stringValue(data), name == "gunshot" {
+            if !isQuiet, let name = stringValue(data), name == "gunshot" {
                 GameSFX.play("gunshot")
             }
         case "death":
             if let id = stringValue(data) { markDead(id, dead: true) }
         case "deathSounds":
-            if !ingestingHistory {
+            if !isQuiet {
                 GameSFX.playRemoteQueue(stringList(data))
             }
         case "revival":
@@ -1638,7 +1699,7 @@ final class GameSession {
             readyEndTime = Date().addingTimeInterval(30)
         }
         ReadyNotifications.notifyIfBackgrounded()
-        if needsReadyConfirm { ReadyBell.start() }
+        if needsReadyConfirm, !isReview { ReadyBell.start() }
     }
 
     private func dateFromMillis(_ any: Any?) -> Date? {
@@ -1679,7 +1740,7 @@ final class GameSession {
             canTalk = false
             clearAllTyping()
         }
-        if !ingestingHistory {
+        if !isQuiet {
             let skipBell = name.lowercased().hasPrefix("give clue")
             if playBell, !skipBell, phaseChanged {
                 GameSFX.play("bell")
@@ -2121,7 +2182,7 @@ final class GameSession {
     }
 
     private func playWinnerMusic(_ groups: [String]) {
-        guard !ingestingHistory else { return }
+        guard !isQuiet else { return }
         let type = (gameType ?? setupGameType).trimmingCharacters(in: .whitespacesAndNewlines)
         guard type.compare("Mafia", options: .caseInsensitive) == .orderedSame else { return }
         GameWinMusic.unlockSession()

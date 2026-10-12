@@ -110,7 +110,6 @@ struct GameSummary: Decodable, Hashable, Identifiable {
     var playerCount: Int { players?.value ?? 0 }
     var setupTotal: Int { setup?.total?.value ?? 0 }
     var isFinished: Bool { (status ?? "").caseInsensitiveCompare("Finished") == .orderedSame }
-    var reviewURL: URL { UMConfig.siteBase.appendingPathComponent("game/\(id)/review") }
     var isOpen: Bool { (status ?? "").caseInsensitiveCompare("Open") == .orderedSame }
     var isInProgress: Bool {
         let s = (status ?? "").lowercased()
