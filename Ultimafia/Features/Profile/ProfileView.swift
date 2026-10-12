@@ -126,6 +126,8 @@ struct ProfileView: View {
                     Text("Install ID, stored only on this device.")
                 }
                 Section {
+                    NavigationLink("Advanced Settings") { AdvancedSettingsView() }
+                        .listRowBackground(UMTheme.card)
                     if app.seatedGameId == nil {
                         Button("Add Another Account") { app.addAnotherAccount() }
                             .listRowBackground(UMTheme.card)

@@ -32,6 +32,13 @@ enum FirebaseAuth {
         return token
     }
 
+    /// Same as the site's firebase `sendPasswordResetEmail` (Settings > Account).
+    static func sendPasswordReset(email: String) async throws {
+        let body: [String: Any] = ["requestType": "PASSWORD_RESET", "email": email]
+        struct Empty: Decodable {}
+        let _: Empty = try await post("sendOobCode", body: body)
+    }
+
     static func sendVerification(idToken: String) async throws {
         let body: [String: Any] = [
             "requestType": "EMAIL_VERIFICATION",

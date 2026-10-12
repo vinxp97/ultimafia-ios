@@ -14,6 +14,8 @@ struct UserInfo: Decodable, Hashable {
     var email: String?
     var settings: JSONValue?
     var itemsOwned: JSONValue?
+    /// GET user/info `perms` (permission name -> true), used to gate settings like the site.
+    var perms: JSONValue?
 
     /// The user's own cosmetics as a GamePlayer, so the You tab reuses chat's name/avatar styling.
     var cosmeticPlayer: GamePlayer {
