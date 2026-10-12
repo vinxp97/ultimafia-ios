@@ -58,17 +58,18 @@ struct LobbyView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxHeight: 44, alignment: .leading)
-                .accessibilityLabel("Ultimafia Mobile")
+                .accessibilityHidden(true)
+            Text("MOBILE")
+                .font(.title3.weight(.heavy))
+                .tracking(1.5)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
             Spacer(minLength: 0)
-            Button {
-                Task { await app.refreshLobby() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(UMTheme.muted)
-            }
-            .buttonStyle(.plain)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Ultimafia Mobile")
+        .accessibilityHint("Pull down to refresh")
     }
 
     private var onlineStrip: some View {
