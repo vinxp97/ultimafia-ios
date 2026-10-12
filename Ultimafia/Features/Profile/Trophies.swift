@@ -34,7 +34,13 @@ struct UMTrophy: Identifiable, Hashable {
 
     var typeTitle: String { type.prefix(1).uppercased() + type.dropFirst() }
 
-    var symbol: String { type == "crown" ? "crown.fill" : "trophy.fill" }
+    /// Bundled copy of react_main/src/images/trophies/<type>-trophy.png; unknown types fall back to silver.
+    var assetName: String {
+        switch type {
+        case "gold", "bronze", "crown": return "Trophy-\(type)"
+        default: return "Trophy-silver"
+        }
+    }
 
     var tint: Color {
         switch type {
@@ -53,9 +59,10 @@ struct UMTrophyIcon: View {
     let trophy: UMTrophy
     var size: CGFloat = 28
     var body: some View {
-        Image(systemName: trophy.symbol)
-            .font(.system(size: size * 0.62, weight: .semibold))
-            .foregroundStyle(trophy.tint)
+        Image(trophy.assetName)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
             .frame(width: size, height: size)
             .accessibilityLabel("\(trophy.name), \(trophy.typeTitle) trophy")
     }
