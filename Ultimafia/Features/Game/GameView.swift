@@ -387,7 +387,7 @@ private struct ChatComposer: View {
         let word = draft[start...]
         let prefix = String(word.prefix(while: { $0 == "@" || $0 == "%" }))
         let query = String(word.dropFirst(prefix.count))
-        guard !query.isEmpty, !draft.hasPrefix("/") else { return nil }
+        guard query.count >= 2, !draft.hasPrefix("/") else { return nil }
         return (prefix, query, start..<draft.endIndex)
     }
 
