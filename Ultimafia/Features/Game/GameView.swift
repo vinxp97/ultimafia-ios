@@ -374,7 +374,7 @@ private struct GameChatPane: View {
                 } action: { old, pin in
                     if atTop != pin.atTop { atTop = pin.atTop }
                     // Keyboard open/close or new content resizes things; stay pinned and follow.
-                    if stickToBottom, abs(pin.containerH - old.containerH) > 1 {
+                    if stickToBottom, !session.isReview, abs(pin.containerH - old.containerH) > 1 {
                         // Defer the scroll so it doesn't re-trigger geometry updates within this frame.
                         DispatchQueue.main.async {
                             if stickToBottom { jumpToLatest(proxy: proxy) }
@@ -422,6 +422,8 @@ private struct GameChatPane: View {
                     }
                 }
                 .onChange(of: session.displayedMessages.count) { old, new in
+                    // Review: a phase's lines are static; never auto-follow to the bottom.
+                    if session.isReview { return }
                     if stickToBottom {
                         markAllSeen()
                         unreadCount = 0
@@ -433,8 +435,13 @@ private struct GameChatPane: View {
                 .onChange(of: session.viewingPhaseId) { _, _ in
                     markAllSeen()
                     unreadCount = 0
-                    if session.reviewScrollTopPending {
+                    // Review: every phase switch (next/prev/pick) opens at the top of that phase
+                    // (newspaper if any, else first message). Live games keep following the bottom.
+                    if session.isReview || session.reviewScrollTopPending {
                         session.reviewScrollTopPending = false
+                        stickToBottom = false
+                        jumpToTop(proxy: proxy)
+                        // Again after the new phase's rows lay out.
                         DispatchQueue.main.async { jumpToTop(proxy: proxy) }
                         return
                     }
