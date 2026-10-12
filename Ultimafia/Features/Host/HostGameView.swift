@@ -20,6 +20,7 @@ struct HostGameView: View {
                     .listRowBackground(UMTheme.card)
                 }
                 Section {
+                    TextField("Lobby Name", text: $o.lobbyName)
                     Picker("Lobby", selection: $o.lobby) {
                         ForEach(HostOptions.lobbies, id: \.self) { Text($0).tag($0) }
                     }
@@ -51,7 +52,6 @@ struct HostGameView: View {
                             Stepper("Extension Length: \(o.extendLength) min", value: $o.extendLength, in: 0...5)
                         }
                     }
-                    TextField("Lobby Name", text: $o.lobbyName)
                 }
                 .listRowBackground(UMTheme.card)
                 .tint(UMTheme.blood)
