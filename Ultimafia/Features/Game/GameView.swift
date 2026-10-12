@@ -815,9 +815,10 @@ private struct ChatComposer: View {
                     }
                 }
 
-                TextField(placeholder(cooling: cooling), text: cappedDraft, axis: .vertical)
+                // Single-line: Return sends (commands too) and focus stays for the next message.
+                TextField(placeholder(cooling: cooling), text: cappedDraft)
                     .textFieldStyle(.plain)
-                    .lineLimit(1...4)
+                    .submitLabel(.send)
                     .padding(10)
                     .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(cooling ? Color.white : Color.primary)
@@ -833,9 +834,18 @@ private struct ChatComposer: View {
                         return completeName() ? KeyPress.Result.handled : KeyPress.Result.ignored
                     }
 
-                Button("Send", action: send)
-                    .disabled(cooling || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .tint(UMTheme.blood)
+                // Keyboard toggle (Return is the send key).
+                Button {
+                    chatFocused.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: chatFocused.wrappedValue ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(UMTheme.muted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(chatFocused.wrappedValue ? "Hide keyboard" : "Show keyboard")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -903,6 +913,8 @@ private struct ChatComposer: View {
     }
 
     private func send() {
+        // Return ends editing by default; put focus back so the user can keep typing.
+        defer { DispatchQueue.main.async { chatFocused.wrappedValue = true } }
         guard !session.isSpeakCoolingDown else { return }
         let text = Self.rewriteStickerTokens(draft, stickerNames: Set(stickerMap.keys.map(Self.bareCode)))
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -910,7 +922,6 @@ private struct ChatComposer: View {
         if session.speak(text) {
             draft = ""
         }
-        chatFocused.wrappedValue = true
     }
 }
 
