@@ -8,6 +8,10 @@ import Foundation
 ///   meeting / the Gun item meeting (actionName "Shoot"), restricted to the server's `targets`.
 /// - /whisper: `speak` {meetingId, content, abilityName: "Whisper", abilityTarget: playerId},
 ///   only when the meeting offers the Whisper speech ability (setup whispers on, not anonymous).
+/// - in-game /kick (no name): the veg "Vote Kick" meeting (core/VegKickMeeting.js) that appears
+///   when the phase timer runs out: socket `vote` {meetingId, selection: "Kick"}; canUnvote is
+///   always false; canVote = alive && voted in all other meetings. Progress is only broadcast as
+///   the alert "Kicking… n / ceil(alive/3)"; at the threshold the 15s "vegKick" timer starts.
 /// - /cry: `speak` {abilityName: "Cry", abilityTarget: "out"} when the Cry ability is offered
 ///   (Crier's BroadcastMessage card); the server re-sends it anonymously with prefix "cries out".
 struct SlashCommand: Identifiable, Hashable {
@@ -51,6 +55,36 @@ extension GameSession {
         return usable.first { $0.name == "Village" } ?? usable.first { $0.actionName == "Vote to Condemn" } ?? usable.first
     }
 
+    /// Live veg/vote-kick meeting you're in (any phase).
+    var kickMeeting: VoteMeeting? {
+        guard isViewingLive, !isReview, !spectate else { return nil }
+        return meetings.first { $0.isVoteKick && $0.amMember }
+    }
+
+    var hasKicked: Bool {
+        guard let m = kickMeeting else { return false }
+        return !m.selections(of: selfId).isEmpty || m.playerHasVoted
+    }
+
+    /// Latest "Kicking… n / m" alert (votes are invisible, so this is the only count the server sends).
+    var kickProgress: (count: Int, needed: Int)? {
+        guard kickMeeting != nil else { return nil }
+        for line in messages.reversed() where line.isServer {
+            let t = line.content
+            guard let r = t.range(of: #"Kicking\S*\s+(\d+)\s*/\s*(\d+)"#, options: .regularExpression) else { continue }
+            let nums = t[r].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            if nums.count >= 2 { return (nums[0], nums[1]) }
+        }
+        let alive = players.filter { !deadIds.contains($0.id) && !$0.left }.count
+        return (0, max(1, Int((Double(alive) / 3).rounded(.up))))
+    }
+
+    /// Web Kick button: one "Kick" vote; server ignores repeats and never allows unkick.
+    func sendKick() {
+        guard let m = kickMeeting, m.canVote, !hasKicked else { return }
+        socketForCommands.send("vote", object: ["meetingId": m.id, "selection": "Kick"])
+    }
+
     var gunMeeting: VoteMeeting? {
         meetings.first { $0.canVote && $0.amMember && ($0.actionName == "Shoot" || $0.name.hasPrefix("Shoot Gun")) }
     }
@@ -71,6 +105,9 @@ extension GameSession {
                 out.append(SlashCommand(name: "ban", usage: "/ban name", summary: "Remove and ban a player from the lobby", icon: "nosign", arg: .player))
             }
         } else {
+            if let k = kickMeeting, k.canVote, !hasKicked {
+                out.append(SlashCommand(name: "kick", usage: "/kick", summary: "Vote to kick vegging players", icon: "figure.walk.departure", arg: .none))
+            }
             if isDayPhase && selfAlive {
                 out.append(SlashCommand(name: "extend", usage: "/extend", summary: "Vote to extend the day", icon: "clock.badge.plus", arg: .none))
             }
@@ -120,6 +157,10 @@ extension GameSession {
             return .error("/\(cmd) isn't available right now")
         }
         switch def.name {
+        case "kick" where !isPregame:
+            guard rest.isEmpty else { return .error("In-game /kick takes no name") }
+            sendKick()
+            return .handled
         case "kick", "ban":
             guard let p = exactPlayer(rest, in: slashTargets(for: cmd)) else { return .error("No player named “\(rest)”") }
             return sendServerCommand("/\(cmd) \(p.name)")

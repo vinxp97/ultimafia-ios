@@ -1258,8 +1258,53 @@ private struct GameActPane: View {
                 }
             }
             .padding(16)
+            if session.kickMeeting != nil, !(session.selfId.map(session.isDead) ?? true) {
+                kickCard
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
         }
         .pointerScrolling()
+    }
+
+    /// Web "Vote Kick" button: shown in any phase while the veg-kick meeting is live.
+    private var kickCard: some View {
+        let done = session.hasKicked
+        let can = session.kickMeeting?.canVote == true
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Vote Kick").font(.headline)
+                Spacer()
+                if let p = session.kickProgress {
+                    Text("\(p.count) / \(p.needed)")
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(UMTheme.muted)
+                }
+            }
+            if let p = session.kickProgress, p.needed > 0 {
+                ProgressView(value: Double(min(p.count, p.needed)), total: Double(p.needed))
+                    .tint(UMTheme.blood)
+            }
+            Button {
+                session.sendKick()
+            } label: {
+                Label(done ? "Kicked" : "Kick", systemImage: done ? "checkmark" : "figure.walk.departure")
+                    .font(.subheadline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(done ? UMTheme.elevated : UMTheme.blood)
+            .disabled(done || !can)
+            if !done && !can {
+                Text("Finish your votes in every meeting to kick.")
+                    .font(.caption)
+                    .foregroundStyle(UMTheme.muted)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var meetingSwitcher: some View {
