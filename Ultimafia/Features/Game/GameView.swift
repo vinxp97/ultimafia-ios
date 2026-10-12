@@ -223,7 +223,7 @@ private struct GameChatPane: View {
                     }
                     .scrollTargetLayout()
                     .padding(12)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 16)
                 }
                 .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.6) { ids in
                     visibleLineIds = Set(ids)
@@ -302,7 +302,6 @@ private struct GameChatPane: View {
                             .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) unseen messages, scroll to latest" : "Scroll to latest message")
                         }
                         VStack(spacing: 0) {
-                            Color.clear.frame(height: 8)
                             if session.showComposer {
                                 ChatComposer(
                                     session: session,
@@ -480,7 +479,8 @@ private struct ChatComposer: View {
                     .disabled(cooling || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .tint(UMTheme.blood)
             }
-            .padding(10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(UMTheme.elevated)
             .onChange(of: cooling) { _, nowCooling in
                 if nowCooling {
