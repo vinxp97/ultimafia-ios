@@ -22,6 +22,12 @@ import UIKit
 // Uploads are native (UMUploads.swift): Photos/Files → crop → resize/compress → the same multipart
 // endpoint and field as the site; the website stays available as a fallback on each row.
 
+/// Settings that only change the website client (rendered/filtered in the browser) and that the app
+/// doesn't honor. Kept in code, hidden in the app. Flip to true to show them again.
+enum UMWebsiteOnlySettings {
+    static let show = false
+}
+
 enum AdvancedSettingsTab: String, CaseIterable, Identifiable {
     case site = "Site", user = "User", game = "Game", account = "Account", cookies = "Cookies", family = "Family"
     var id: String { rawValue }
@@ -444,6 +450,7 @@ private struct SiteSettingsTab: View {
             SettingToggle(model: model, title: "DMs from Friends Only", prop: "onlyFriendDMs")
             SettingToggle(model: model, title: "Disable Pokes", prop: "disablePokes")
         }
+        if UMWebsiteOnlySettings.show {
         Section("Censors") {
             if !model.bool("disableAllCensors") {
                 SettingToggle(model: model, title: "Disable PG-13 Censor", prop: "disablePg13Censor")
@@ -488,6 +495,7 @@ private struct SiteSettingsTab: View {
             SettingToggle(model: model, title: "Disable Animated Avatars", prop: "disableAnimatedAvatars",
                           info: "When enabled, other users' GIF/WebP avatars are shown as a still first frame.")
         }
+        } // UMWebsiteOnlySettings.show
     }
 }
 
@@ -721,11 +729,14 @@ private struct GameSettingsTab: View {
                           disabled: !(user?.owns("avatarShape") ?? false), after: refresh)
         }
         Section("Display") {
-            SettingToggle(model: model, title: "Ignore Custom Text Color", prop: "ignoreTextColor")
-            SettingToggle(model: model, title: "Ignore Custom Name Font", prop: "ignoreNameFonts",
-                          info: "When enabled, all usernames use the default font. Name colors and animations are unchanged.")
-            SettingToggle(model: model, title: "Accessible Name Colors", prop: "accessibleNameColors",
-                          info: "Shows each player's custom name color in a circle beside their name. Names and message text use black or white for readability based on your theme.")
+            if UMWebsiteOnlySettings.show {
+                SettingToggle(model: model, title: "Ignore Custom Text Color", prop: "ignoreTextColor")
+                SettingToggle(model: model, title: "Ignore Custom Name Font", prop: "ignoreNameFonts",
+                              info: "When enabled, all usernames use the default font. Name colors and animations are unchanged.")
+                SettingToggle(model: model, title: "Accessible Name Colors", prop: "accessibleNameColors",
+                              info: "Shows each player's custom name color in a circle beside their name. Names and message text use black or white for readability based on your theme.")
+            }
+            // Server-side (Games/core/User.js): the game server skips protips, so the app benefits too.
             SettingToggle(model: model, title: "Disable Protips", prop: "disableProTips")
         }
         Section("Death") {
@@ -755,8 +766,10 @@ private struct GameSettingsTab: View {
                 }
                 .listRowBackground(UMTheme.card)
             }
-            SettingToggle(model: model, title: "Ignore all Death Sounds", prop: "ignoreDeathSounds",
-                          info: "When enabled, you will not hear custom death sounds from other players in games.")
+            if UMWebsiteOnlySettings.show {
+                SettingToggle(model: model, title: "Ignore all Death Sounds", prop: "ignoreDeathSounds",
+                              info: "When enabled, you will not hear custom death sounds from other players in games.")
+            }
         }
         Section {
             NavigationLink("Order Custom Emojis & Stickers") { CustomMediaOrderView() }
