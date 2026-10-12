@@ -57,6 +57,13 @@ struct LoginView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 108 * 0.2237, style: .continuous))
                     .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
                     .accessibilityLabel("Ultimafia")
+                    .accessibilityAddTraits(.isLink)
+                    .accessibilityHint("Opens ultimafia.com in your browser")
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // System open (Safari/default browser), never the in-app browser.
+                        if let url = URL(string: "https://ultimafia.com") { UIApplication.shared.open(url) }
+                    }
                 Text("ULTIMAFIA")
                     .font(.system(.largeTitle, design: .serif).weight(.bold))
                     .tracking(2)
