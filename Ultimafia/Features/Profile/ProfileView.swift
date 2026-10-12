@@ -4,7 +4,7 @@ struct ProfileView: View {
     @Environment(AppModel.self) private var app
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
-    @AppStorage("um.showTabButton") private var showTabButton = true
+    @AppStorage("um.showNameAutofill") private var showTabButton = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
     @AppStorage("um.sfxVolume") private var sfxVolume = 1.0
@@ -58,7 +58,7 @@ struct ProfileView: View {
                     .listRowBackground(UMTheme.card)
                     Toggle("Show Typing Indicator", isOn: $showTypingIndicator)
                         .listRowBackground(UMTheme.card)
-                    Toggle("Show Name Suggestions", isOn: $showTabButton)
+                    Toggle("Show Autofill Name", isOn: $showTabButton)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Voting Log", isOn: $showVotingLog)
                         .listRowBackground(UMTheme.card)

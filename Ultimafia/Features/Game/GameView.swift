@@ -348,7 +348,7 @@ private struct ChatComposer: View {
     @Binding var draft: String
     var chatFocused: FocusState<Bool>.Binding
     @State private var savedDraft = ""
-    @AppStorage("um.showTabButton") private var showTabButton = true
+    @AppStorage("um.showNameAutofill") private var showTabButton = true
     @State private var keyboardExpanded = false
 
     /// Last word of the draft (cursor is assumed at the end), keeping any leading @ or %.
@@ -363,7 +363,7 @@ private struct ChatComposer: View {
     }
 
     private var nameSuggestions: [String] {
-        guard showTabButton, let t = nameToken else { return [] }
+        guard showTabButton, chatFocused.wrappedValue, let t = nameToken else { return [] }
         var seen = Set<String>()
         return session.players.map(\.name).filter { name in
             name.lowercased().hasPrefix(t.query.lowercased())
