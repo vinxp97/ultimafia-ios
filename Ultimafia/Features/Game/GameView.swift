@@ -163,6 +163,12 @@ private struct GamePanelPicker: View {
     }
 }
 
+/// Non-observed buffer so scroll-visibility callbacks coalesce into one state update per frame.
+private final class VisibleIdBuffer {
+    var pending: Set<String> = []
+    var scheduled = false
+}
+
 private struct ChatScrollPin: Equatable {
     var atBottom: Bool
     var atTop: Bool
@@ -181,6 +187,7 @@ private struct GameChatPane: View {
     @State private var unreadCount = 0
     @State private var atTop = false
     @State private var visibleLineIds: Set<String> = []
+    @State private var visibleBuffer = VisibleIdBuffer()
 
     private var chatLines: [ChatLine] {
         session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
@@ -226,8 +233,16 @@ private struct GameChatPane: View {
                     .padding(.bottom, 16)
                 }
                 .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.6) { ids in
-                    visibleLineIds = Set(ids)
-                    recomputeUnread()
+                    let buffer = visibleBuffer
+                    buffer.pending = Set(ids)
+                    guard !buffer.scheduled else { return }
+                    buffer.scheduled = true
+                    DispatchQueue.main.async {
+                        buffer.scheduled = false
+                        guard buffer.pending != visibleLineIds else { return }
+                        visibleLineIds = buffer.pending
+                        recomputeUnread()
+                    }
                 }
                 .pointerScrolling()
                 .defaultScrollAnchor(.bottom)
@@ -266,12 +281,15 @@ private struct GameChatPane: View {
                     }
                 }
                 .onScrollGeometryChange(for: ChatScrollPin.self) { geo in
-                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height, containerH: geo.containerSize.height)
+                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height.rounded(), containerH: geo.containerSize.height.rounded())
                 } action: { old, pin in
                     if atTop != pin.atTop { atTop = pin.atTop }
                     // Keyboard open/close or new content resizes things; stay pinned and follow.
                     if stickToBottom, abs(pin.containerH - old.containerH) > 1 {
-                        jumpToLatest(proxy: proxy)
+                        // Defer the scroll so it doesn't re-trigger geometry updates within this frame.
+                        DispatchQueue.main.async {
+                            if stickToBottom { jumpToLatest(proxy: proxy) }
+                        }
                         return
                     }
                     if stickToBottom, pin.contentH > old.contentH + 1 {
