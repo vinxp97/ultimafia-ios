@@ -23,9 +23,13 @@ struct CustomMediaOrderView: View {
                     .listRowBackground(UMTheme.card)
             }
             if !emotes.isEmpty {
-                Section("Emojis") {
+                Section {
                     ForEach(emotes) { row($0) }
                         .onMove { emotes.move(fromOffsets: $0, toOffset: $1); save() }
+                } header: {
+                    Text("Emojis")
+                } footer: {
+                    triggerHint(":", "emoji")
                 }
             }
             if !stickers.isEmpty {
@@ -35,7 +39,10 @@ struct CustomMediaOrderView: View {
                 } header: {
                     Text("Stickers")
                 } footer: {
-                    Text("Tap Edit and drag to choose what shows first when you type \":\" in chat.")
+                    VStack(alignment: .leading, spacing: 4) {
+                        triggerHint(";", "sticker")
+                        Text("Tap Edit and drag to choose what shows first in the picker.")
+                    }
                 }
             }
         }
@@ -45,6 +52,14 @@ struct CustomMediaOrderView: View {
         .toolbar { EditButton() }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: EmoteOrderStore.didChange)) { _ in rebuild() }
+    }
+
+    /// "Type : in chat to pick an emoji (e.g. :name:)." with the trigger characters in monospaced.
+    private func triggerHint(_ c: String, _ noun: String) -> Text {
+        let mono = Font.footnote.monospaced().weight(.semibold)
+        let key = Text(c).font(mono).foregroundStyle(Color.primary)
+        let example = Text("\(c)name\(c)").font(mono).foregroundStyle(Color.primary)
+        return Text("Type \(key) in chat to pick \(noun == "emoji" ? "an" : "a") \(noun) (e.g. \(example)).")
     }
 
     private func row(_ item: Item) -> some View {
