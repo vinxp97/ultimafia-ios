@@ -24,6 +24,8 @@ final class AppModel {
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
+    /// Set when returning to the seated game from the lobby (vs. a fresh join/review).
+    var resumingFromLobby = false
     var showLeaveConfirm = false
     var onlineUsers: [OnlineUser] = []
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
@@ -218,6 +220,7 @@ final class AppModel {
 
     func resumeSeatedGame() {
         guard let id = seatedGameId else { return }
+        resumingFromLobby = true
         resumeGame(id)
     }
 

@@ -8,6 +8,7 @@ struct GameView: View {
     var review = false
     @State private var draft = ""
     @State private var selectedPanel = 0
+    @State private var didAppearOnce = false
     @FocusState private var chatFocused: Bool
 
     var body: some View {
@@ -85,14 +86,22 @@ private struct GameScreen: View {
         .task { await RoleCatalog.shared.load() }
         // Entering a game or review collapses the bottom bar, like tapping Hide; restore it on the way out.
         .onAppear {
-            app.hideAppTabs = true
+            // Collapse the bar on a fresh join/review, or when coming back from the lobby with a ping badge.
+            // Switching back from the You tab leaves it as it was.
+            if !didAppearOnce {
+                didAppearOnce = true
+                let fromLobby = app.resumingFromLobby
+                app.resumingFromLobby = false
+                if !fromLobby || app.mentionBadge > 0 { app.hideAppTabs = true }
+            }
             if !session.isReview {
                 app.isViewingGame = true
                 app.mentionCount = 0
             }
         }
         .onDisappear { if !session.isReview { app.isViewingGame = false } }
-        .onDisappear { app.hideAppTabs = false }
+        // Left the game screen for the lobby (not just another tab): bring the bar back.
+        .onDisappear { if !app.isOnGameScreen { app.hideAppTabs = false } }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -156,13 +165,14 @@ private struct GamePanelPicker: View {
     @Binding var selectedPanel: Int
     @Environment(AppModel.self) private var app
     @State private var showGuides = false
+    @AppStorage("um.showSetupGuides") private var showSetupGuides = true
 
     var body: some View {
         HStack(spacing: 4) {
             tabBtn("Village", 1, "person.3")
             tabBtn("Chat", 0, "text.bubble")
             tabBtn("Act", 2, "hand.raised")
-            if session.setupId != nil { guidesBtn }
+            if showSetupGuides, session.setupId != nil { guidesBtn }
             hideBtn
         }
         .padding(.horizontal, 8)
