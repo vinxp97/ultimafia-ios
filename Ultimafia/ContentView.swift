@@ -91,7 +91,7 @@ struct MainTabs: View {
         case .back: ("Back", "arrow.left")
         case .lobby: ("Lobby", "list.bullet.rectangle")
         case .game: ("Game", "gamecontroller")
-        case .create: ("Create", "plus.circle")
+        case .create: ("Host", "plus.circle")
         case .you: ("You", "person")
         }
     }
