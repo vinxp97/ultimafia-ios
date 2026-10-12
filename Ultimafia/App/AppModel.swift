@@ -188,6 +188,8 @@ final class AppModel {
     }
 
     /// Drop everything tied to the active account's session (keeps on-disk asset caches).
+    /// Clears only per-account in-memory state. Device-wide caches (UMCustomAssetCache,
+    /// UMImageCache, name fonts, role icons, sounds) are intentionally left alone.
     private func resetSessionState() {
         stopPresence()
         game?.disconnectWithoutLeaving()

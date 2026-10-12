@@ -153,7 +153,7 @@ struct ProfileView: View {
                     }
                 }
             } message: {
-                Text("Removes saved custom emotes, stickers and avatars. They'll download again when needed. Role icons, fonts, sounds and site emotes are kept.")
+                Text("Removes saved custom emotes, stickers and avatars. They'll download again when needed. Role icons, fonts, sounds and site emotes are kept, and saved accounts, sign-ins and settings aren't affected.")
             }
             .alert("Disable alert sounds?", isPresented: $confirmMuteAlerts) {
                 Button("Disable", role: .destructive) {}

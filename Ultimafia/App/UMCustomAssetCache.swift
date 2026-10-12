@@ -4,6 +4,11 @@ import CryptoKit
 /// On-disk store for custom *user* assets only (custom emotes, stickers, avatars under
 /// ultimafia.com/uploads). Lives in Caches/UMCustomAssets so it can be cleared without touching
 /// bundled role icons, fonts, sounds or site emotes.
+///
+/// Device-wide by design: keyed only by asset URL, never by account, so every saved account
+/// shares it and an account switch never re-downloads. Sign-out / switching must not clear it.
+/// `clear()` touches only this folder: Keychain sessions/passwords, the account list, the
+/// install ID and emote order/settings (UserDefaults / iCloud KVS) are never affected.
 actor UMCustomAssetCache {
     static let shared = UMCustomAssetCache()
 

@@ -114,6 +114,7 @@ struct UMAvatarView: View {
 
 /// Decoded frames in memory + raw bytes on disk, so avatars/role icons don't refetch or flicker
 /// when rows re-render or the app relaunches.
+/// Shared by all accounts (keyed by URL only); not cleared on sign-out or account switch.
 final class UMImageCache: @unchecked Sendable {
     static let shared = UMImageCache()
     private final class Entry { let images: [UMPlatformImage]; let delays: [Double]
