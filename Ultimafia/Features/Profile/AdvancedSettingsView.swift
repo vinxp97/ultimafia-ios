@@ -19,8 +19,8 @@ import UIKit
 //   DELETE family/:id/banner | family/:id/background
 //   POST family/:id/transferLeadership {newLeaderId}   POST family/:id/leave
 //   DELETE family/:id                       (family deletion; double-confirmed, never auto-called)
-// Image/sound uploads (profile background, forum banner, death sound, emotes/stickers, family
-// avatar/banner/background) use multipart + croppers on the site and are linked to the website.
+// Uploads are native (UMUploads.swift): Photos/Files → crop → resize/compress → the same multipart
+// endpoint and field as the site; the website stays available as a fallback on each row.
 
 enum AdvancedSettingsTab: String, CaseIterable, Identifiable {
     case site = "Site", user = "User", game = "Game", account = "Account", cookies = "Cookies", family = "Family"
@@ -350,31 +350,33 @@ private struct SettingTextSave: View {
     }
 }
 
-/// Upload rows the app doesn't replicate (cropper + multipart): open the site's settings tab.
-private struct WebUploadRow: View {
+/// Native upload row: picker control, optional Remove, help text, and an "Open website" fallback.
+private struct UploadRow<Control: View>: View {
     let title: String
     let sitePath: String
     var info: String?
     var removeTitle: String?
     var onRemove: (() -> Void)?
+    @ViewBuilder var control: () -> Control
     @State private var browser: UMBrowserItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline.weight(.semibold))
             HStack {
-                Button { browser = UMBrowserItem(url: URL(string: "https://ultimafia.com\(sitePath)")!) } label: {
-                    Label(title, systemImage: "arrow.up.forward.app")
-                }
-                .buttonStyle(.borderless)
+                control()
                 Spacer()
                 if let onRemove {
-                    Button(removeTitle ?? "Remove", role: .destructive) { onRemove() }
-                        .buttonStyle(.borderless)
+                    Button(removeTitle ?? "Remove", role: .destructive) { onRemove() }.buttonStyle(.borderless)
                 }
             }
-            Text((info.map { $0 + " " } ?? "") + "Uploading opens the website.")
-                .font(.footnote).foregroundStyle(UMTheme.muted)
+            if let info { Text(info).font(.footnote).foregroundStyle(UMTheme.muted) }
+            Button("Or use the website") { browser = UMBrowserItem(url: URL(string: "https://ultimafia.com\(sitePath)")!) }
+                .font(.caption)
+                .buttonStyle(.borderless)
+                .foregroundStyle(UMTheme.muted)
         }
+        .buttonStyle(.borderless)
         .listRowBackground(UMTheme.card)
         .sheet(item: $browser) { item in
             UMInAppBrowser(url: item.url, shareSiteSession: true) { browser = nil }
@@ -529,6 +531,16 @@ private struct UserSettingsTab: View {
             birthdayRow
         }
         Section("Profile") {
+            UploadRow(title: "Avatar", sitePath: "/user/profile",
+                      info: "Square crop, saved at 100×100 by the server (static max 1 MB). Animated GIF/WebP needs Animated Profile Picture from the Shop.") {
+                UMImageUploadButton(spec: .avatar(animated: user?.owns("animatedAvatar") ?? false), label: "Upload Avatar") { await refreshUser() }
+            }
+            if customProfile || (user?.owns("animatedBanner") ?? false) {
+                UploadRow(title: "Profile Banner", sitePath: "/user/profile",
+                          info: "3:1 crop, saved at 900×300. Animated GIF/WebP (max 20 MB, frames ≤1800×600) needs Animated Profile Banner.") {
+                    UMImageUploadButton(spec: .banner(animated: user?.owns("animatedBanner") ?? false), label: "Upload Banner") { await refreshUser() }
+                }
+            }
             SettingColor(model: model, title: "Background Color", prop: "backgroundColor", defaultHex: "#535353", disabled: !customProfile)
             SettingTextSave(title: "Media URL", initial: model.string("youtube"), placeholder: "https://…",
                             info: "Supports YouTube, SoundCloud, Spotify, Vimeo, Invidious, and direct media files (mp3, mp4, webm, ogg)") { link in
@@ -548,19 +560,25 @@ private struct UserSettingsTab: View {
                           disabled: !(user?.owns("avatarShape") ?? false))
             vanityRow(owned: user?.owns("vanityUrl") ?? false)
             if user?.owns("profileBackground") == true {
-                WebUploadRow(title: "Upload Profile Background", sitePath: "/user/settings/profile",
-                             info: "Replaces the default diamond pattern on your profile page (max 5 MB).") {
+                UploadRow(title: "Profile Background", sitePath: "/user/settings/profile",
+                          info: "Replaces the default diamond pattern on your profile page (max 5 MB, any shape).",
+                          onRemove: {
                     confirm = ConfirmAction(title: "Remove background?", message: "Are you sure you wish to remove your profile background?", button: "Remove") {
                         Task { await model.call("DELETE", "user/profileBackground", success: "Profile background removed") }
                     }
+                }) {
+                    UMImageUploadButton(spec: .profileBackground, label: "Upload Background Image") { await model.load() }
                 }
             }
             if user?.owns("forumBanner") == true {
-                WebUploadRow(title: "Upload Forum Banner", sitePath: "/user/settings/profile",
-                             info: "Slim banner above your forum post header (500x100 recommended, max 2 MB).") {
+                UploadRow(title: "Forum Banner", sitePath: "/user/settings/profile",
+                          info: "Slim banner above your forum post header (5:1 crop, saved at 500×100, max 2 MB).",
+                          onRemove: {
                     confirm = ConfirmAction(title: "Remove forum banner?", message: "Are you sure you wish to remove your forum banner?", button: "Remove") {
                         Task { await model.call("DELETE", "user/forumBanner", success: "Forum banner removed") }
                     }
+                }) {
+                    UMImageUploadButton(spec: .forumBanner, label: "Upload Forum Banner") { await model.load() }
                 }
             }
             if user?.owns("profileBackground") == true {
@@ -721,11 +739,14 @@ private struct GameSettingsTab: View {
                 Task { if await model.call("POST", "user/deathMessage", ["deathMessage": msg], success: "Death message changed") { model.values["deathMessage"] = msg } }
             }
             if user?.owns("deathSoundEnabled") == true {
-                WebUploadRow(title: "Custom Death Sound", sitePath: "/user/settings/game",
-                             info: "Played to everyone in the lobby when you die.") {
+                UploadRow(title: "Custom Death Sound", sitePath: "/user/settings/game",
+                          info: "Played to everyone in the lobby when you die. MP3/WAV (OGG/WebM via the website), up to 10 MB; trimmed to 5 seconds.",
+                          onRemove: {
                     confirm = ConfirmAction(title: "Remove death sound?", message: "Your custom death sound will be removed.", button: "Remove") {
                         Task { await model.call("DELETE", "user/deathSound", success: "Death sound removed") }
                     }
+                }) {
+                    UMDeathSoundUploadButton { await model.load() }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 4) {
@@ -740,8 +761,7 @@ private struct GameSettingsTab: View {
         Section {
             NavigationLink("Order Custom Emojis & Stickers") { CustomMediaOrderView() }
                 .listRowBackground(UMTheme.card)
-            WebUploadRow(title: "Upload Custom Emote / Sticker", sitePath: "/user/settings/game",
-                         info: "Buy emote and sticker slots in the Shop. GIF/PNG/JPEG/WebP.")
+            CustomMediaUploadRows(model: model)
         } header: {
             Text("Custom Emotes & Stickers")
         }
@@ -955,24 +975,32 @@ private struct FamilySettingsTab: View {
     @ViewBuilder
     private func leaderSections(fam: [String: Any], id: String) -> some View {
         Section("Images") {
-            WebUploadRow(title: "Upload Family Avatar", sitePath: "/user/settings/family")
-            WebUploadRow(title: perks.contains("familyAnimatedBanner") ? "Upload / Crop Banner" : "Upload Banner",
-                         sitePath: "/user/settings/family",
-                         info: perks.contains("familyBanner")
-                            ? "Banner for the family page" + (perks.contains("familyAnimatedBanner") ? " (animation enabled)." : ".")
-                            : "Your family must buy the Family Banner perk first.",
-                         onRemove: b("banner") ? {
+            UploadRow(title: "Family Avatar", sitePath: "/user/settings/family",
+                      info: "Square crop, saved at 100×100 (static max 1 MB; animated needs the Animated Avatar perk, max 25 MB).") {
+                UMImageUploadButton(spec: .familyAvatar(animated: perks.contains("familyAnimatedAvatar")), label: "Upload New Avatar") { await model.loadFamily() }
+            }
+            UploadRow(title: "Family Banner", sitePath: "/user/settings/family",
+                      info: perks.contains("familyBanner")
+                        ? "Banner for the family page, 3:1 crop saved at 900×300" + (perks.contains("familyAnimatedBanner") ? " (animation enabled, max 20 MB)." : " (max 5 MB).")
+                        : "Your family must buy the Family Banner perk first.",
+                      onRemove: b("banner") ? {
                 confirm = ConfirmAction(title: "Remove banner?", message: "Remove the family banner?", button: "Remove") {
                     Task { if await model.call("DELETE", "family/\(id)/banner", success: "Family banner removed") { await model.loadFamily() } }
                 }
-            } : nil)
-            WebUploadRow(title: "Upload Family Background", sitePath: "/user/settings/family",
-                         info: "Replaces the default pattern on the family page (max 5 MB).",
-                         onRemove: b("background") ? {
+            } : nil) {
+                UMImageUploadButton(spec: .familyBanner(id: id, animated: perks.contains("familyAnimatedBanner")),
+                                    label: perks.contains("familyAnimatedBanner") ? "Upload / Crop Banner" : "Upload Banner",
+                                    disabled: !perks.contains("familyBanner")) { await model.loadFamily() }
+            }
+            UploadRow(title: "Family Background", sitePath: "/user/settings/family",
+                      info: "Replaces the default pattern on the family page (max 5 MB).",
+                      onRemove: b("background") ? {
                 confirm = ConfirmAction(title: "Remove background?", message: "Are you sure you wish to remove the family background?", button: "Remove") {
                     Task { if await model.call("DELETE", "family/\(id)/background", success: "Family background removed") { await model.loadFamily() } }
                 }
-            } : nil)
+            } : nil) {
+                UMImageUploadButton(spec: .familyBackground(id: id), label: "Upload Background Image") { await model.loadFamily() }
+            }
             if b("background") {
                 Picker("Background Display Mode", selection: Binding<String>(
                     get: { s("backgroundRepeatMode").isEmpty ? "checker" : s("backgroundRepeatMode") },
@@ -1087,6 +1115,61 @@ private struct FamilySettingsTab: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enter \(s("name")) to permanently delete it.")
+        }
+    }
+}
+
+// MARK: - Custom emote / sticker upload
+
+/// Site Form emoteUpload / stickerUpload: name + image, slots from the Shop.
+private struct CustomMediaUploadRows: View {
+    @Environment(AppModel.self) private var app
+    let model: AdvancedSettingsModel
+    @State private var emoteName = ""
+    @State private var stickerName = ""
+
+    private func count(_ k: String) -> Int { (model.values[k] as? [String: Any])?.count ?? (model.values[k] as? [Any])?.count ?? 0 }
+    private func item(_ k: String) -> Int {
+        let v = (app.user?.itemsOwned?.asAny as? [String: Any])?[k]
+        return (v as? Int) ?? Int((v as? Double) ?? 0)
+    }
+    private func nameError(_ n: String) -> String? {
+        if n.isEmpty { return nil }
+        if n.contains(" ") || n.contains(":") { return "Names may not have spaces or colons." }
+        if n.count > 25 { return "Name is too long (max 25)." }
+        return nil
+    }
+
+    var body: some View {
+        let emoteSlots = item("customEmotes") + item("customEmotesExtra")
+        let emotesUsed = count("customEmotes")
+        let stickerSlots = item("customStickers")
+        let stickersUsed = count("customStickers")
+        UploadRow(title: "Upload Custom Emote", sitePath: "/user/settings/game",
+                  info: nameError(emoteName) ?? "\(emotesUsed)/\(emoteSlots) emote slots used. Square crop; the server shrinks it to 30×30. Animated GIF/WebP allowed (under ~1.4 MB).") {
+            HStack {
+                TextField("emote name", text: $emoteName)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .frame(maxWidth: 140)
+                UMImageUploadButton(spec: .emote(name: emoteName), label: "Choose Image",
+                                    disabled: emoteName.isEmpty || nameError(emoteName) != nil || emotesUsed >= emoteSlots) {
+                    emoteName = ""
+                    await model.load()
+                }
+            }
+        }
+        UploadRow(title: "Upload Custom Sticker", sitePath: "/user/settings/game",
+                  info: nameError(stickerName) ?? "\(stickersUsed)/\(stickerSlots) sticker slots used (buy more in the Shop, 10 coins each). GIF/PNG/JPEG/WebP, max 512×512.") {
+            HStack {
+                TextField("sticker name", text: $stickerName)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .frame(maxWidth: 140)
+                UMImageUploadButton(spec: .sticker(name: stickerName), label: "Choose Image",
+                                    disabled: stickerName.isEmpty || nameError(stickerName) != nil || stickersUsed >= stickerSlots) {
+                    stickerName = ""
+                    await model.load()
+                }
+            }
         }
     }
 }

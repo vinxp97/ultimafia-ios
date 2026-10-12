@@ -61,6 +61,42 @@ final class APIClient {
         return data
     }
 
+    /// multipart/form-data POST, like the site's axios FormData uploads (same cookie session + x-csrf).
+    /// `progress` reports 0...1 of the request body sent.
+    @discardableResult
+    func upload(_ path: String, fields: [String: String] = [:], fileField: String, filename: String, mimeType: String,
+                data fileData: Data, progress: (@MainActor @Sendable (Double) -> Void)? = nil) async throws -> Data {
+        let url = try makeURL(path: path, query: [:])
+        let boundary = "UMBoundary-\(UUID().uuidString)"
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (k, v) in fields.sorted(by: { $0.key < $1.key }) {
+            add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n")
+        }
+        let safeName = filename.replacingOccurrences(of: "\"", with: "")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        add("\r\n--\(boundary)--\r\n")
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 120
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let csrf { req.setValue(csrf, forHTTPHeaderField: "x-csrf") }
+        let delegate = UMUploadProgressDelegate(progress)
+        let (data, response) = try await session.upload(for: req, from: body, delegate: delegate)
+        guard let http = response as? HTTPURLResponse else { throw UMError.message("No response.") }
+        if http.statusCode == 413 { throw UMError.message("File too large for the server.") }
+        if http.statusCode >= 400 {
+            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Upload 401/403s are usually shop/perk gating, not sign-in loss: surface as a plain message.
+            throw UMError.message(text?.isEmpty == false ? text! : "Upload failed (\(http.statusCode)).")
+        }
+        return data
+    }
+
     func establishSession(idToken: String) async throws {
         _ = try await post("auth", json: ["idToken": idToken])
     }
@@ -242,5 +278,16 @@ final class APIClient {
             return "Empty response from /\(path)."
         }
         return "Could not read server response (\(path))."
+    }
+}
+
+private final class UMUploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let onProgress: (@MainActor @Sendable (Double) -> Void)?
+    init(_ onProgress: (@MainActor @Sendable (Double) -> Void)?) { self.onProgress = onProgress }
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                                totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        guard let onProgress, totalBytesExpectedToSend > 0 else { return }
+        let f = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        Task { @MainActor in onProgress(f) }
     }
 }
