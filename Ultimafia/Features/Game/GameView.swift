@@ -167,6 +167,7 @@ private struct ChatScrollPin: Equatable {
     var atBottom: Bool
     var atTop: Bool
     var contentH: CGFloat
+    var containerH: CGFloat
 }
 
 private struct GameChatPane: View {
@@ -179,13 +180,26 @@ private struct GameChatPane: View {
     @State private var stickToBottom = true
     @State private var unreadCount = 0
     @State private var atTop = false
+    @State private var visibleLineIds: Set<String> = []
+
+    private var chatLines: [ChatLine] {
+        session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
+    }
+
+    /// Messages below the lowest one currently on screen (off-screen or behind the keyboard).
+    private func recomputeUnread() {
+        guard !stickToBottom else { unreadCount = 0; return }
+        let lines = chatLines
+        guard let lastSeen = lines.lastIndex(where: { visibleLineIds.contains($0.id) }) else { return }
+        unreadCount = lines.count - 1 - lastSeen
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             PhaseBar(session: session)
             ScrollViewReader { proxy in
                 ScrollView {
-                    let lines = session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
+                    let lines = chatLines
                     LazyVStack(alignment: .leading, spacing: chatLayout == .compact ? 4 : 2) {
                         Color.clear
                             .frame(height: 1)
@@ -207,8 +221,13 @@ private struct GameChatPane: View {
                             .frame(height: 1)
                             .id("chat-bottom")
                     }
+                    .scrollTargetLayout()
                     .padding(12)
                     .padding(.bottom, 8)
+                }
+                .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.6) { ids in
+                    visibleLineIds = Set(ids)
+                    recomputeUnread()
                 }
                 .pointerScrolling()
                 .defaultScrollAnchor(.bottom)
@@ -247,15 +266,20 @@ private struct GameChatPane: View {
                     }
                 }
                 .onScrollGeometryChange(for: ChatScrollPin.self) { geo in
-                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height)
+                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height, containerH: geo.containerSize.height)
                 } action: { old, pin in
                     if atTop != pin.atTop { atTop = pin.atTop }
+                    // Keyboard open/close or new content resizes things; stay pinned and follow.
+                    if stickToBottom, abs(pin.containerH - old.containerH) > 1 {
+                        jumpToLatest(proxy: proxy)
+                        return
+                    }
                     if stickToBottom, pin.contentH > old.contentH + 1 {
                         return
                     }
                     if stickToBottom != pin.atBottom {
                         stickToBottom = pin.atBottom
-                        if pin.atBottom { unreadCount = 0 }
+                        recomputeUnread()
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -266,7 +290,7 @@ private struct GameChatPane: View {
                                 stickToBottom = true
                                 jumpToLatest(proxy: proxy)
                             } label: {
-                                Text(unreadCount > 0 ? "\(unreadCount) new messages" : "Go to latest message")
+                                Text(unreadCount > 0 ? "\(unreadCount) unseen message\(unreadCount == 1 ? "" : "s") ↓" : "Scroll to latest message ↓")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 14)
@@ -275,7 +299,7 @@ private struct GameChatPane: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.bottom, 8)
-                            .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) new messages" : "Go to latest message")
+                            .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) unseen messages, scroll to latest" : "Scroll to latest message")
                         }
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 8)
@@ -294,14 +318,20 @@ private struct GameChatPane: View {
                     if stickToBottom {
                         unreadCount = 0
                         jumpToLatestIfPinned(proxy: proxy)
-                    } else if new > old {
-                        unreadCount += new - old
+                    } else {
+                        recomputeUnread()
                     }
                 }
                 .onChange(of: session.viewingPhaseId) { _, _ in
                     unreadCount = 0
                     stickToBottom = true
                     jumpToLatest(proxy: proxy)
+                }
+                .onChange(of: chatFocused.wrappedValue) { _, focused in
+                    guard focused, stickToBottom else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if stickToBottom { jumpToLatest(proxy: proxy) }
+                    }
                 }
                 .onAppear {
                     stickToBottom = true
