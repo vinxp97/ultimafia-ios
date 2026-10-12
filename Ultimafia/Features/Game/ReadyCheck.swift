@@ -14,16 +14,17 @@ import AppKit
 enum UMAudioSession {
     private static let queue = DispatchQueue(label: "com.ultimafia.audiosession")
 
-    private static var activated = false
-
-    /// Fire-and-forget: configures + activates once, off the main thread, never blocking the caller.
+    /// Fire-and-forget, off the main thread. Always `.playback` + `.mixWithOthers` so Spotify /
+    /// Apple Music keep playing under game sounds. Re-asserted on each call (cheap) in case another
+    /// component changed the category; never deactivated, so other apps are never stopped by us.
     static func activatePlayback() {
         #if os(iOS)
         queue.async {
-            guard !activated else { return }
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            if (try? session.setActive(true)) != nil { activated = true }
+            if session.category != .playback || !session.categoryOptions.contains(.mixWithOthers) {
+                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try? session.setActive(true)
         }
         #endif
     }

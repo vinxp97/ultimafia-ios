@@ -100,6 +100,7 @@ struct GuidesView: View {
             if open {
                 Divider().overlay(UMTheme.line)
                 UMMarkdownView(text: guide.content ?? "", roleGameType: gameType, otherRoles: otherRoles)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(12)

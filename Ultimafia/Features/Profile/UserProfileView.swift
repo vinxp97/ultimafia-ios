@@ -501,6 +501,11 @@ struct UMMarkdownView: View {
     }
 
     private var content: some View {
+        contentStack
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var contentStack: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
                 switch chunk {
@@ -556,7 +561,9 @@ struct UMMarkdownView: View {
     private func imageView(_ url: URL) -> some View {
         AnimatedWebPView(url: url)
             .scaledToFit()
-            .frame(maxHeight: 280)
+            // Never wider than the column: big uploads otherwise push the whole block off-screen.
+            .frame(maxWidth: .infinity, maxHeight: 280, alignment: .leading)
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -687,6 +694,7 @@ struct UMMarkdownView: View {
         } else if let type = roleGameType {
             umRoleMentionText(styledInline(s, headingLevel: headingLevel), gameType: type)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text(styledInline(s, headingLevel: headingLevel))
                 .fixedSize(horizontal: false, vertical: true)
@@ -1188,6 +1196,7 @@ private struct ProfileAudioBar: View {
     var body: some View {
         VideoPlayer(player: player)
             .onAppear {
+                UMAudioSession.activatePlayback()   // mix with the user's own music
                 player = AVPlayer(url: url)
             }
             .onDisappear {

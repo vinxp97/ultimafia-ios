@@ -29,19 +29,19 @@ func umRoleMentionText(_ attr: AttributedString, gameType: String) -> Text {
         let lo = plain.distance(from: plain.startIndex, to: hit.range.lowerBound)
         let hi = plain.distance(from: plain.startIndex, to: hit.range.upperBound)
         guard lo >= cursor else { continue }
-        if lo > cursor { out = out + Text(slice(cursor, lo)) }
+        if lo > cursor { out = Text("\(out)\(Text(slice(cursor, lo)))") }
         var mention = slice(lo, hi)
         mention.foregroundColor = UMTheme.roleMention
         mention.inlinePresentationIntent = .stronglyEmphasized
         let encoded = hit.name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? hit.name
         mention.link = URL(string: "\(UMRoleMentionItem.scheme)://\(encoded)")
         if let icon = umRoleIconImage(hit.name, gameType: gameType) {
-            out = out + Text(Image(uiImage: icon)).baselineOffset(-3) + Text(" ")
+            out = Text("\(out)\(Text(Image(uiImage: icon)).baselineOffset(-3)) ")
         }
-        out = out + Text(mention)
+        out = Text("\(out)\(Text(mention))")
         cursor = hi
     }
-    if cursor < plain.count { out = out + Text(slice(cursor, plain.count)) }
+    if cursor < plain.count { out = Text("\(out)\(Text(slice(cursor, plain.count)))") }
     return out
 }
 
