@@ -2,9 +2,10 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(AppModel.self) private var app
+    // Legacy "Remember me" values prefill once; they're cleared after the next sign-in.
     @State private var email = RememberedLogin.email
     @State private var password = RememberedLogin.isEnabled ? (RememberedLogin.password ?? "") : ""
-    @State private var rememberMe = RememberedLogin.isEnabled
+    @FocusState private var passwordFocused: Bool
     @State private var creating = false
     @State private var confirm = ""
     @State private var birthday = ""
@@ -79,6 +80,7 @@ struct LoginView: View {
                     .padding(14)
                     .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
                 SecureField("Password", text: $password)
+                    .focused($passwordFocused)
                     .textContentType(creating ? .newPassword : .password)
                     .padding(14)
                     .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
@@ -116,12 +118,6 @@ struct LoginView: View {
                             .foregroundStyle(UMTheme.mafia)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                } else {
-                    Toggle(isOn: $rememberMe) {
-                        Text("Remember me")
-                            .foregroundStyle(.white)
-                    }
-                    .tint(UMTheme.blood)
                 }
 
                 if let error = app.errorMessage {
@@ -136,7 +132,7 @@ struct LoginView: View {
                         if creating {
                             await app.signUp(email: email, password: password)
                         } else {
-                            await app.signIn(email: email, password: password, remember: rememberMe)
+                            await app.signIn(email: email, password: password)
                         }
                     }
                 } label: {
@@ -158,6 +154,7 @@ struct LoginView: View {
             .padding(.horizontal, 24)
 
             Spacer()
+            SavedAccountsRow()
             Text("Talks to ultimafia.com. Same account as the website.")
                 .font(.caption2)
                 .foregroundStyle(UMTheme.muted)
@@ -170,12 +167,66 @@ struct LoginView: View {
             confirm = ""
             birthday = ""
         }
-        .onChange(of: rememberMe) { _, on in
-            if !on { RememberedLogin.clear() }
-        }
+        .onAppear { applyPrefill(app.loginPrefillEmail) }
+        .onChange(of: app.loginPrefillEmail) { _, v in applyPrefill(v) }
     }
 }
 
+
+extension LoginView {
+    fileprivate func applyPrefill(_ value: String?) {
+        guard let value else { return }
+        creating = false
+        email = value
+        password = ""
+        if !value.isEmpty { passwordFocused = true }
+    }
+}
+
+/// Saved accounts, newest first. Tap to switch; long-press to remove from this device.
+struct SavedAccountsRow: View {
+    @Environment(AppModel.self) private var app
+    private var store: AccountStore { .shared }
+
+    var body: some View {
+        let accounts = store.sorted
+        if !accounts.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Saved accounts")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(UMTheme.muted)
+                    .padding(.horizontal, 24)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(accounts) { account in
+                            Button {
+                                Task { await app.switchToAccount(account) }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    UMAvatarView(player: account.player, size: 56)
+                                    PlayerNameView(player: account.player, fontSize: 13)
+                                        .lineLimit(1)
+                                        .frame(maxWidth: 84)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(app.isBusy)
+                            .contextMenu {
+                                Button("Remove from This Device", systemImage: "trash", role: .destructive) {
+                                    app.removeSavedAccount(account.id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 4)
+                }
+            }
+            .padding(.bottom, 12)
+        }
+    }
+}
 
 /// Full-width filled button: the whole rounded shape is the hit target, with pressed/disabled states.
 struct UMPrimaryButtonStyle: ButtonStyle {

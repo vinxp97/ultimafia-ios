@@ -34,6 +34,8 @@ final class AppModel {
     var showLeaveConfirm = false
     var onlineUsers: [OnlineUser] = []
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
+    /// Email to prefill on the sign-in screen (saved account whose session expired).
+    var loginPrefillEmail: String?
 
     enum Route: Hashable {
         case game(String, spectate: Bool)
@@ -134,37 +136,116 @@ final class AppModel {
     func bootstrap() async {
         isRestoring = true
         defer { isRestoring = false }
+        _ = DeviceIdentity.installId
         do {
             let info = try await APIClient.shared.userInfo()
             if info.id != nil {
-                user = info
-                startPresence()
-                Task { await self.loadMyCustomMedia() }
-                await refreshLobby()
-                resumeIfSeated()
+                await didSignIn(info, email: nil)
             }
         } catch {
             user = nil
         }
     }
 
-    func signIn(email: String, password: String, remember: Bool) async {
+    func signIn(email: String, password: String) async {
         await run {
-            let token = try await FirebaseAuth.signIn(email: email, password: password)
-            try await APIClient.shared.establishSession(idToken: token)
-            let info = try await APIClient.shared.userInfo()
-            guard info.id != nil else { throw UMError.message("Check your email to verify the account, then sign in.") }
-            self.user = info
-            self.startPresence()
-            Task { await self.loadMyCustomMedia() }
-            if remember {
-                RememberedLogin.save(email: email, password: password)
-            } else {
-                RememberedLogin.clear()
-            }
-            await self.refreshLobby()
-            self.resumeIfSeated()
+            try await self.authenticate(email: email, password: password)
         }
+    }
+
+    /// Firebase idToken -> POST /auth (sets cookie) -> GET /user/info (csrf).
+    private func authenticate(email: String, password: String) async throws {
+        AccountStore.clearCookies()
+        let token = try await FirebaseAuth.signIn(email: email, password: password)
+        try await APIClient.shared.establishSession(idToken: token)
+        let info = try await APIClient.shared.userInfo()
+        guard let id = info.id else { throw UMError.message("Check your email to verify the account, then sign in.") }
+        AccountStore.shared.savePassword(password, for: id)
+        RememberedLogin.clear()
+        await didSignIn(info, email: email)
+    }
+
+    /// Shared tail of every successful sign-in / restore / account switch.
+    private func didSignIn(_ info: UserInfo, email: String?) async {
+        guard let id = info.id else { return }
+        user = info
+        loginPrefillEmail = nil
+        AccountStore.shared.upsert(info, email: email)
+        AccountStore.shared.saveSession(for: id)
+        DeviceIdentity.recordSignIn(userId: id)
+        startPresence()
+        Task { await self.loadMyCustomMedia() }
+        await refreshLobby()
+        resumeIfSeated()
+    }
+
+    /// Drop everything tied to the active account's session (keeps on-disk asset caches).
+    private func resetSessionState() {
+        stopPresence()
+        game?.disconnectWithoutLeaving()
+        game = nil
+        reviewSession?.stop()
+        reviewSession = nil
+        APIClient.shared.csrf = nil
+        user = nil
+        path = []
+        hideAppTabs = false
+        suppressAppBar = false
+        isViewingGame = false
+        resumingFromLobby = false
+        showLeaveConfirm = false
+        mentionCount = 0
+        myCustomEmotes = [:]
+        myCustomStickers = [:]
+        onlineUsers = []
+        openGames = []
+        inProgressGames = []
+        finishedGames = []
+        finishedCursor = nil
+        finishedHasMore = true
+        errorMessage = nil
+    }
+
+    /// You tab: keep this account's session saved, go offline, and show sign-in for another account.
+    /// The site has no explicit offline call; stopping the /user/online heartbeat lets it time out.
+    func addAnotherAccount() {
+        guard seatedGameId == nil else { return }
+        if let id = user?.id { AccountStore.shared.saveSession(for: id) }
+        resetSessionState()
+        AccountStore.clearCookies()
+    }
+
+    /// Sign-in switcher: restore the saved cookie, verify with /user/info; else re-auth with the
+    /// Keychain password; else prefill the email and ask for the password.
+    func switchToAccount(_ account: SavedAccount) async {
+        if let current = user?.id {
+            if current == account.id { return }
+            AccountStore.shared.saveSession(for: current)
+        }
+        resetSessionState()
+        await run {
+            if AccountStore.shared.restoreSession(for: account.id),
+               let info = try? await APIClient.shared.userInfo(), info.id == account.id {
+                await self.didSignIn(info, email: nil)
+                return
+            }
+            AccountStore.shared.clearSession(account.id)
+            AccountStore.clearCookies()
+            if let email = account.email, let password = AccountStore.shared.password(for: account.id) {
+                do {
+                    try await self.authenticate(email: email, password: password)
+                    return
+                } catch {
+                    AccountStore.shared.clearPassword(account.id)
+                }
+            }
+            self.loginPrefillEmail = account.email ?? ""
+            throw UMError.message("Session for \(account.name) expired. Enter the password to sign back in.")
+        }
+    }
+
+    func removeSavedAccount(_ id: String) {
+        AccountStore.shared.remove(id)
     }
 
     /// GET user/settings/data returns `customEmotes` / `customStickers` keyed by `:name:`.
@@ -190,18 +271,20 @@ final class AppModel {
         }
     }
 
+    /// Signs out only the active account: its session and stored password are removed, but its
+    /// row stays in the switcher (tapping it asks for the password). Other accounts are untouched.
     func signOut() async {
-        leaveActiveGame()
+        let id = user?.id
+        let email = id.flatMap { uid in AccountStore.shared.accounts.first { $0.id == uid }?.email }
+        if seatedGameId != nil { game?.leave() }
         stopPresence()
         await APIClient.shared.logout()
-        user = nil
-        myCustomEmotes = [:]
-        myCustomStickers = [:]
-        onlineUsers = []
-        openGames = []
-        inProgressGames = []
-        finishedGames = []
-        path = []
+        if let id {
+            AccountStore.shared.clearSession(id)
+            AccountStore.shared.clearPassword(id)
+        }
+        resetSessionState()
+        loginPrefillEmail = email
     }
 
     func refreshLobby() async {

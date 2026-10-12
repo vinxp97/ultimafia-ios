@@ -51,6 +51,10 @@ struct ProfileView: View {
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)
                 }
+                Section {
+                    NavigationLink("Custom Emojis & Stickers") { CustomMediaOrderView() }
+                        .listRowBackground(UMTheme.card)
+                }
                 Section("Audio") {
                     volumeRow("Music Volume", $musicVolume) {
                         GameMusic.applyVolume()
@@ -89,6 +93,23 @@ struct ProfileView: View {
                     Text(clearedMessage ?? "Custom emotes, stickers and avatars saved on this device: \(Self.mb(cacheBytes)).")
                 }
                 Section {
+                    HStack {
+                        Text("Device")
+                        Spacer()
+                        Text(String(DeviceIdentity.installId.prefix(8)) + "…")
+                            .foregroundStyle(UMTheme.muted)
+                            .monospaced()
+                            .textSelection(.enabled)
+                    }
+                    .listRowBackground(UMTheme.card)
+                } footer: {
+                    Text("Install ID, stored only on this device.")
+                }
+                Section {
+                    if app.seatedGameId == nil {
+                        Button("Add Another Account") { app.addAnotherAccount() }
+                            .listRowBackground(UMTheme.card)
+                    }
                     Button("Sign out", role: .destructive) {
                         Task { await app.signOut() }
                     }
