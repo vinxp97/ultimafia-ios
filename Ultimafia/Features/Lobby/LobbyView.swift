@@ -54,11 +54,11 @@ struct LobbyView: View {
 
     private var playHeader: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text("Ultimafia Mobile")
-                .font(.largeTitle.weight(.bold))
-                .minimumScaleFactor(0.7)
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            Image(SeasonalLogo.current())
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 44, alignment: .leading)
+                .accessibilityLabel("Ultimafia Mobile")
             Spacer(minLength: 0)
             Button {
                 Task { await app.refreshLobby() }
@@ -262,5 +262,20 @@ struct LobbySetupStrip: View {
             isSimpleMulti: setup.isSimpleMulti(defaultGameType: gameType),
             compact: true
         )
+    }
+}
+
+
+/// Lobby header logo, picked by month like the website (Feb, Jun, Jul, Oct, Dec), Default otherwise.
+enum SeasonalLogo {
+    static func current(_ date: Date = .now) -> String {
+        switch Calendar.current.component(.month, from: date) {
+        case 2: return "Logo-valentines"
+        case 6: return "Logo-pride"
+        case 7: return "Logo-july"
+        case 10: return "Logo-halloween"
+        case 12: return "Logo-winter"
+        default: return "Logo-default"
+        }
     }
 }
