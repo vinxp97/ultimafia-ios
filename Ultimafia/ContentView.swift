@@ -163,8 +163,9 @@ struct MainTabs: View {
             // Signed-in shell settled: warm Z's profile (credits link) at low priority.
             .task {
                 try? await Task.sleep(for: .seconds(8))
+                let ids = AccountStore.shared.accounts.map(\.id)
                 await Task.detached(priority: .background) {
-                    await UMDevProfileCache.prefetchIfNeeded()
+                    await UMProfileCache.prefetchAll(accountIds: ids)
                 }.value
             }
             .onChange(of: tab, initial: true) { old, new in

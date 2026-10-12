@@ -4,7 +4,10 @@ import Observation
 @Observable
 final class AppModel {
     var user: UserInfo? {
-        didSet { UMViewerPrefs.shared.apply(user: user) }
+        didSet {
+            UMViewerPrefs.shared.apply(user: user)
+            UMProfileCache.activeUserId.withLock { $0 = user?.id }
+        }
     }
     var isRestoring = true
     var isBusy = false

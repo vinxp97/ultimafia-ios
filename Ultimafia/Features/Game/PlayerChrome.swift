@@ -187,7 +187,7 @@ final class UMImageCache: @unchecked Sendable {
     }
 }
 
-final class UMLocked<T>: @unchecked Sendable {
+nonisolated final class UMLocked<T>: @unchecked Sendable {
     private var value: T
     private let lock = NSLock()
     init(_ v: T) { value = v }

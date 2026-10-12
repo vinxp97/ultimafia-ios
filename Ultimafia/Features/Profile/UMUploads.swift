@@ -272,6 +272,7 @@ struct UMImageUploadButton: View {
             if !purge.isEmpty { await UMImageCache.shared.purge(purge) }
             done = "\(spec.title) uploaded."
             await onUploaded()
+            Task.detached(priority: .utility) { await UMProfileCache.refreshActiveAccount() }
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }

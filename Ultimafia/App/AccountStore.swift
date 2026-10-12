@@ -58,6 +58,7 @@ final class AccountStore {
         var merged = fromKeychain ?? []
         for a in fromDefaults ?? [] where !merged.contains(where: { $0.id == a.id }) { merged.append(a) }
         accounts = merged
+        UMProfileCache.setSavedAccounts(accounts.map(\.id))
         order = Self.loadOrder(kvs: kvs)
         migrateKeychainOnce()
         persist()
@@ -133,11 +134,14 @@ final class AccountStore {
         )
         accounts.removeAll { $0.id == id }
         accounts.append(row)
+        UMProfileCache.setSavedAccounts(accounts.map(\.id))
         persist()
     }
 
     func remove(_ id: String) {
         accounts.removeAll { $0.id == id }
+        UMProfileCache.remove(id)
+        UMProfileCache.setSavedAccounts(accounts.map(\.id))
         if order.contains(id) { setOrder(order.filter { $0 != id }) }
         clearSession(id)
         clearPassword(id)

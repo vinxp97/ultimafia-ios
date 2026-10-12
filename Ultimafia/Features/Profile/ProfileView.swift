@@ -168,7 +168,7 @@ struct ProfileView: View {
                         let freed = UMCacheLocation.bytes()
                         await UMCustomAssetCache.shared.clear()
                         UMImageCache.shared.clearAll()
-                        for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds, UMDevProfileCache.directory] {
+                        for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds, UMProfileCache.directory] {
                             try? FileManager.default.removeItem(at: dir)
                         }
                         cacheBytes = 0
@@ -265,7 +265,7 @@ struct UMYouBackBar<Content: View>: View {
 /// immediately; the profile view shows its own loading state.
 struct UMCreditsFooter: View {
     static let devName = "Z"
-    static let devUserId = "Fy2Ee8BH9"
+    static let devUserId = UMProfileCache.devUserId
     @Environment(AppModel.self) private var app
 
     var body: some View {

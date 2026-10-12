@@ -98,6 +98,10 @@ final class AdvancedSettingsModel {
         do {
             try await APIClient.shared.request(method, path: path, query: [:], body: body ?? (method == "POST" ? [:] : nil))
             if let success { notice = success }
+            // Profile-affecting changes (removals, name, media…): keep your cached profile current.
+            if method != "GET", path.hasPrefix("user/") {
+                Task.detached(priority: .utility) { await UMProfileCache.refreshActiveAccount() }
+            }
             return true
         } catch {
             errorMessage = Self.text(error)
