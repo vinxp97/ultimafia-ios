@@ -112,6 +112,42 @@ struct UMAvatarView: View {
     }
 }
 
+/// Decoded frames in memory + raw bytes on disk, so avatars/role icons don't refetch or flicker
+/// when rows re-render or the app relaunches.
+final class UMImageCache: @unchecked Sendable {
+    static let shared = UMImageCache()
+    private final class Entry { let images: [UMPlatformImage]; let delays: [Double]
+        init(_ i: [UMPlatformImage], _ d: [Double]) { images = i; delays = d } }
+    private let memory = NSCache<NSURL, Entry>()
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.urlCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 200 << 20,
+                                   directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+                                       .appendingPathComponent("UMImages"))
+        // Uploads are `no-cache` + ETag: disk copy is revalidated with a cheap 304, so avatar
+        // changes still show up; the in-memory frame cache keeps re-renders from flickering.
+        config.requestCachePolicy = .useProtocolCachePolicy
+        return URLSession(configuration: config)
+    }()
+
+    init() { memory.countLimit = 400 }
+
+    func frames(for url: URL) -> (images: [UMPlatformImage], delays: [Double])? {
+        memory.object(forKey: url as NSURL).map { ($0.images, $0.delays) }
+    }
+
+    func store(_ images: [UMPlatformImage], delays: [Double], for url: URL) {
+        memory.setObject(Entry(images, delays), forKey: url as NSURL)
+    }
+
+    func data(for url: URL) async throws -> Data {
+        if url.isFileURL { return try Data(contentsOf: url) }
+        let (data, response) = try await session.data(from: url)
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
+        return data
+    }
+}
+
 struct AnimatedWebPView: View {
     let url: URL
     var showsPlaceholder: Bool = true
@@ -144,9 +180,16 @@ struct AnimatedWebPView: View {
     }
 
     private func load() async {
+        if let hit = UMImageCache.shared.frames(for: url) {
+            frames = hit.images
+            delays = hit.delays
+            index = 0
+            return
+        }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let data = try await UMImageCache.shared.data(for: url)
             let parsed = Self.frames(from: data)
+            if !parsed.images.isEmpty { UMImageCache.shared.store(parsed.images, delays: parsed.delays, for: url) }
             await MainActor.run {
                 frames = parsed.images
                 delays = parsed.delays

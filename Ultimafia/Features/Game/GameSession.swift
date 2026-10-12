@@ -171,7 +171,12 @@ final class GameSession {
         guard let id = selfId else { return false }
         return !deadIds.contains(id) || graveyardParticipation
     }
-    var players: [GamePlayer] = []
+    var players: [GamePlayer] = [] {
+        didSet { for p in players { knownPlayers[p.id] = p } }
+    }
+    /// Everyone ever seen this game, by player id. Survives playerLeave / players refreshes so a
+    /// departed player's chat rows, newspaper, vote log etc. keep their name + avatar.
+    @ObservationIgnored private var knownPlayers: [String: GamePlayer] = [:]
     var messages: [ChatLine] = []
     var meetings: [VoteMeeting] = []
     var speechChannels: [SpeechChannel] = []
@@ -763,7 +768,7 @@ final class GameSession {
     }
 
     func player(for senderId: String) -> GamePlayer? {
-        players.first(where: { $0.id == senderId })
+        players.first(where: { $0.id == senderId }) ?? knownPlayers[senderId]
     }
 
     private func applyIncomingTyping(_ data: Any?) {
