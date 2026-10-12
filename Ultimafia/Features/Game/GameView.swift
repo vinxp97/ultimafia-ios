@@ -180,7 +180,7 @@ private struct GameChatPane: View {
     @Binding var draft: String
     var chatFocused: FocusState<Bool>.Binding
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
-    @AppStorage("um.bubbleStyle") private var bubbleStyle: BubbleIndicatorStyle = .bar
+    @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @State private var stickToBottom = true
     @State private var unreadCount = 0
@@ -236,7 +236,7 @@ private struct GameChatPane: View {
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if bubbleStyle == .overlay, stickToBottom {
+                    if showTypingIndicator, stickToBottom {
                         VStack(alignment: .trailing, spacing: 6) {
                             ForEach(session.typingPlayers) { player in
                                 HStack(spacing: 4) {
@@ -284,12 +284,7 @@ private struct GameChatPane: View {
                             .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) new messages" : "Go to latest message")
                         }
                         VStack(spacing: 0) {
-                            if bubbleStyle == .bar || bubbleStyle == .hidden {
-                                Color.clear.frame(height: 8)
-                            }
-                            if bubbleStyle == .bar {
-                                TypingStrip(session: session)
-                            }
+                            Color.clear.frame(height: 8)
                             if session.showComposer {
                                 ChatComposer(
                                     session: session,

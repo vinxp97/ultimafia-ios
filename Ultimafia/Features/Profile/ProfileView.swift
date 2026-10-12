@@ -3,7 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(AppModel.self) private var app
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
-    @AppStorage("um.bubbleStyle") private var bubbleStyle: BubbleIndicatorStyle = .bar
+    @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showTabButton") private var showTabButton = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
@@ -56,13 +56,8 @@ struct ProfileView: View {
                     }
                     .pickerStyle(.menu)
                     .listRowBackground(UMTheme.card)
-                    Picker("Bubble indicators", selection: $bubbleStyle) {
-                        ForEach(BubbleIndicatorStyle.allCases) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .listRowBackground(UMTheme.card)
+                    Toggle("Show Typing Indicator", isOn: $showTypingIndicator)
+                        .listRowBackground(UMTheme.card)
                     Toggle("Show Tab button", isOn: $showTabButton)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Voting Log", isOn: $showVotingLog)
