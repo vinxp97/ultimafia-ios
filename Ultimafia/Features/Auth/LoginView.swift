@@ -7,9 +7,37 @@ struct LoginView: View {
     @State private var rememberMe = RememberedLogin.isEnabled
     @State private var creating = false
     @State private var confirm = ""
+    @State private var birthday = ""
+
+    /// Parses MM/DD/YYYY; nil if incomplete or not a real date.
+    private var birthDate: Date? {
+        let parts = birthday.split(separator: "/").compactMap { Int($0) }
+        guard birthday.count == 10, parts.count == 3, parts[2] > 1900 else { return nil }
+        var c = DateComponents(); c.month = parts[0]; c.day = parts[1]; c.year = parts[2]
+        let cal = Calendar(identifier: .gregorian)
+        guard let d = cal.date(from: c), cal.component(.month, from: d) == parts[0],
+              cal.component(.day, from: d) == parts[1], d <= Date() else { return nil }
+        return d
+    }
+
+    private var isUnder13: Bool {
+        guard let d = birthDate else { return false }
+        let age = Calendar(identifier: .gregorian).dateComponents([.year], from: d, to: Date()).year ?? 0
+        return age < 13
+    }
+
+    private func formatBirthday(_ raw: String) -> String {
+        let digits = String(raw.filter(\.isNumber).prefix(8))
+        var out = ""
+        for (i, ch) in digits.enumerated() {
+            if i == 2 || i == 4 { out.append("/") }
+            out.append(ch)
+        }
+        return out
+    }
 
     private var canSubmit: Bool {
-        !app.isBusy && !email.isEmpty && password.count >= 6 && (!creating || password == confirm)
+        !app.isBusy && !email.isEmpty && password.count >= 6 && (!creating || (password == confirm && birthDate != nil && !isUnder13))
     }
 
     var body: some View {
@@ -55,6 +83,28 @@ struct LoginView: View {
                         .textContentType(.newPassword)
                         .padding(14)
                         .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                    TextField("Birthday (MM/DD/YYYY)", text: $birthday)
+                        .textContentType(.birthdate)
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                        .padding(14)
+                        .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                        .onChange(of: birthday) { _, v in
+                            let f = formatBirthday(v)
+                            if f != v { birthday = f }
+                        }
+                    if isUnder13 {
+                        Text("Ultimafia is for 13+ users only.")
+                            .font(.footnote)
+                            .foregroundStyle(UMTheme.mafia)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if birthday.count == 10 && birthDate == nil {
+                        Text("Enter a real date as MM/DD/YYYY.")
+                            .font(.footnote)
+                            .foregroundStyle(UMTheme.mafia)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if !confirm.isEmpty && confirm != password {
                         Text("Passwords don't match.")
                             .font(.footnote)
@@ -116,6 +166,7 @@ struct LoginView: View {
         .onChange(of: creating) { _, _ in
             app.errorMessage = nil
             confirm = ""
+            birthday = ""
         }
         .onChange(of: rememberMe) { _, on in
             if !on { RememberedLogin.clear() }
