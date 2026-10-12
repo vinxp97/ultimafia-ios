@@ -62,7 +62,7 @@ private struct GameScreen: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
-        .toolbar(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -351,7 +351,59 @@ private struct ChatComposer: View {
     @AppStorage("um.showTabButton") private var showTabButton = true
     @State private var keyboardExpanded = false
 
+    /// Last word of the draft (cursor is assumed at the end), keeping any leading @ or %.
+    private var nameToken: (prefix: String, query: String, range: Range<String.Index>)? {
+        guard let last = draft.last, !last.isWhitespace else { return nil }
+        let start = draft.lastIndex(where: { $0.isWhitespace }).map { draft.index(after: $0) } ?? draft.startIndex
+        let word = draft[start...]
+        let prefix = String(word.prefix(while: { $0 == "@" || $0 == "%" }))
+        let query = String(word.dropFirst(prefix.count))
+        guard !query.isEmpty, !draft.hasPrefix("/") else { return nil }
+        return (prefix, query, start..<draft.endIndex)
+    }
+
+    private var nameSuggestions: [String] {
+        guard showTabButton, let t = nameToken else { return [] }
+        var seen = Set<String>()
+        return session.players.map(\.name).filter { name in
+            name.lowercased().hasPrefix(t.query.lowercased())
+                && name.caseInsensitiveCompare(t.query) != .orderedSame
+                && seen.insert(name).inserted
+        }.prefix(3).map { $0 }
+    }
+
+    private func applySuggestion(_ name: String) {
+        guard let t = nameToken else { return }
+        var next = draft
+        next.replaceSubrange(t.range, with: t.prefix + name + " ")
+        draft = String(next.prefix(UMConfig.maxChatLength))
+        session.noteTyping()
+    }
+
     var body: some View {
+        VStack(spacing: 0) {
+        if !session.isSpeakCoolingDown, !nameSuggestions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(nameSuggestions, id: \.self) { name in
+                        Button { applySuggestion(name) } label: {
+                            Text(name)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(UMTheme.card, in: Capsule())
+                                .overlay(Capsule().stroke(UMTheme.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .background(UMTheme.elevated)
+        }
         TimelineView(.periodic(from: .now, by: 0.2)) { context in
             let cooling = (session.speakCooldownUntil ?? .distantPast) > context.date
             HStack(alignment: .center, spacing: 8) {
@@ -413,15 +465,8 @@ private struct ChatComposer: View {
                 }
             }
         }
-        .bindKeyboardExpanded($keyboardExpanded)
-        .toolbar {
-            if showTabButton, keyboardExpanded {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Button("Tab") { _ = completeName() }
-                    Spacer()
-                }
-            }
         }
+        .bindKeyboardExpanded($keyboardExpanded)
     }
 
     private func placeholder(cooling: Bool) -> String {

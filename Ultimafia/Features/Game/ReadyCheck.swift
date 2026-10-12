@@ -14,17 +14,16 @@ import AppKit
 enum UMAudioSession {
     private static let queue = DispatchQueue(label: "com.ultimafia.audiosession")
 
+    private static var activated = false
+
+    /// Fire-and-forget: configures + activates once, off the main thread, never blocking the caller.
     static func activatePlayback() {
         #if os(iOS)
-        let work = {
+        queue.async {
+            guard !activated else { return }
             let session = AVAudioSession.sharedInstance()
             try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try? session.setActive(true)
-        }
-        if Thread.isMainThread {
-            queue.sync(execute: work)
-        } else {
-            work()
+            if (try? session.setActive(true)) != nil { activated = true }
         }
         #endif
     }

@@ -39,16 +39,38 @@ struct ContentView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
+    @State private var tab = "play"
+
+    /// Leave lives in the tab bar as a fake tab: selecting it pops the confirm and snaps back.
+    private var tabSelection: Binding<String> {
+        Binding(
+            get: { tab },
+            set: { new in
+                guard new == "leave" else { tab = new; return }
+                if let session = app.game {
+                    if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
+                }
+            }
+        )
+    }
 
     var body: some View {
         ZStack {
-            TabView {
+            TabView(selection: tabSelection) {
+                if app.game != nil {
+                    Color.clear
+                        .tabItem { Label("Leave", systemImage: "arrow.left") }
+                        .tag("leave")
+                        .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
+                }
                 LobbyView()
                     .tabItem { Label("Play", systemImage: "theatermasks") }
+                    .tag("play")
                     .badge(app.seatedGameId == nil ? 0 : 1)
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
                 ProfileView()
                     .tabItem { Label("You", systemImage: "person") }
+                    .tag("you")
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
             }
             .toolbarBackground(UMTheme.card, for: .tabBar)
@@ -56,11 +78,6 @@ struct MainTabs: View {
             if let session = app.game {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
                 RoleRevealOverlay(session: session)
-                if !app.hideAppTabs && !app.path.isEmpty && !app.showLeaveConfirm {
-                    LeaveGameButton {
-                        if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
-                    }
-                }
                 if app.showLeaveConfirm {
                     LeaveConfirmOverlay(
                         warning: session.participationRequired
