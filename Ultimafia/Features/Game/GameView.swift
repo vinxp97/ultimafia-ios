@@ -663,7 +663,7 @@ private struct ChatComposer: View {
             .map { .player(cmd, $0) }
         // /vote: No One goes last when the meeting offers it.
         if cmd == "vote", let m = session.villageMeeting, m.targets.contains("*") {
-            let label = m.noOneDisplayName ?? "No one"
+            let label = session.voteLabel("*", meeting: m)
             if arg.isEmpty || label.lowercased().hasPrefix(arg.lowercased()) || "nl".hasPrefix(arg.lowercased()) {
                 out.append(.noOne(label))
             }
@@ -815,6 +815,13 @@ private struct ChatComposer: View {
                         Button(option.menuTitle) {
                             session.selectSpeechOption(option.id)
                         }
+                    }
+                    if session.setupWhispers {
+                        Divider()
+                        Toggle("Leak Whispers", isOn: Binding(
+                            get: { session.whisperForceLeak },
+                            set: { session.whisperForceLeak = $0 }
+                        ))
                     }
                 }
 

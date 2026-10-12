@@ -241,6 +241,11 @@ final class GameSession {
     var setupEventsPerSet: [[SetupRole]] = []
     var setupGrouped = false
     var setupGroupSizes: [Int] = []
+    /// setup.gameSettings["Whispers"] / ["Whisper Leak Chance"] (web getSetupGameSetting).
+    var setupWhispers = false
+    var setupWhisperLeakChance: Double = 0
+    /// Web "Leak Whispers" checkbox: whispers are sent with forceLeak.
+    var whisperForceLeak = false
     var roleGuesses: [String: RoleGuess] = [:]
 
     var isSimpleMulti: Bool {
@@ -318,6 +323,7 @@ final class GameSession {
         var opts = [SpeechOption(id: "Say", label: "Say", placeholder: "to everyone", abilityName: nil, abilityTarget: nil)]
         let channel = speechChannels.first(where: { $0.id == selectedSpeechMeetingId })
         for ability in channel?.abilities ?? [] {
+            if ability.name == "Whisper" && !setupWhispers { continue }
             if ability.targets.isEmpty {
                 opts.append(SpeechOption(
                     id: ability.name,
@@ -763,6 +769,7 @@ final class GameSession {
             if let target = currentSpeechOption.abilityTarget {
                 payload["abilityTarget"] = target
             }
+            if name == "Whisper" && whisperForceLeak { payload["forceLeak"] = true }
         }
         socket.send("speak", object: payload)
         stopTyping()
@@ -2318,6 +2325,28 @@ final class GameSession {
         setupEventsPerSet = bundle.eventsPerSet
         setupGrouped = bundle.grouped
         setupGroupSizes = bundle.groupSizes
+        let settings = obj["gameSettings"] as? [String: Any] ?? [:]
+        setupWhispers = Self.truthySetting(settings["Whispers"])
+        setupWhisperLeakChance = setupWhispers ? Self.numberSetting(settings["Whisper Leak Chance"]) : 0
+        if !setupWhispers { whisperForceLeak = false }
+    }
+
+    nonisolated static func truthySetting(_ v: Any?) -> Bool {
+        switch v {
+        case let b as Bool: return b
+        case let n as NSNumber: return n.doubleValue != 0
+        case let s as String: return !s.isEmpty && s != "0" && s.lowercased() != "false"
+        case let a as [Any]: return !a.isEmpty
+        default: return false
+        }
+    }
+
+    nonisolated static func numberSetting(_ v: Any?) -> Double {
+        switch v {
+        case let n as NSNumber: return n.doubleValue
+        case let s as String: return Double(s) ?? 0
+        default: return 0
+        }
     }
 
     private func parseSetupBundle(_ obj: [String: Any]) -> SetupRoleParse.Bundle {
@@ -2459,6 +2488,10 @@ final class GameSession {
     func voteLabel(_ target: String, meeting: VoteMeeting?) -> String {
         switch target {
         case "*":
+            // Web G:5326-5340: boolean -> "No", non-player inputs -> "None".
+            if let type = meeting?.inputType, type != "player" {
+                return type == "boolean" ? "No" : "None"
+            }
             let custom = meeting?.noOneDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return custom.isEmpty ? "no one" : custom
         case "*magus":

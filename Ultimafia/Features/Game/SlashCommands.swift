@@ -7,7 +7,9 @@ import Foundation
 /// - /vote, /unvote, /shoot: socket `vote` / `unvote` {meetingId, selection} on the village
 ///   meeting / the Gun item meeting (actionName "Shoot"), restricted to the server's `targets`.
 /// - /whisper: `speak` {meetingId, content, abilityName: "Whisper", abilityTarget: playerId},
-///   only when the meeting offers the Whisper speech ability (setup whispers on, not anonymous).
+///   plus `forceLeak: true` when "Leak Whispers" is on. Only offered when setup.gameSettings
+///   "Whispers" is on AND the meeting carries the Whisper speech ability (not Pregame/anonymous);
+///   "Whisper Leak Chance" is shown in the summary.
 /// - in-game /kick (no name): the veg "Vote Kick" meeting (core/VegKickMeeting.js) that appears
 ///   when the phase timer runs out: socket `vote` {meetingId, selection: "Kick"}; canUnvote is
 ///   always false; canVote = alive && voted in all other meetings. Progress is only broadcast as
@@ -90,6 +92,7 @@ extension GameSession {
     }
 
     private func abilityChannel(_ ability: String) -> (channel: SpeechChannel, ability: SpeechAbility)? {
+        if ability == "Whisper" && !setupWhispers { return nil }
         for ch in speechChannels where ch.canTalk {
             if let a = ch.abilities.first(where: { $0.name == ability }) { return (ch, a) }
         }
@@ -122,12 +125,19 @@ extension GameSession {
             }
         }
         if abilityChannel("Whisper") != nil {
-            out.append(SlashCommand(name: "whisper", usage: "/whisper name message", summary: "Whisper privately to a player", icon: "ear", arg: .playerThenText))
+            out.append(SlashCommand(name: "whisper", usage: "/whisper name message", summary: whisperSummary, icon: "ear", arg: .playerThenText))
         }
         if abilityChannel("Cry") != nil {
             out.append(SlashCommand(name: "cry", usage: "/cry message", summary: "Cry out anonymously to everyone", icon: "megaphone.fill", arg: .text))
         }
         return out
+    }
+
+    private var whisperSummary: String {
+        var s = "Whisper privately to a player"
+        if setupWhisperLeakChance > 0 { s += " (\(Int(setupWhisperLeakChance))% leak chance)" }
+        if whisperForceLeak { s += " · leaking" }
+        return s
     }
 
     /// Players a command can target, from the server's lists only.
@@ -197,16 +207,18 @@ extension GameSession {
             let msg = bits.count > 1 ? String(bits[1]).trimmingCharacters(in: .whitespaces) : ""
             guard !msg.isEmpty else { return .error("Add a message after the name") }
             guard let ch = abilityChannel("Whisper")?.channel else { return .error("Whispers are off") }
-            socketForCommands.send("speak", object: [
+            var payload: [String: Any] = [
                 "meetingId": ch.id, "content": msg, "abilityName": "Whisper", "abilityTarget": p.id,
-            ])
+            ]
+            if whisperForceLeak { payload["forceLeak"] = true }
+            socketForCommands.send("speak", object: payload)
             return .handled
         case "cry":
             guard !rest.isEmpty else { return .error("Add a message: /cry message") }
-            guard let (ch, ability) = abilityChannel("Cry") else { return .error("You can't cry out") }
+            guard let (ch, _) = abilityChannel("Cry") else { return .error("You can't cry out") }
             socketForCommands.send("speak", object: [
                 "meetingId": ch.id, "content": rest, "abilityName": "Cry",
-                "abilityTarget": ability.targets.first ?? "out",
+                "abilityTarget": "out",
             ])
             return .handled
         default:
