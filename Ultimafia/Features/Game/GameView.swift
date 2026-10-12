@@ -1042,7 +1042,7 @@ private struct ChatRow: View {
                         if let player {
                             HStack(spacing: 0) {
                                 PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
-                                if session.reviewSenderDead(line) {
+                                if session.showsDeadSuffix(line) {
                                     Text(" (dead)")
                                         .font(.system(size: 14))
                                         .foregroundStyle(UMTheme.deadName)
@@ -1162,7 +1162,7 @@ private struct ChatRow: View {
             } else if let player {
                 HStack(spacing: 0) {
                                 PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
-                                if session.reviewSenderDead(line) {
+                                if session.showsDeadSuffix(line) {
                                     Text(" (dead)")
                                         .font(.system(size: 14))
                                         .foregroundStyle(UMTheme.deadName)

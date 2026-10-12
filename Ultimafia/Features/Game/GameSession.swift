@@ -42,6 +42,8 @@ struct ChatLine: Identifiable, Hashable {
     var quotedSenderName: String?
     var quotedTime: Date?
     var senderWasDead: Bool = false
+    /// Message carried its own `alive` flag (so senderWasDead isn't a fallback guess).
+    var aliveFlagKnown: Bool = false
     var newspaper: NewspaperIssue? = nil
 
     var isVoteLog: Bool { senderId == "vote" || id.hasPrefix("votehist:") }
@@ -442,9 +444,16 @@ final class GameSession {
         return deadByPhase[viewingPhaseId] ?? deadIds
     }
 
-    /// Review only: sender is in the dead set of the phase the line belongs to (per-phase map).
-    func reviewSenderDead(_ line: ChatLine) -> Bool {
-        guard isReview, let phase = line.fromState, phase >= 0 || phase == -2 else { return false }
+    /// " (dead)" suffix: reviews show it to everyone; live games only to dead viewers.
+    /// Uses the message's own alive flag (same as the red line); falls back to the
+    /// dead set of the message's phase only when the flag is missing.
+    func showsDeadSuffix(_ line: ChatLine) -> Bool {
+        if !isReview {
+            guard let me = selfId, deadIds.contains(me) else { return false }
+        }
+        if line.aliveFlagKnown { return line.senderWasDead }
+        guard let phase = line.fromState ?? (isReview ? nil : currentPhaseId), phase >= 0 || phase == -2 else { return false }
+        if !isReview && phase == currentPhaseId { return deadIds.contains(line.senderId) }
         return deadByPhase[phase]?.contains(line.senderId) ?? false
     }
 
@@ -1477,7 +1486,8 @@ final class GameSession {
             isQuote: isQuote,
             quotable: !isQuote && senderId != "server" && senderId != "vote",
             fromState: intValue(obj["fromState"]),
-            senderWasDead: deadWhenSent(senderId: senderId, alive: obj["alive"])
+            senderWasDead: deadWhenSent(senderId: senderId, alive: obj["alive"]),
+            aliveFlagKnown: !(obj["alive"] == nil || obj["alive"] is NSNull)
         )
     }
 
@@ -2073,7 +2083,8 @@ final class GameSession {
             quotedSenderId: quotedId,
             quotedSenderName: quotedName,
             quotedTime: original?.time,
-            senderWasDead: deadWhenSent(senderId: senderId, alive: obj["alive"])
+            senderWasDead: deadWhenSent(senderId: senderId, alive: obj["alive"]),
+            aliveFlagKnown: !(obj["alive"] == nil || obj["alive"] is NSNull)
         )
     }
 
