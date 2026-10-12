@@ -73,8 +73,11 @@ final class UMNameFonts {
         guard let provider = CGDataProvider(data: data as CFData),
               let cgFont = CGFont(provider),
               let ps = cgFont.postScriptName as String? else { return false }
-        var error: Unmanaged<CFError>?
-        if !CTFontManagerRegisterGraphicsFont(cgFont, &error) {
+        // Register from a file URL (CTFontManagerRegisterGraphicsFont is deprecated in iOS 18).
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("umfont-\(ps)").appendingPathExtension("ttf")
+        guard (try? data.write(to: fileURL, options: .atomic)) != nil else { return false }
+        if !CTFontManagerRegisterFontsForURL(fileURL as CFURL, .process, nil) {
             // Already registered (e.g. second load) is fine; anything else is a bad file.
             guard UIFont(name: ps, size: 12) != nil else { return false }
         }
