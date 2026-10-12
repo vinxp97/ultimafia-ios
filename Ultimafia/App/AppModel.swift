@@ -14,6 +14,7 @@ final class AppModel {
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
+    var showLeaveConfirm = false
     var onlineUsers: [OnlineUser] = []
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
 

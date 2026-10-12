@@ -64,12 +64,6 @@ private struct GameScreen: View {
         .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
         .toolbar(.visible, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Leave", action: onLeave)
-                    .foregroundStyle(UMTheme.mafia)
-            }
-        }
         .alert("Game", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -56,6 +56,19 @@ struct MainTabs: View {
             if let session = app.game {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
                 RoleRevealOverlay(session: session)
+                if !app.hideAppTabs && !app.path.isEmpty && !app.showLeaveConfirm {
+                    LeaveGameButton { app.showLeaveConfirm = true }
+                }
+                if app.showLeaveConfirm {
+                    LeaveConfirmOverlay(
+                        inProgress: session.currentPhaseId >= 0 && !session.finished,
+                        onStay: { app.showLeaveConfirm = false },
+                        onLeave: {
+                            app.showLeaveConfirm = false
+                            app.leaveActiveGame()
+                        }
+                    )
+                }
             }
         }
     }
