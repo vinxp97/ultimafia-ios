@@ -270,6 +270,7 @@ final class GameSession {
     private var newspaperEpoch: Date?
     private var newspaperEpochDayCount: Int?
 
+    var socketForCommands: GameSocket { socket }
     private let socket = GameSocket()
     private var token: String?
     private var didJoin = false
@@ -279,6 +280,10 @@ final class GameSession {
     private var weInitiatedLeave = false
     var displaced = false
     private var typingIn: String?
+    /// Set once the draft starts with "/"; no typing indicator is sent until a normal message goes out.
+    var typingSuppressed = false
+    /// Brief inline hint for an invalid slash command (shown above the composer).
+    var slashHint: String?
     private var typingIdleTask: Task<Void, Never>?
     private var typingExpireTasks: [String: Task<Void, Never>] = [:]
     /// Desktop `activity.typing[playerId] = meetingId`.
@@ -722,7 +727,19 @@ final class GameSession {
         let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(UMConfig.maxChatLength))
         guard !trimmed.isEmpty else { return false }
         if trimmed.hasPrefix("/") {
-            if handleSlashCommand(trimmed) { return true }
+            switch runSlashCommand(trimmed) {
+            case .handled:
+                slashHint = nil
+                return true
+            case .error(let hint):
+                slashHint = hint
+                return false
+            case .passThrough:
+                break // server-parsed command (/me, /role, /help…): send as speak, server handles it
+            }
+        } else {
+            typingSuppressed = false
+            slashHint = nil
         }
         let meetingId = selectedSpeechMeetingId
             ?? speechChannels.first(where: { $0.canTalk })?.id
@@ -746,6 +763,7 @@ final class GameSession {
     }
 
     func noteTyping() {
+        guard !typingSuppressed else { return }
         guard isViewingLive, !spectate, canTalk else { return }
         guard currentSpeechOption.abilityName == nil else { return }
         let meetingId = selectedSpeechMeetingId
@@ -2407,54 +2425,6 @@ final class GameSession {
                 teammateIds.insert(pid)
                 roleGuesses[pid] = .sure(role)
             }
-        }
-    }
-
-    private func handleSlashCommand(_ text: String) -> Bool {
-        let body = String(text.dropFirst())
-        let parts = body.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-        guard let cmd = parts.first?.lowercased() else { return false }
-        if cmd == "vote" || cmd == "v" {
-            let name = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            slashVote(name)
-            return true
-        }
-        if cmd == "unvote" || cmd == "uv" {
-            slashUnvote()
-            return true
-        }
-        return false
-    }
-
-    private func primaryVoteMeeting() -> VoteMeeting? {
-        meetings.first { m in
-            m.canVote && m.amMember && !isVegKickMeeting(m) && m.inputType != "button"
-        }
-    }
-
-    private func matchVoteTarget(_ raw: String) -> String? {
-        let seed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if seed.isEmpty { return nil }
-        if seed == "*" || seed.lowercased() == "no one" || seed.lowercased() == "noone" { return "*" }
-        if let exact = players.first(where: { $0.name.lowercased() == seed.lowercased() }) {
-            return exact.id
-        }
-        let hits = players.filter { $0.name.lowercased().hasPrefix(seed.lowercased()) }
-        if hits.count == 1 { return hits[0].id }
-        return nil
-    }
-
-    private func slashVote(_ name: String) {
-        guard let meeting = primaryVoteMeeting() else { return }
-        guard let target = matchVoteTarget(name) else { return }
-        vote(meetingId: meeting.id, selection: target)
-    }
-
-    private func slashUnvote() {
-        guard let meeting = primaryVoteMeeting() else { return }
-        guard let selfId else { return }
-        for sel in meeting.selections(of: selfId) {
-            vote(meetingId: meeting.id, selection: sel)
         }
     }
 

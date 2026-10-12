@@ -615,10 +615,104 @@ private struct ChatComposer: View {
         session.noteTyping()
     }
 
+    // MARK: Slash commands
+
+    private enum SlashSuggestion: Identifiable {
+        case command(SlashCommand)
+        case player(String, GamePlayer)
+        var id: String {
+            switch self {
+            case .command(let c): return "c:" + c.name
+            case .player(let cmd, let p): return "p:\(cmd):" + p.id
+            }
+        }
+    }
+
+    /// "/" + partial command -> matching valid commands; "/cmd " + partial name -> valid targets.
+    private var slashSuggestions: [SlashSuggestion] {
+        guard chatFocused.wrappedValue, draft.hasPrefix("/") else { return [] }
+        let body = String(draft.dropFirst())
+        let commands = session.availableSlashCommands
+        guard let space = body.firstIndex(of: " ") else {
+            let q = body.lowercased()
+            return commands.filter { q.isEmpty || $0.name.hasPrefix(q) }.map { .command($0) }
+        }
+        let cmd = body[..<space].lowercased()
+        guard let def = commands.first(where: { $0.name == cmd }),
+              [.player, .playerThenText, .optionalPlayer].contains(def.arg) else { return [] }
+        let arg = String(body[body.index(after: space)...])
+        guard !arg.contains(" ") else { return [] }
+        let targets = session.slashTargets(for: cmd)
+        if targets.contains(where: { $0.name.caseInsensitiveCompare(arg) == .orderedSame }) { return [] }
+        return targets.filter { arg.isEmpty || $0.name.lowercased().hasPrefix(arg.lowercased()) }
+            .map { .player(cmd, $0) }
+    }
+
+    private func applySlash(_ item: SlashSuggestion) {
+        switch item {
+        case .command(let c):
+            draft = "/" + c.name + (c.arg == .none ? "" : " ")
+        case .player(let cmd, let p):
+            draft = "/\(cmd) \(p.name) "
+        }
+        session.slashHint = nil
+    }
+
+    @ViewBuilder
+    private var slashBar: some View {
+        let items = slashSuggestions
+        if !items.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(items) { item in
+                        Button { applySlash(item) } label: {
+                            HStack(spacing: 6) {
+                                switch item {
+                                case .command(let c):
+                                    Image(systemName: c.icon)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .frame(width: 20, height: 20)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(c.usage).font(.subheadline.weight(.semibold))
+                                        Text(c.summary).font(.system(size: 10)).foregroundStyle(UMTheme.muted)
+                                    }
+                                case .player(_, let p):
+                                    UMAvatarView(player: p, size: 20)
+                                    Text(p.name).font(.subheadline.weight(.semibold))
+                                }
+                            }
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(UMTheme.card, in: Capsule())
+                            .overlay(Capsule().stroke(UMTheme.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .background(UMTheme.elevated)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-        let media = session.isSpeakCoolingDown ? [] : mediaSuggestions
-        if !media.isEmpty {
+        if let hint = session.slashHint {
+            Text(hint)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(UMTheme.mafia)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+                .background(UMTheme.elevated)
+        }
+        let media = session.isSpeakCoolingDown || draft.hasPrefix("/") ? [] : mediaSuggestions
+        if draft.hasPrefix("/") {
+            slashBar
+        } else if !media.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(media) { item in
@@ -773,7 +867,10 @@ private struct ChatComposer: View {
             session.stopTyping()
             return
         }
+        if session.slashHint != nil, newValue != oldValue { session.slashHint = nil }
         if newValue.hasPrefix("/") {
+            // Suppress typing until the next normal message is sent.
+            session.typingSuppressed = true
             session.stopTyping()
             return
         }
