@@ -51,6 +51,14 @@ final class AppModel {
         return false
     }
 
+    /// Game or review screen on top: the screens where the app bar can be collapsed with Hide.
+    var isOnCollapsibleGameScreen: Bool {
+        switch path.last {
+        case .game, .review: return true
+        default: return false
+        }
+    }
+
     /// True while a user profile is on top of the Play stack.
     var isOnProfile: Bool {
         switch path.last {

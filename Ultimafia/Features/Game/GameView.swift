@@ -102,7 +102,7 @@ private struct GameScreen: View {
         }
         .onDisappear { if !session.isReview { app.isViewingGame = false } }
         // Left the game screen for the lobby (not just another tab): bring the bar back.
-        .onDisappear { if !app.isOnGameScreen { app.hideAppTabs = false } }
+        .onDisappear { if !app.isOnCollapsibleGameScreen { app.hideAppTabs = false } }
     }
 
     private func prefetchCustomAssets() async {
@@ -1214,7 +1214,9 @@ private struct MeetingBlock: View {
                         .foregroundStyle(UMTheme.muted)
                 }
             }
-            if meeting.inputType == "text" {
+            if session.isReview {
+                reviewLines
+            } else if meeting.inputType == "text" {
                 if clickable {
                     HStack(spacing: 8) {
                         TextField("Type…", text: $textDraft)
@@ -1242,6 +1244,60 @@ private struct MeetingBlock: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Review: only what happened. One line per member who voted, e.g. "Bob litigated Alice";
+    /// members who didn't vote and unchosen options are hidden.
+    @ViewBuilder
+    private var reviewLines: some View {
+        let ordered: [String] = {
+            var ids = meeting.members.map(\.id).filter { !meeting.selections(of: $0).isEmpty }
+            for (voter, _) in meeting.ballot where !ids.contains(voter) { ids.append(voter) }
+            return ids
+        }()
+        if ordered.isEmpty {
+            Text("No votes")
+                .font(.caption)
+                .foregroundStyle(UMTheme.muted)
+        } else {
+            let verb = Self.reviewVerb(meeting.actionName)
+            ForEach(ordered, id: \.self) { voter in
+                let picks = meeting.selections(of: voter).map { session.voteLabel($0, meeting: meeting) }
+                let who = Text(session.displayVoter(voter, meeting: meeting)).fontWeight(.semibold)
+                let what = Text(picks.joined(separator: ", ")).fontWeight(.semibold).foregroundStyle(UMTheme.roleMention)
+                let how = Text(" \(verb) ").foregroundStyle(UMTheme.muted)
+                Text("\(who)\(how)\(what)")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    /// Single-word actions read as past tense ("Litigate" -> "litigated"); multi-word meeting
+    /// names (Village Vote, Mafia Kill…) fall back to the existing "votes" wording.
+    static func reviewVerb(_ actionName: String) -> String {
+        let words = actionName.split(separator: " ")
+        guard words.count == 1 else { return "votes" }
+        let w = words[0].lowercased()
+        let irregular: [String: String] = [
+            "vote": "voted", "shoot": "shot", "hide": "hid", "steal": "stole", "give": "gave",
+            "choose": "chose", "see": "saw", "make": "made", "take": "took", "eat": "ate",
+            "bite": "bit", "bind": "bound", "find": "found", "hold": "held", "read": "read",
+            "send": "sent", "put": "put", "set": "set", "hit": "hit", "cut": "cut", "meet": "met",
+            "sell": "sold", "tell": "told", "win": "won", "lead": "led", "feed": "fed",
+            "speak": "spoke", "write": "wrote", "break": "broke", "wake": "woke", "freeze": "froze",
+            "swap": "swapped", "stab": "stabbed", "rob": "robbed", "kidnap": "kidnapped",
+            "spy": "spied on", "visit": "visited", "follow": "followed", "watch": "watched",
+        ]
+        if let v = irregular[w] { return v }
+        guard w.count > 2, w.allSatisfy(\.isLetter) else { return "votes" }
+        if w.hasSuffix("e") { return w + "d" }
+        if w.hasSuffix("y"), let before = w.dropLast().last, !"aeiou".contains(before) {
+            return String(w.dropLast()) + "ied"
+        }
+        return w + "ed"
     }
 
     private func playerRow(_ row: ActVoteRow) -> some View {

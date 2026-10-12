@@ -93,7 +93,7 @@ struct MainTabs: View {
         if keyboardShown { return false }
         if tab == "you" { return true }
         if app.suppressAppBar { return false }
-        return !app.hideAppTabs || !app.isOnGameScreen
+        return !app.hideAppTabs || !app.isOnCollapsibleGameScreen
     }
 
     private var bar: some View {
