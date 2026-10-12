@@ -62,8 +62,9 @@ final class AppModel {
         }
     }
 
-    /// Fake "Lobby" tab on profile pages.
+    /// Lobby button: pop the Play stack to the lobby root.
     func goToLobby() {
+        hideAppTabs = false
         path.removeAll()
     }
 
@@ -76,19 +77,9 @@ final class AppModel {
         (seatedGameId != nil && game != nil && !isViewingGame) ? mentionCount : 0
     }
 
-    /// Play tab re-tap: game screen -> lobby (stay seated), lobby while seated -> game,
-    /// otherwise open setup search.
-    func playTabReselected() {
-        if seatedGameId != nil {
-            if isOnGameScreen {
-                hideAppTabs = false
-                path.removeAll()
-            } else {
-                resumeSeatedGame()
-            }
-        } else if path.last != .setupSearch {
-            setPlayPath([.setupSearch])
-        }
+    /// Create button: open setup search (no-op if already there).
+    func openCreate() {
+        if path.last != .setupSearch { setPlayPath([.setupSearch]) }
     }
 
     var isSignedIn: Bool { user?.id != nil }

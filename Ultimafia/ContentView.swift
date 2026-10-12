@@ -40,54 +40,100 @@ struct ContentView: View {
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @State private var tab = "play"
+    @State private var keyboardShown = false
 
-    /// Leave lives in the tab bar as a fake tab: selecting it pops the confirm and snaps back.
-    private var tabSelection: Binding<String> {
-        Binding(
-            get: { tab },
-            set: { new in
-                if new == "play", tab == "play" { app.playTabReselected(); return }
-                if new == "lobby" { app.goToLobby(); tab = "play"; return }
-                if new != "play", new != "leave", tab == "play", app.isOnProfile { app.dropProfiles() }
-                guard new == "leave" else { tab = new; return }
-                if let session = app.game {
-                    if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
-                }
-            }
-        )
+    private enum BarItem: String { case leave, lobby, game, create, you }
+
+    /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Lobby, Create, You.
+    private var items: [BarItem] {
+        app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.lobby, .create, .you]
     }
 
-    private var playLabel: (title: String, icon: String) {
-        guard app.seatedGameId != nil else { return ("Create", "plus.circle") }
-        if app.isOnProfile { return ("Game", "gamecontroller") }
-        return app.isOnGameScreen ? ("Lobby", "list.bullet.rectangle") : ("Game", "gamecontroller")
+    private var selected: BarItem {
+        if tab == "you" { return .you }
+        return app.isOnGameScreen ? .game : .lobby
+    }
+
+    private func tap(_ item: BarItem) {
+        switch item {
+        case .leave:
+            if let session = app.game {
+                if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
+            }
+        case .lobby:
+            tab = "play"
+            if !app.path.isEmpty { app.goToLobby() }
+        case .game:
+            let fromYou = tab == "you"
+            tab = "play"
+            // Back from You onto a game screen that's still on the stack: just switch, no collapse.
+            if fromYou, app.isOnGameScreen { return }
+            if !app.isOnGameScreen { app.resumeSeatedGame() }
+        case .create:
+            tab = "play"
+            app.openCreate()
+        case .you:
+            if tab == "play", app.isOnProfile { app.dropProfiles() }
+            tab = "you"
+        }
+    }
+
+    private func info(_ item: BarItem) -> (String, String) {
+        switch item {
+        case .leave: ("Leave", "arrow.left")
+        case .lobby: ("Lobby", "list.bullet.rectangle")
+        case .game: ("Game", "gamecontroller")
+        case .create: ("Create", "plus.circle")
+        case .you: ("You", "person")
+        }
+    }
+
+    private var bar: some View {
+        HStack(spacing: 0) {
+            ForEach(items, id: \.self) { item in
+                let (title, icon) = info(item)
+                let on = item == selected
+                Button { tap(item) } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: icon).font(.system(size: 20))
+                            .overlay(alignment: .topTrailing) {
+                                if item == .game, app.mentionBadge > 0 {
+                                    Text("\(app.mentionBadge)")
+                                        .font(.caption2.bold()).foregroundStyle(.white)
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(Capsule().fill(.red))
+                                        .offset(x: 12, y: -6)
+                                }
+                            }
+                        Text(title).font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 6).padding(.bottom, 2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .background(UMTheme.card.ignoresSafeArea(edges: .bottom))
     }
 
     var body: some View {
         ZStack {
-            TabView(selection: tabSelection) {
-                if app.game != nil {
-                    Color.clear
-                        .tabItem { Label("Leave", systemImage: "arrow.left") }
-                        .tag("leave")
-                        .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
-                }
-                if app.isOnProfile {
-                    Color.clear
-                        .tabItem { Label("Lobby", systemImage: "list.bullet.rectangle") }
-                        .tag("lobby")
-                }
+            TabView(selection: $tab) {
                 LobbyView()
-                    .tabItem { Label(playLabel.title, systemImage: playLabel.icon) }
                     .tag("play")
-                    .badge(app.mentionBadge)
-                    .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
+                    .toolbar(.hidden, for: .tabBar)
                 ProfileView()
-                    .tabItem { Label("You", systemImage: "person") }
                     .tag("you")
-                    .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
+                    .toolbar(.hidden, for: .tabBar)
             }
-            .toolbarBackground(UMTheme.card, for: .tabBar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !app.hideAppTabs, !keyboardShown { bar }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
 
             if let session = app.game {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
