@@ -58,7 +58,7 @@ struct ProfileView: View {
                     .listRowBackground(UMTheme.card)
                     Toggle("Show Typing Indicator", isOn: $showTypingIndicator)
                         .listRowBackground(UMTheme.card)
-                    Toggle("Show Name Suggestions", isOn: $showTabButton)
+                    Toggle("Show Tab button", isOn: $showTabButton)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Voting Log", isOn: $showVotingLog)
                         .listRowBackground(UMTheme.card)
