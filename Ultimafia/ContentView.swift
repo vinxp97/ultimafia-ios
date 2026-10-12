@@ -42,11 +42,14 @@ struct MainTabs: View {
     @State private var tab = "play"
     @State private var keyboardShown = false
 
-    private enum BarItem: String { case leave, back, lobby, game, create, you }
+    private enum BarItem: String { case leave, back, youBack, lobby, game, create, you }
 
     /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Lobby, Create, You.
     /// Reviewing (Play tab): Back takes Leave's spot; seated keeps Game, else Create.
     private var items: [BarItem] {
+        if tab == "you", !app.youPath.isEmpty {
+            return app.seatedGameId != nil ? [.youBack, .lobby, .game, .you] : [.youBack, .lobby, .create, .you]
+        }
         if tab == "play", app.isOnReview {
             return app.seatedGameId != nil ? [.back, .lobby, .game, .you] : [.back, .lobby, .create, .you]
         }
@@ -64,6 +67,8 @@ struct MainTabs: View {
             if let session = app.game {
                 if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
             }
+        case .youBack:
+            if !app.youPath.isEmpty { app.youPath.removeLast() }
         case .back:
             // Same as the old review top-bar arrow: close the review (no leave endpoint).
             app.closeReview()
@@ -81,6 +86,8 @@ struct MainTabs: View {
             app.openCreate()
         case .you:
             if tab == "play", app.isOnProfile { app.dropProfiles() }
+            // Re-selecting You returns it to its root.
+            app.youPath = []
             tab = "you"
         }
     }
@@ -88,7 +95,7 @@ struct MainTabs: View {
     private func info(_ item: BarItem) -> (String, String) {
         switch item {
         case .leave: ("Leave", "arrow.left")
-        case .back: ("Back", "arrow.left")
+        case .back, .youBack: ("Back", "arrow.left")
         case .lobby: ("Lobby", "list.bullet.rectangle")
         case .game: ("Game", "gamecontroller")
         case .create: ("Host", "plus.circle")
@@ -153,6 +160,11 @@ struct MainTabs: View {
                 }
             }
             .animation(.snappy(duration: 0.28), value: showBar)
+            .onChange(of: tab, initial: true) { old, new in
+                app.activeTab = new
+                // Leaving You pops its stack, so coming back shows the You root.
+                if old == "you", new != "you" { app.youPath = [] }
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
 

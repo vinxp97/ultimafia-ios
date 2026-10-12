@@ -293,7 +293,7 @@ struct UserProfileView: View {
             }()
             let name = umDictString(love, "name")
             Button {
-                app.path.append(.profile(id: loveId, name: name))
+                app.openProfile(id: loveId, name: name)
             } label: {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(title)
@@ -1126,7 +1126,7 @@ struct ProfileCommentsView: View {
                     )
                     Button(authorName) {
                         if !navId.isEmpty {
-                            app.path.append(.profile(id: navId, name: authorName))
+                            app.openProfile(id: navId, name: authorName)
                         }
                     }
                     .buttonStyle(.plain)

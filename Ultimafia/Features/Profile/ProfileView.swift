@@ -13,7 +13,6 @@ struct ProfileView: View {
     @AppStorage("um.deathSoundVolume") private var deathSoundVolume = 1.0
     @AppStorage(GameAudio.pregameMusicKey) private var pregameMusicVolume = 1.0
     @AppStorage(GameAudio.alertKey) private var alertVolume = 1.0
-    @State private var devProfile: UMProfileRef?
     @State private var confirmMuteAlerts = false
     @State private var confirmClearCache = false
     @State private var cacheBytes: Int64 = 0
@@ -22,7 +21,8 @@ struct ProfileView: View {
     @State private var selectedTrophy: UMTrophy?
 
     var body: some View {
-        NavigationStack {
+        @Bindable var app = app
+        NavigationStack(path: $app.youPath) {
             List {
                 Section {
                     let me = app.user?.cosmeticPlayer
@@ -139,14 +139,19 @@ struct ProfileView: View {
                     .listRowBackground(UMTheme.card)
                 }
                 Section {
-                    UMCreditsFooter { devProfile = $0 }
+                    UMCreditsFooter()
                         .frame(maxWidth: .infinity)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 16, trailing: 16))
                 }
             }
-            .navigationDestination(item: $devProfile) { p in
-                UserProfileView(userId: p.id, userName: p.name)
+            .navigationDestination(for: AppModel.Route.self) { route in
+                switch route {
+                case .profile(let id, let name):
+                    UMYouPushedProfile(userId: id, userName: name)
+                default:
+                    EmptyView()
+                }
             }
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg.ignoresSafeArea())
@@ -217,53 +222,56 @@ struct ProfileView: View {
 
 }
 
-struct UMProfileRef: Identifiable, Hashable {
-    var id: String
-    var name: String
+/// Profile pushed on the You tab: same view as avatar taps, plus a visible Back control.
+struct UMYouPushedProfile: View {
+    var userId: String
+    var userName: String
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        UserProfileView(userId: userId, userName: userName)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack {
+                    Button {
+                        if !app.youPath.isEmpty { app.youPath.removeLast() }
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(UMTheme.blood)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    Spacer()
+                }
+                .background(UMTheme.bg)
+            }
+    }
 }
 
-/// You-page credits. "Z" opens Z's in-app profile; the site's /user/Z resolves through
-/// GET /api/vanityUrl/:identifier (user id first, then vanity URL) -> {userId}.
+/// You-page credits. "Z" (user id Fy2Ee8BH9, the site's /user/Z) opens Z's in-app profile
+/// immediately; the profile view shows its own loading state.
 struct UMCreditsFooter: View {
     static let devName = "Z"
-    var open: (UMProfileRef) -> Void
-    @State private var resolving = false
-    @State private var failed = false
-
-    private struct Resolved: Decodable { var userId: String? }
+    static let devUserId = "Fy2Ee8BH9"
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 0) {
                 Text("App Developed by UltiMafia User ")
-                Button(Self.devName) { resolveAndOpen() }
-                    .buttonStyle(.plain)
-                    .underline()
-                    .foregroundStyle(UMTheme.blood)
-                    .disabled(resolving)
-                    .accessibilityHint("Opens Z's profile")
+                Button(Self.devName) {
+                    app.youPath.append(.profile(id: Self.devUserId, name: Self.devName))
+                }
+                .buttonStyle(.borderless)
+                .underline()
+                .foregroundStyle(UMTheme.blood)
+                .accessibilityHint("Opens Z's profile")
             }
             Text("© 2026 UltiMafia Mobile - VCCC LLC - All Rights Reserved")
-            if failed {
-                Text("Couldn't open that profile.").foregroundStyle(UMTheme.mafia)
-            }
         }
         .font(.caption2)
         .foregroundStyle(UMTheme.muted)
         .multilineTextAlignment(.center)
-    }
-
-    private func resolveAndOpen() {
-        resolving = true
-        failed = false
-        Task {
-            defer { resolving = false }
-            if let r: Resolved = try? await APIClient.shared.get("vanityUrl/\(Self.devName)"),
-               let id = r.userId, !id.isEmpty {
-                open(UMProfileRef(id: id, name: Self.devName))
-            } else {
-                failed = true
-            }
-        }
     }
 }

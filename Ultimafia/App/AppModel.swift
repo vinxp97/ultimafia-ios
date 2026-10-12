@@ -519,8 +519,19 @@ final class AppModel {
         path.append(.family(id: id, name: name))
     }
 
+    /// You tab's own stack (profiles pushed from the You page). Popped when leaving/re-selecting You.
+    var youPath: [Route] = []
+    /// Set by MainTabs: which bottom tab is showing ("play" / "you").
+    var activeTab = "play"
+
+    /// Pushes onto the stack of the tab that's showing, so a profile opened from the You tab
+    /// stays in the You tab (and Back pops it there).
     func openProfile(id: String, name: String) {
-        path.append(.profile(id: id, name: name))
+        if activeTab == "you" {
+            youPath.append(.profile(id: id, name: name))
+        } else {
+            path.append(.profile(id: id, name: name))
+        }
     }
 
     private func run(_ work: () async throws -> Void) async {
