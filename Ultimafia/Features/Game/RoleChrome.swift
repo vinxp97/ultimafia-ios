@@ -61,17 +61,32 @@ struct SetupRole: Identifiable, Hashable {
 
 
 enum SetupRoleParse {
+    /// Web Setup.jsx `getRolesByAlignment`: roles whose modifiers include Banished go to a
+    /// shared Banished pool; roles whose catalog alignment is "Event" go to the Event pool
+    /// (overall and per roleset); everything else stays in its roleset / role group.
     struct Bundle {
         var rolesets: [[SetupRole]]
         var banished: [SetupRole]
+        var events: [SetupRole] = []
+        var eventsPerSet: [[SetupRole]] = []
+        /// Closed setups with `useRoleGroups`: each roleset is a group of `groupSizes[i]` slots.
+        var grouped = false
+        var groupSizes: [Int] = []
+
+        func groupSize(_ i: Int) -> Int {
+            groupSizes.indices.contains(i) ? groupSizes[i] : (rolesets.indices.contains(i) ? rolesets[i].reduce(0) { $0 + $1.count } : 0)
+        }
     }
+
+    static let groupLabels = (65...90).map { String(UnicodeScalar(UInt8($0))) }
 
     static func parse(
         rolesBlob: Any?,
         closed: Bool,
         useRoleGroups: Bool,
         count: [String: Any]?,
-        gameType: String
+        gameType: String,
+        roleGroupSizes: [Int] = []
     ) -> Bundle {
         func countVal(_ val: Any) -> Int {
             if let i = val as? Int { return i }
@@ -95,38 +110,44 @@ enum SetupRoleParse {
                 $0.caseInsensitiveCompare("Banished") == .orderedSame
             }
         }
-        func rolesFromDict(_ dict: [String: Any], banishedMap: inout [String: Int]) -> [SetupRole] {
-            var map: [String: Int] = [:]
-            for (k, v) in dict {
-                if isEvent(k) { continue }
-                let n = countVal(v)
-                guard n > 0 else { continue }
-                if isBanished(k) {
-                    banishedMap[k, default: 0] += n
-                    continue
-                }
-                map[k, default: 0] += n
-            }
-            return map.map { SetupRole(raw: $0.key, count: $0.value) }
-                .sorted { $0.name < $1.name }
+        func sorted(_ map: [String: Int]) -> [SetupRole] {
+            map.map { SetupRole(raw: $0.key, count: $0.value) }.sorted { $0.name < $1.name }
         }
 
         var blob: Any? = rolesBlob
         if let s = blob as? String, let data = s.data(using: .utf8) {
             blob = try? JSONSerialization.jsonObject(with: data)
         }
+        let dicts: [[String: Any]] = {
+            if let arr = blob as? [Any] { return arr.compactMap { $0 as? [String: Any] } }
+            if let dict = blob as? [String: Any] { return [dict] }
+            return []
+        }()
 
         var banishedMap: [String: Int] = [:]
-        if let arr = blob as? [Any] {
-            for item in arr {
-                guard let dict = item as? [String: Any] else { continue }
-                _ = rolesFromDict(dict, banishedMap: &banishedMap)
+        var eventMap: [String: Int] = [:]
+        var eventsPerSet: [[SetupRole]] = []
+        var rolesets: [[SetupRole]] = []
+        for dict in dicts {
+            var map: [String: Int] = [:]
+            var setEvents: [String: Int] = [:]
+            for (k, v) in dict {
+                let n = countVal(v)
+                guard n > 0 else { continue }
+                if isBanished(k) {
+                    banishedMap[k, default: 0] += n
+                } else if isEvent(k) {
+                    setEvents[k, default: 0] += n
+                    eventMap[k, default: 0] += n
+                } else {
+                    map[k, default: 0] += n
+                }
             }
-        } else if let dict = blob as? [String: Any] {
-            _ = rolesFromDict(dict, banishedMap: &banishedMap)
+            rolesets.append(sorted(map))
+            eventsPerSet.append(sorted(setEvents))
         }
-        let banished = banishedMap.map { SetupRole(raw: $0.key, count: $0.value) }
-            .sorted { $0.name < $1.name }
+        let banished = sorted(banishedMap)
+        let events = sorted(eventMap)
 
         if closed, !useRoleGroups, let count {
             let roles = count.compactMap { key, val -> SetupRole? in
@@ -134,22 +155,19 @@ enum SetupRoleParse {
                 guard n > 0 else { return nil }
                 return SetupRole(raw: key, count: n)
             }.sorted { $0.name < $1.name }
-            return Bundle(rolesets: [roles], banished: banished)
+            return Bundle(rolesets: [roles], banished: banished, events: events, eventsPerSet: [events])
         }
 
-        var rolesets: [[SetupRole]] = []
-        if let arr = blob as? [Any] {
-            for item in arr {
-                guard let dict = item as? [String: Any] else { continue }
-                var unused: [String: Int] = [:]
-                rolesets.append(rolesFromDict(dict, banishedMap: &unused))
-            }
-        } else if let dict = blob as? [String: Any] {
-            var unused: [String: Int] = [:]
-            rolesets.append(rolesFromDict(dict, banishedMap: &unused))
-        }
-        if rolesets.isEmpty { rolesets = [[]] }
-        return Bundle(rolesets: rolesets, banished: banished)
+        if rolesets.isEmpty { rolesets = [[]]; eventsPerSet = [[]] }
+        let grouped = closed && useRoleGroups
+        return Bundle(
+            rolesets: rolesets,
+            banished: banished,
+            events: events,
+            eventsPerSet: eventsPerSet,
+            grouped: grouped,
+            groupSizes: grouped ? roleGroupSizes : []
+        )
     }
 }
 
@@ -222,35 +240,69 @@ struct SetupPreviewStrip: View {
     var displayedRoles: [SetupRole]? = nil
     var onCycle: (() -> Void)? = nil
     var compact: Bool = true
+    var events: [SetupRole] = []
+    var eventsPerSet: [[SetupRole]] = []
+    var grouped: Bool = false
+    var groupSizes: [Int] = []
+    /// Roleset index owned by the caller (in-game cycling); otherwise the strip cycles locally.
+    var currentIndex: Int? = nil
 
     @State private var localIndex = 0
     @State private var selected: SetupRole?
+    @State private var selectedGroup: RoleGroupSelection?
     @State private var showBanished = false
+    @State private var showEvents = false
 
     private var iconSize: CGFloat { compact ? 22 : 24 }
+    private var index: Int { currentIndex ?? localIndex }
 
     private var roles: [SetupRole] {
         if let displayedRoles { return displayedRoles }
-        guard rolesets.indices.contains(localIndex) else { return rolesets.first ?? [] }
-        return rolesets[localIndex]
+        guard rolesets.indices.contains(index) else { return rolesets.first ?? [] }
+        return rolesets[index]
+    }
+
+    /// Web: multi-set shows the current set's events; closed/single show all events.
+    private var shownEvents: [SetupRole] {
+        if isSimpleMulti { return eventsPerSet.indices.contains(index) ? eventsPerSet[index] : [] }
+        return events
     }
 
     private var otherRoles: [String] {
         var seen = Set<String>()
         var out: [String] = []
-        for set in rolesets {
-            for role in set where seen.insert(role.raw).inserted {
-                out.append(role.raw)
+        for role in rolesets.joined() where seen.insert(role.raw).inserted { out.append(role.raw) }
+        for role in banished where seen.insert(role.raw).inserted { out.append(role.raw) }
+        for role in events where seen.insert(role.raw).inserted { out.append(role.raw) }
+        return out
+    }
+
+    private func size(_ i: Int) -> Int {
+        groupSizes.indices.contains(i) ? groupSizes[i] : rolesets[i].reduce(0) { $0 + $1.count }
+    }
+
+    /// Web labels multi-role groups A, B, C… in order, skipping single-role groups.
+    private var groupItems: [RoleGroupSelection] {
+        var letter = 0
+        var out: [RoleGroupSelection] = []
+        for (i, set) in rolesets.enumerated() where !set.isEmpty {
+            if set.count == 1 {
+                out.append(RoleGroupSelection(index: i, label: nil, size: size(i), roles: set))
+            } else {
+                let label = SetupRoleParse.groupLabels[min(letter, SetupRoleParse.groupLabels.count - 1)]
+                letter += 1
+                out.append(RoleGroupSelection(index: i, label: label, size: size(i), roles: set))
             }
-        }
-        for role in banished where seen.insert(role.raw).inserted {
-            out.append(role.raw)
         }
         return out
     }
 
+    private var hasContent: Bool {
+        !rolesets.joined().isEmpty || !(displayedRoles ?? []).isEmpty || !banished.isEmpty || !shownEvents.isEmpty
+    }
+
     var body: some View {
-        if !roles.isEmpty || !banished.isEmpty {
+        if hasContent {
             HStack(spacing: compact ? 2 : 4) {
                 if isSimpleMulti {
                     Button {
@@ -271,26 +323,50 @@ struct SetupPreviewStrip: View {
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: compact ? 6 : 8) {
-                        ForEach(roles) { role in
-                            Button {
-                                selected = role
-                            } label: {
-                                HStack(spacing: 4) {
-                                    RoleIconView(role: role.raw, gameType: gameType, size: iconSize)
-                                    if role.count > 1 {
-                                        Text("\(role.count)")
-                                            .font(.caption2.weight(.bold).monospacedDigit())
-                                            .foregroundStyle(UMTheme.muted)
+                        if grouped {
+                            ForEach(groupItems) { item in
+                                Button {
+                                    if item.label == nil, let only = item.roles.first { selected = only } else { selectedGroup = item }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if let label = item.label {
+                                            RoleGroupBadge(label: label, size: iconSize)
+                                        } else if let only = item.roles.first {
+                                            RoleIconView(role: only.raw, gameType: gameType, size: iconSize)
+                                        }
+                                        countText(item.size, force: item.label != nil)
                                     }
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(item.label.map { "Role group \($0), \(item.size) slots" } ?? (item.roles.first?.name ?? ""))
+                            }
+                        } else {
+                            ForEach(roles) { role in
+                                Button {
+                                    selected = role
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        RoleIconView(role: role.raw, gameType: gameType, size: iconSize)
+                                        countText(role.count, force: false)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        if !shownEvents.isEmpty {
+                            Button {
+                                showEvents = true
+                            } label: {
+                                poolIcon(RoleArt.eventPoolURL, fallback: "calendar")
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Event pool")
                         }
                         if !banished.isEmpty {
                             Button {
                                 showBanished = true
                             } label: {
-                                banishedPoolIcon
+                                poolIcon(RoleArt.banishedPoolURL, fallback: "person.crop.circle.badge.xmark")
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Banished pool")
@@ -302,36 +378,116 @@ struct SetupPreviewStrip: View {
             }
             .background(compact ? Color.clear : UMTheme.card)
             .sheet(item: $selected) { role in
-                RoleDetailsSheet(
-                    roleRaw: role.raw,
+                RoleDetailsSheet(roleRaw: role.raw, gameType: gameType, otherRoles: otherRoles)
+            }
+            .sheet(item: $selectedGroup) { item in
+                RolePoolSheet(
+                    title: "Group \(item.label ?? "") · \(item.size) \(item.size == 1 ? "slot" : "slots")",
                     gameType: gameType,
+                    roles: item.roles,
                     otherRoles: otherRoles
                 )
             }
             .sheet(isPresented: $showBanished) {
-                BanishedPoolSheet(
-                    gameType: gameType,
-                    banished: banished,
-                    otherRoles: otherRoles
-                )
+                BanishedPoolSheet(gameType: gameType, banished: banished, otherRoles: otherRoles)
+            }
+            .sheet(isPresented: $showEvents) {
+                RolePoolSheet(title: "Event Pool", gameType: gameType, roles: shownEvents, otherRoles: otherRoles)
             }
         }
     }
 
     @ViewBuilder
-    private var banishedPoolIcon: some View {
-        Group {
-            if let url = RoleArt.banishedPoolURL {
-                AnimatedWebPView(url: url, showsPlaceholder: false)
-                    .frame(width: iconSize, height: iconSize)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            } else {
-                Image(systemName: "person.crop.circle.badge.xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(UMTheme.muted)
-                    .frame(width: iconSize, height: iconSize)
+    private func countText(_ n: Int, force: Bool) -> some View {
+        if n > 1 || force {
+            Text("\(n)")
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(UMTheme.muted)
+        }
+    }
+
+    @ViewBuilder
+    private func poolIcon(_ url: URL?, fallback: String) -> some View {
+        if let url {
+            AnimatedWebPView(url: url, showsPlaceholder: false)
+                .frame(width: iconSize, height: iconSize)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            Image(systemName: fallback)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(UMTheme.muted)
+                .frame(width: iconSize, height: iconSize)
+        }
+    }
+}
+
+struct RoleGroupSelection: Identifiable, Hashable {
+    var index: Int
+    var label: String?
+    var size: Int
+    var roles: [SetupRole]
+    var id: Int { index }
+}
+
+/// Lettered tile standing in for a multi-role group (web INDEXED_ROLE_GROUP_LABELS).
+struct RoleGroupBadge: View {
+    var label: String
+    var size: CGFloat
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: size * 0.55, weight: .heavy))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: 4).fill(UMTheme.elevated))
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(UMTheme.muted.opacity(0.6), lineWidth: 1))
+    }
+}
+
+/// Grid of roles (a role group or the Event pool); tapping one opens its details sheet.
+struct RolePoolSheet: View {
+    var title: String
+    var gameType: String
+    var roles: [SetupRole]
+    var otherRoles: [String]
+    @State private var selected: SetupRole?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(roles) { role in
+                Button {
+                    selected = role
+                } label: {
+                    HStack(spacing: 10) {
+                        RoleIconView(role: role.raw, gameType: gameType, size: 32)
+                        Text(role.name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        if role.count > 1 {
+                            Text("×\(role.count)")
+                                .font(.caption.weight(.bold).monospacedDigit())
+                                .foregroundStyle(UMTheme.muted)
+                        }
+                    }
+                }
+                .listRowBackground(UMTheme.card)
+            }
+            .scrollContentBackground(.hidden)
+            .background(UMTheme.bg.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .sheet(item: $selected) { role in
+                RoleDetailsSheet(roleRaw: role.raw, gameType: gameType, otherRoles: otherRoles)
             }
         }
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -346,7 +502,12 @@ struct SetupRoleStrip: View {
             isSimpleMulti: session.isSimpleMulti,
             displayedRoles: session.setupRoles,
             onCycle: { session.cycleSetupRoleset() },
-            compact: false
+            compact: false,
+            events: session.setupEvents,
+            eventsPerSet: session.setupEventsPerSet,
+            grouped: session.setupGrouped,
+            groupSizes: session.setupGroupSizes,
+            currentIndex: session.setupRolesetIndex
         )
     }
 }

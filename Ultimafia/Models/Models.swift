@@ -78,6 +78,7 @@ struct SetupInfo: Decodable, Hashable, Identifiable {
     var count: [String: Int]?
     var roles: JSONValue?
     var useRoleGroups: Bool?
+    var roleGroupSizes: [FlexInt]?
     var ranked: Bool?
     var competitive: Bool?
     var featured: Bool?
@@ -97,7 +98,8 @@ struct SetupInfo: Decodable, Hashable, Identifiable {
             closed: closed ?? false,
             useRoleGroups: useRoleGroups ?? false,
             count: countAny,
-            gameType: gameType ?? defaultGameType
+            gameType: gameType ?? defaultGameType,
+            roleGroupSizes: (roleGroupSizes ?? []).map(\.value)
         )
     }
 
@@ -130,6 +132,20 @@ struct GameSummary: Decodable, Hashable, Identifiable {
     var readyCheck: Bool?
     var anonymousGame: Bool?
     var endTime: Double?
+    var broken: Bool?
+    /// Finished games only: JSON string of seat id -> user id.
+    var playerIdMap: String?
+
+    /// Mirrors the server's review/data gate (`!private || reviewPrivate perm || user played`)
+    /// and the web GameRow, which hides the review button for private or broken games.
+    /// The reviewPrivate permission isn't exposed to the client, so mods see the same filter.
+    func isReviewVisible(to userId: String?) -> Bool {
+        if broken == true { return false }
+        guard `private` == true else { return true }
+        guard let userId, let data = playerIdMap?.data(using: .utf8),
+              let map = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        return map.values.contains { ($0 as? String) == userId }
+    }
 
     var playerCount: Int { players?.value ?? 0 }
     var setupTotal: Int { setup?.total?.value ?? 0 }

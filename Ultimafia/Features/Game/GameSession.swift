@@ -161,6 +161,8 @@ final class GameSession {
     var connected = false
     var loaded = false
     var errorMessage: String?
+    /// Review mode: called when review/data fails (private/locked, broken, not found).
+    @ObservationIgnored var onReviewUnavailable: (() -> Void)?
     var gameType: String?
     var setupName: String?
     var stateName = "Connecting"
@@ -224,6 +226,10 @@ final class GameSession {
     var setupRolesets: [[SetupRole]] = []
     var setupRolesetIndex = 0
     var setupBanished: [SetupRole] = []
+    var setupEvents: [SetupRole] = []
+    var setupEventsPerSet: [[SetupRole]] = []
+    var setupGrouped = false
+    var setupGroupSizes: [Int] = []
     var roleGuesses: [String: RoleGuess] = [:]
 
     var isSimpleMulti: Bool {
@@ -672,6 +678,7 @@ final class GameSession {
             loaded = true
         } catch {
             errorMessage = error.localizedDescription
+            onReviewUnavailable?()
         }
     }
 
@@ -2249,22 +2256,22 @@ final class GameSession {
         setupRolesetIndex = 0
         setupRoles = bundle.rolesets.first ?? []
         setupBanished = bundle.banished
+        setupEvents = bundle.events
+        setupEventsPerSet = bundle.eventsPerSet
+        setupGrouped = bundle.grouped
+        setupGroupSizes = bundle.groupSizes
     }
 
-    private struct SetupBundle {
-        var rolesets: [[SetupRole]]
-        var banished: [SetupRole]
-    }
-
-    private func parseSetupBundle(_ obj: [String: Any]) -> SetupBundle {
-        let parsed = SetupRoleParse.parse(
+    private func parseSetupBundle(_ obj: [String: Any]) -> SetupRoleParse.Bundle {
+        let sizes: [Int] = (obj["roleGroupSizes"] as? [Any] ?? []).map { ($0 as? NSNumber)?.intValue ?? Int("\($0)") ?? 0 }
+        return SetupRoleParse.parse(
             rolesBlob: obj["roles"],
             closed: setupClosed,
             useRoleGroups: setupUseRoleGroups,
             count: obj["count"] as? [String: Any],
-            gameType: setupGameType
+            gameType: setupGameType,
+            roleGroupSizes: sizes
         )
-        return SetupBundle(rolesets: parsed.rolesets, banished: parsed.banished)
     }
 
     func displayedGuess(for playerId: String) -> RoleGuess {

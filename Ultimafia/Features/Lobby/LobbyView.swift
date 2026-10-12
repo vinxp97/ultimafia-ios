@@ -146,7 +146,7 @@ struct LobbyView: View {
 
     @ViewBuilder
     private var seatedRoleStrip: some View {
-        if let session = app.game, !session.setupRoles.isEmpty || !session.setupBanished.isEmpty {
+        if let session = app.game, !session.setupRolesets.joined().isEmpty || !session.setupBanished.isEmpty || !session.setupEvents.isEmpty {
             SetupPreviewStrip(
                 gameType: session.setupGameType,
                 rolesets: session.setupRolesets,
@@ -154,7 +154,12 @@ struct LobbyView: View {
                 isSimpleMulti: session.isSimpleMulti,
                 displayedRoles: session.setupRoles,
                 onCycle: { session.cycleSetupRoleset() },
-                compact: true
+                compact: true,
+                events: session.setupEvents,
+                eventsPerSet: session.setupEventsPerSet,
+                grouped: session.setupGrouped,
+                groupSizes: session.setupGroupSizes,
+                currentIndex: session.setupRolesetIndex
             )
         } else if let setup = app.seatedGameSummary?.setup {
             LobbySetupStrip(setup: setup, gameType: app.seatedGameSummary?.type ?? "Mafia")
@@ -261,7 +266,11 @@ struct LobbySetupStrip: View {
             rolesets: bundle.rolesets,
             banished: bundle.banished,
             isSimpleMulti: setup.isSimpleMulti(defaultGameType: gameType),
-            compact: true
+            compact: true,
+            events: bundle.events,
+            eventsPerSet: bundle.eventsPerSet,
+            grouped: bundle.grouped,
+            groupSizes: bundle.groupSizes
         )
     }
 }

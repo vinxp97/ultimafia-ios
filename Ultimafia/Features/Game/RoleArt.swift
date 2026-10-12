@@ -689,6 +689,10 @@ enum RoleArt {
         return assetURL(path)
     }
 
+    static var eventPoolURL: URL? {
+        assetURL("roles/event-vivid.png")
+    }
+
     static var banishedPoolURL: URL? {
         assetURL("roles/banished-vivid.png")
     }

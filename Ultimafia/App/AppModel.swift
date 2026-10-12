@@ -209,8 +209,9 @@ final class AppModel {
             async let open = APIClient.shared.gameList(list: "open", lobby: lobby)
             async let progress = APIClient.shared.gameList(list: "in progress", lobby: lobby)
             async let online = APIClient.shared.onlineUsers()
-            openGames = (try await open).filter(\.isOpen)
-            inProgressGames = try await progress
+            let me = user?.id
+            openGames = (try await open).filter { $0.isOpen && $0.isReviewVisible(to: me) }
+            inProgressGames = (try await progress).filter { $0.isReviewVisible(to: me) }
             onlineUsers = (try? await online) ?? onlineUsers
             await loadFinished(reset: true)
         } catch {
@@ -231,7 +232,7 @@ final class AppModel {
                 let rows = try await APIClient.shared.finishedGames(before: reset ? nil : finishedCursor)
                 // Cursor from the raw page so filtered-out game types don't stall paging.
                 if let oldest = rows.compactMap(\.endTime).min() { finishedCursor = oldest }
-                let kept = rows.filter { UMGameTypes.reviewable.contains($0.type ?? "") }
+                let kept = rows.filter { UMGameTypes.reviewable.contains($0.type ?? "") && $0.isReviewVisible(to: user?.id) }
                 if reset && attempts == 1 {
                     finishedGames = kept
                 } else {
@@ -250,8 +251,16 @@ final class AppModel {
     func openReview(_ id: String) {
         let session = GameSession(gameId: id, spectate: true, review: true)
         reviewSession = session
+        session.onReviewUnavailable = { [weak self] in self?.hideUnreviewable(id) }
         path.append(.review(id))
         Task { await session.start() }
+    }
+
+    /// Safety net for the list-side filter: drop a game whose review the server refused.
+    func hideUnreviewable(_ id: String) {
+        finishedGames.removeAll { $0.id == id }
+        inProgressGames.removeAll { $0.id == id }
+        openGames.removeAll { $0.id == id }
     }
 
     func closeReview() {
