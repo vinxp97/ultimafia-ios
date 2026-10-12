@@ -8,7 +8,8 @@ struct GameView: View {
     var review = false
     @State private var draft = ""
     @State private var selectedPanel = 0
-    @FocusState private var chatFocused: Bool
+    /// Composer focus (UIKit-backed field; Return never resigns first responder).
+    @State private var chatFocused = false
 
     var body: some View {
         Group {
@@ -45,7 +46,7 @@ private struct GameScreen: View {
     var session: GameSession
     @Binding var draft: String
     @Binding var selectedPanel: Int
-    var chatFocused: FocusState<Bool>.Binding
+    var chatFocused: Binding<Bool>
     var onLeave: () -> Void
     var onDetach: () -> Void
 
@@ -256,7 +257,7 @@ private struct ChatScrollPin: Equatable {
 private struct GameChatPane: View {
     var session: GameSession
     @Binding var draft: String
-    var chatFocused: FocusState<Bool>.Binding
+    var chatFocused: Binding<Bool>
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
@@ -506,7 +507,7 @@ private struct GameChatPane: View {
 private struct ChatComposer: View {
     var session: GameSession
     @Binding var draft: String
-    var chatFocused: FocusState<Bool>.Binding
+    var chatFocused: Binding<Bool>
     @State private var savedDraft = ""
     @AppStorage("um.showNameAutofill") private var showTabButton = true
     @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
@@ -815,24 +816,23 @@ private struct ChatComposer: View {
                     }
                 }
 
-                // Single-line: Return sends (commands too) and focus stays for the next message.
-                TextField(placeholder(cooling: cooling), text: cappedDraft)
-                    .textFieldStyle(.plain)
-                    .submitLabel(.send)
-                    .padding(10)
-                    .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))
-                    .foregroundStyle(cooling ? Color.white : Color.primary)
-                    .focused(chatFocused)
-                    .disabled(cooling)
-                    .onSubmit(send)
-                    .onChange(of: draft) { oldValue, newValue in
-                        if cooling { return }
-                        handleTyping(oldValue, newValue)
-                    }
-                    .onKeyPress(.tab) {
-                        if cooling { return KeyPress.Result.ignored }
-                        return completeName() ? KeyPress.Result.handled : KeyPress.Result.ignored
-                    }
+                // Return sends (commands too) without ever dismissing the keyboard.
+                UMComposerField(
+                    text: cappedDraft,
+                    isFocused: chatFocused,
+                    placeholder: placeholder(cooling: cooling),
+                    enabled: !cooling,
+                    textColor: cooling ? .white : .label,
+                    maxLength: UMConfig.maxChatLength,
+                    onReturn: send,
+                    onTab: { cooling ? false : completeName() }
+                )
+                .padding(10)
+                .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))
+                .onChange(of: draft) { oldValue, newValue in
+                    if cooling { return }
+                    handleTyping(oldValue, newValue)
+                }
 
                 // Keyboard toggle (Return is the send key).
                 Button {
@@ -913,8 +913,6 @@ private struct ChatComposer: View {
     }
 
     private func send() {
-        // Return ends editing by default; put focus back so the user can keep typing.
-        defer { DispatchQueue.main.async { chatFocused.wrappedValue = true } }
         guard !session.isSpeakCoolingDown else { return }
         let text = Self.rewriteStickerTokens(draft, stickerNames: Set(stickerMap.keys.map(Self.bareCode)))
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
