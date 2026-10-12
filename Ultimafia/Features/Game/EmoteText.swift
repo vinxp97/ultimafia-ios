@@ -29,10 +29,16 @@ struct FlowWrap: Layout {
         var rowH: CGFloat = 0
         var maxX: CGFloat = 0
         var items: [Item] = []
+        var rowStart = 0
+        func centerRow() {
+            for i in rowStart..<items.count { items[i].origin.y = y + (rowH - items[i].size.height) / 2 }
+        }
         for sub in subviews {
             let available = width.isFinite ? max(width - x, 0) : .infinity
             var size = sub.sizeThatFits(ProposedViewSize(width: available, height: nil))
             if x > 0, width.isFinite, size.width > available + 0.5 {
+                centerRow()
+                rowStart = items.count
                 y += rowH + spacing
                 x = 0
                 rowH = 0
@@ -43,6 +49,7 @@ struct FlowWrap: Layout {
             rowH = max(rowH, size.height)
             x += size.width + spacing
         }
+        centerRow()
         let usedWidth = width.isFinite ? width : maxX
         return (CGSize(width: usedWidth, height: y + rowH), items)
     }
@@ -185,12 +192,12 @@ struct EmoteText: View {
         return hits.count == 1 ? hits[0] : nil
     }
 
-    /// About three lines of chat body text.
+    /// About four lines of chat body text.
     static var stickerHeight: CGFloat {
         #if canImport(UIKit)
-        return (UIFont.preferredFont(forTextStyle: .body).lineHeight * 3).rounded()
+        return (UIFont.preferredFont(forTextStyle: .body).lineHeight * 4).rounded()
         #else
-        return 60
+        return 80
         #endif
     }
 

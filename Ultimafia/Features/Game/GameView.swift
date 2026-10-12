@@ -72,7 +72,6 @@ private struct GameScreen: View {
             GamePanelPicker(session: session, selectedPanel: $selectedPanel)
         }
         .background(UMTheme.bg.ignoresSafeArea())
-        .toolbar(app.hideAppTabs || session.isReview ? .hidden : .automatic, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
@@ -84,6 +83,8 @@ private struct GameScreen: View {
             if displaced { onDetach() }
         }
         .task { await RoleCatalog.shared.load() }
+        // Warm the on-disk custom asset cache: own maps once, then every player's maps/avatars.
+        .task(id: session.players.count) { await prefetchCustomAssets() }
         // Entering a game or review collapses the bottom bar, like tapping Hide; restore it on the way out.
         .onAppear {
             // Collapse the bar on a fresh join/review, or when coming back from the lobby with a ping badge.
@@ -102,6 +103,17 @@ private struct GameScreen: View {
         .onDisappear { if !session.isReview { app.isViewingGame = false } }
         // Left the game screen for the lobby (not just another tab): bring the bar back.
         .onDisappear { if !app.isOnGameScreen { app.hideAppTabs = false } }
+    }
+
+    private func prefetchCustomAssets() async {
+        var paths = Array(app.myCustomEmotes.values) + Array(app.myCustomStickers.values)
+        var urls: [URL] = []
+        for p in session.players {
+            paths += Array(p.customEmotes.values) + Array(p.customStickers.values)
+            if p.avatar, let id = p.userId, !id.isEmpty, let u = UMAvatarURL.live(userId: id) { urls.append(u) }
+        }
+        urls += paths.compactMap(UMMediaURL.resolve)
+        await UMCustomAssetCache.shared.prefetch(urls)
     }
 
     private var errorBinding: Binding<Bool> {
@@ -200,9 +212,9 @@ private struct GamePanelPicker: View {
 
     private var hideBtn: some View {
         Button {
-            app.hideAppTabs.toggle()
+            withAnimation(.snappy(duration: 0.28)) { app.hideAppTabs.toggle() }
         } label: {
-            Label("Hide", systemImage: app.hideAppTabs ? "chevron.up" : "chevron.down")
+            Label(app.hideAppTabs ? "Show" : "Hide", systemImage: app.hideAppTabs ? "chevron.up" : "chevron.down")
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -210,7 +222,7 @@ private struct GamePanelPicker: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(app.hideAppTabs ? .white : UMTheme.muted)
-        .accessibilityLabel(app.hideAppTabs ? "Show Play and You" : "Hide Play and You")
+        .accessibilityLabel(app.hideAppTabs ? "Show app bar" : "Hide app bar")
     }
 
     private func tabBtn(_ title: String, _ tag: Int, _ icon: String) -> some View {
@@ -499,12 +511,12 @@ private struct ChatComposer: View {
         let isSticker: Bool
     }
 
-    /// Current word when it looks like `:x...` (colon then at least one letter).
+    /// Current word when it's a bare `:` (show everything) or `:x...` (colon then a letter).
     private var colonToken: (query: String, range: Range<String.Index>)? {
         guard let last = draft.last, !last.isWhitespace, !draft.hasPrefix("/") else { return nil }
         let start = draft.lastIndex(where: { $0.isWhitespace }).map { draft.index(after: $0) } ?? draft.startIndex
         let word = draft[start...]
-        guard word.hasPrefix(":"), word.count >= 2, word.dropFirst().first?.isLetter == true else { return nil }
+        guard word.hasPrefix(":"), word.count == 1 || word.dropFirst().first?.isLetter == true else { return nil }
         var q = String(word.dropFirst()).lowercased()
         if q.hasSuffix(":") { q.removeLast() }
         return (q, start..<draft.endIndex)
@@ -521,7 +533,7 @@ private struct ChatComposer: View {
             let items = map.compactMap { code, path -> (String, URL)? in
                 guard let url = UMMediaURL.resolve(path) else { return nil }
                 let bare = code.trimmingCharacters(in: CharacterSet(charactersIn: ":")).lowercased()
-                return bare.contains(t.query) ? (code, url) : nil
+                return (t.query.isEmpty || bare.contains(t.query)) ? (code, url) : nil
             }
             let bare: (String) -> String = { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":")).lowercased() }
             return items.sorted { a, b in

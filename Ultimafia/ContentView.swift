@@ -88,6 +88,14 @@ struct MainTabs: View {
         }
     }
 
+    /// `hideAppTabs` = app bar collapsed; it only applies on the game screen (Play tab).
+    private var showBar: Bool {
+        if keyboardShown { return false }
+        if tab == "you" { return true }
+        if app.suppressAppBar { return false }
+        return !app.hideAppTabs || !app.isOnGameScreen
+    }
+
     private var bar: some View {
         HStack(spacing: 0) {
             ForEach(items, id: \.self) { item in
@@ -121,17 +129,22 @@ struct MainTabs: View {
 
     var body: some View {
         ZStack {
-            TabView(selection: $tab) {
-                LobbyView()
-                    .tag("play")
-                    .toolbar(.hidden, for: .tabBar)
-                ProfileView()
-                    .tag("you")
-                    .toolbar(.hidden, for: .tabBar)
+            // A real stack (not a safe-area inset) so screens end above the bar and their own
+            // bottom rows (e.g. the in-game picker) are never covered by it.
+            VStack(spacing: 0) {
+                TabView(selection: $tab) {
+                    LobbyView()
+                        .tag("play")
+                        .toolbar(.hidden, for: .tabBar)
+                    ProfileView()
+                        .tag("you")
+                        .toolbar(.hidden, for: .tabBar)
+                }
+                if showBar {
+                    bar.transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !app.hideAppTabs, !keyboardShown { bar }
-            }
+            .animation(.snappy(duration: 0.28), value: showBar)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
 

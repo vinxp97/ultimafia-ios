@@ -39,8 +39,8 @@ struct SetupSearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { app.hideAppTabs = true }
-        .onDisappear { if app.game == nil { app.hideAppTabs = false } }
+        .onAppear { app.suppressAppBar = true }
+        .onDisappear { app.suppressAppBar = false }
         .task(id: filter) { await load(reset: true) }
         .task(id: query) {
             // Debounce typing; .task(id:) cancels the previous run.

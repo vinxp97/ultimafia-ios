@@ -24,6 +24,8 @@ final class AppModel {
     var path: [Route] = []
     var game: GameSession?
     var hideAppTabs = false
+    /// Full-screen flows (setup search) that hide the app bar regardless of the game collapse state.
+    var suppressAppBar = false
     /// The signed-in user's own custom emotes/stickers (`:name:` -> media path), loaded once per session.
     var myCustomEmotes: [String: String] = [:]
     var myCustomStickers: [String: String] = [:]

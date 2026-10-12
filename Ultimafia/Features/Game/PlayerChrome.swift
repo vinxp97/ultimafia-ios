@@ -140,12 +140,31 @@ final class UMImageCache: @unchecked Sendable {
         memory.setObject(Entry(images, delays), forKey: url as NSURL)
     }
 
+    /// Drops decoded frames for custom user assets only (site emotes / role icons stay).
+    func evictCustomUserAssets() {
+        for url in customKeys.withLock({ k in defer { k.removeAll() }; return k }) {
+            memory.removeObject(forKey: url as NSURL)
+        }
+    }
+    private let customKeys = UMLocked<Set<URL>>([])
+
     func data(for url: URL) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }
+        if UMCustomAssetCache.isCustomUserAsset(url) {
+            customKeys.withLock { _ = $0.insert(url) }
+            return try await UMCustomAssetCache.shared.data(for: url)
+        }
         let (data, response) = try await session.data(from: url)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
         return data
     }
+}
+
+final class UMLocked<T>: @unchecked Sendable {
+    private var value: T
+    private let lock = NSLock()
+    init(_ v: T) { value = v }
+    func withLock<R>(_ body: (inout T) -> R) -> R { lock.lock(); defer { lock.unlock() }; return body(&value) }
 }
 
 struct AnimatedWebPView: View {

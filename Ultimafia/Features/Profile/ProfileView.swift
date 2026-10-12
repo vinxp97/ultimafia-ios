@@ -14,6 +14,9 @@ struct ProfileView: View {
     @AppStorage(GameAudio.pregameMusicKey) private var pregameMusicVolume = 1.0
     @AppStorage(GameAudio.alertKey) private var alertVolume = 1.0
     @State private var confirmMuteAlerts = false
+    @State private var confirmClearCache = false
+    @State private var cacheBytes: Int64 = 0
+    @State private var clearedMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -78,6 +81,14 @@ struct ProfileView: View {
                     }
                 }
                 Section {
+                    Button("Clear Custom Asset Cache", role: .destructive) { confirmClearCache = true }
+                        .listRowBackground(UMTheme.card)
+                } header: {
+                    Text("Storage")
+                } footer: {
+                    Text(clearedMessage ?? "Custom emotes, stickers and avatars saved on this device: \(Self.mb(cacheBytes)).")
+                }
+                Section {
                     Button("Sign out", role: .destructive) {
                         Task { await app.signOut() }
                     }
@@ -88,6 +99,19 @@ struct ProfileView: View {
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("You")
             // Web asks before silencing alerts; declining leaves them at 10%.
+            .task { cacheBytes = UMCustomAssetCache.diskBytes() }
+            .confirmationDialog("Clear custom asset cache?", isPresented: $confirmClearCache, titleVisibility: .visible) {
+                Button("Clear", role: .destructive) {
+                    Task {
+                        let freed = await UMCustomAssetCache.shared.clear()
+                        UMImageCache.shared.evictCustomUserAssets()
+                        cacheBytes = 0
+                        clearedMessage = "Cleared \(Self.mb(freed)) of custom emotes, stickers and avatars."
+                    }
+                }
+            } message: {
+                Text("Removes saved custom emotes, stickers and avatars. They'll download again when needed. Role icons, fonts, sounds and site emotes are kept.")
+            }
             .alert("Disable alert sounds?", isPresented: $confirmMuteAlerts) {
                 Button("Disable", role: .destructive) {}
                 Button("Keep at 10%", role: .cancel) { alertVolume = 0.1 }
@@ -111,6 +135,10 @@ struct ProfileView: View {
                 .onChange(of: value.wrappedValue) { _, _ in onChange() }
         }
         .listRowBackground(UMTheme.card)
+    }
+
+    private static func mb(_ bytes: Int64) -> String {
+        String(format: "%.1f MB", Double(bytes) / 1_048_576)
     }
 
     private func row(_ title: String, _ value: String) -> some View {
