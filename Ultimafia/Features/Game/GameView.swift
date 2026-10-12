@@ -529,6 +529,7 @@ private struct ChatComposer: View {
         let selfPlayer = me.flatMap { id in session.players.first { $0.userId == id || $0.id == id } }
         let emotes = app.myCustomEmotes.isEmpty ? (selfPlayer?.customEmotes ?? [:]) : app.myCustomEmotes
         let stickers = app.myCustomStickers.isEmpty ? (selfPlayer?.customStickers ?? [:]) : app.myCustomStickers
+        let rank = EmoteOrderStore.shared.rank(for: me)
         func ranked(_ map: [String: String], sticker: Bool) -> [MediaSuggestion] {
             let items = map.compactMap { code, path -> (String, URL)? in
                 guard let url = UMMediaURL.resolve(path) else { return nil }
@@ -536,9 +537,13 @@ private struct ChatComposer: View {
                 return (t.query.isEmpty || bare.contains(t.query)) ? (code, url) : nil
             }
             let bare: (String) -> String = { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":")).lowercased() }
+            // Prefix matches first while filtering; then the user's You-tab order; then name.
+            let ix: (String) -> Int = { rank[EmoteOrderStore.key(code: $0, sticker: sticker)] ?? Int.max }
             return items.sorted { a, b in
                 let pa = bare(a.0).hasPrefix(t.query), pb = bare(b.0).hasPrefix(t.query)
-                return pa != pb ? pa : a.0 < b.0
+                if pa != pb { return pa }
+                let ia = ix(a.0), ib = ix(b.0)
+                return ia != ib ? ia < ib : a.0 < b.0
             }.map { MediaSuggestion(code: $0.0, url: $0.1, isSticker: sticker) }
         }
         return ranked(emotes, sticker: false) + ranked(stickers, sticker: true)
