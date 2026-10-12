@@ -2,7 +2,7 @@ import SwiftUI
 import CoreText
 import Observation
 
-/// Loads the cosmetic name fonts (web PR #2928 `settings.nameFont`) from ultimafia.com at runtime.
+/// Registers the cosmetic name fonts (web PR #2928 `settings.nameFont`). Bundled in Fonts/; falls back to ultimafia.com.
 /// The site serves them under content-hashed paths, so we read the @font-face rules from the
 /// live stylesheet, download each face once, cache it on disk, and register it process-wide.
 @Observable
@@ -42,12 +42,19 @@ final class UMNameFonts {
     }
 
     private func load() async {
+        // Bundled copies (Fonts/<CSS family>.ttf) are the primary source.
+        for (key, family) in Self.webFamilies {
+            if let url = Bundle.main.url(forResource: family, withExtension: "ttf"),
+               let data = try? Data(contentsOf: url) { register(data, key: key) }
+        }
+        guard registered.count < Self.webFamilies.count else { return }
+        // Fallback for any bundled face that is missing: disk cache, then the live site.
         // Cached files first so names render correctly offline / before the network returns.
         var cachedByFamily: [String: URL] = [:]
         if let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
             for f in files { cachedByFamily[f.deletingPathExtension().lastPathComponent] = f }
         }
-        for (key, family) in Self.webFamilies {
+        for (key, family) in Self.webFamilies where registered[key] == nil {
             if let file = cachedByFamily[family], let data = try? Data(contentsOf: file) { register(data, key: key) }
         }
         guard let urls = try? await fetchFontFaceURLs() else { return }

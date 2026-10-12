@@ -372,8 +372,8 @@ extension GamePlayer {
     func displayFont(size: CGFloat) -> Font {
         let key = (nameFont ?? "default").lowercased()
         if key != "default", let ps = UMNameFonts.shared.postScriptName(for: key) {
-            // Variable faces (Roboto) default to their thin master; ask for the web's semibold-ish weight.
-            return .custom(ps, fixedSize: size).weight(key == "poppins" ? .heavy : .semibold)
+            // Roboto faces are variable (default Regular); other faces carry their own fixed weight.
+            return .custom(ps, fixedSize: size).weight(key == "slab" || key == "mono" ? .semibold : .regular)
         }
         return .system(size: size, weight: .semibold)
     }
