@@ -887,9 +887,9 @@ final class GameSession {
             }
         case "options":
             if let o = data as? [String: Any] {
-                rankedGame = (o["ranked"] as? Bool) ?? rankedGame
-                competitiveGame = (o["competitive"] as? Bool) ?? competitiveGame
-                graveyardParticipation = (o["graveyardParticipation"] as? Bool) ?? graveyardParticipation
+                rankedGame = (o["ranked"] as? Bool) ?? false
+                competitiveGame = (o["competitive"] as? Bool) ?? false
+                graveyardParticipation = (o["graveyardParticipation"] as? Bool) ?? false
             }
         case "setup":
             applySetup(data)
