@@ -6,6 +6,11 @@ struct LoginView: View {
     @State private var password = RememberedLogin.isEnabled ? (RememberedLogin.password ?? "") : ""
     @State private var rememberMe = RememberedLogin.isEnabled
     @State private var creating = false
+    @State private var confirm = ""
+
+    private var canSubmit: Bool {
+        !app.isBusy && !email.isEmpty && password.count >= 6 && (!creating || password == confirm)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +29,13 @@ struct LoginView: View {
             .padding(.bottom, 36)
 
             VStack(spacing: 12) {
+                Picker("Mode", selection: $creating) {
+                    Text("Log in").tag(false)
+                    Text("Register").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .padding(.bottom, 4)
+
                 TextField("Email", text: $email)
                     .textContentType(.username)
                     .autocorrectionDisabled()
@@ -38,11 +50,24 @@ struct LoginView: View {
                     .padding(14)
                     .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
 
-                Toggle(isOn: $rememberMe) {
-                    Text("Remember me")
-                        .foregroundStyle(.white)
+                if creating {
+                    SecureField("Confirm password", text: $confirm)
+                        .textContentType(.newPassword)
+                        .padding(14)
+                        .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                    if !confirm.isEmpty && confirm != password {
+                        Text("Passwords don't match.")
+                            .font(.footnote)
+                            .foregroundStyle(UMTheme.mafia)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    Toggle(isOn: $rememberMe) {
+                        Text("Remember me")
+                            .foregroundStyle(.white)
+                    }
+                    .tint(UMTheme.blood)
                 }
-                .tint(UMTheme.blood)
 
                 if let error = app.errorMessage {
                     Text(error)
@@ -64,7 +89,7 @@ struct LoginView: View {
                         if app.isBusy {
                             ProgressView().tint(.white)
                         } else {
-                            Text(creating ? "Create account" : "Sign in")
+                            Text(creating ? "Register" : "Log in")
                                 .fontWeight(.semibold)
                         }
                     }
@@ -74,14 +99,9 @@ struct LoginView: View {
                 .buttonStyle(.plain)
                 .background(UMTheme.blood, in: RoundedRectangle(cornerRadius: 12))
                 .foregroundStyle(.white)
-                .disabled(app.isBusy || email.isEmpty || password.count < 6)
+                .disabled(!canSubmit)
+                .opacity(canSubmit ? 1 : 0.6)
 
-                Button(creating ? "Have an account? Sign in" : "New here? Create an account") {
-                    creating.toggle()
-                    app.errorMessage = nil
-                }
-                .font(.footnote)
-                .foregroundStyle(UMTheme.muted)
             }
             .padding(.horizontal, 24)
 
@@ -92,6 +112,11 @@ struct LoginView: View {
                 .padding(.bottom, 24)
         }
         .background(UMTheme.bg.ignoresSafeArea())
+        .animation(.default, value: creating)
+        .onChange(of: creating) { _, _ in
+            app.errorMessage = nil
+            confirm = ""
+        }
         .onChange(of: rememberMe) { _, on in
             if !on { RememberedLogin.clear() }
         }
