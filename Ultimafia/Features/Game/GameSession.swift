@@ -214,7 +214,17 @@ final class GameSession {
     var readyEndTime = Date()
     var readyPlayerIds: Set<String> = []
     var phases: [GamePhase] = [GamePhase(id: -1, name: "Pregame")]
-    var currentPhaseId: Int = -1
+    var currentPhaseId: Int = -1 {
+        didSet {
+            // Web copies the previous state's dead map into each new state; keep a snapshot of the
+            // phase we're leaving so viewing it later shows who was dead then.
+            if oldValue != currentPhaseId, !ingestingHistory, deadByPhase[oldValue] == nil {
+                deadByPhase[oldValue] = deadIds
+            }
+        }
+    }
+    /// Per-state dead set (web history.states[id].dead), from history / review data.
+    var deadByPhase: [Int: Set<String>] = [:]
     var viewingPhaseId: Int = -1
     var followLive = true
     var showRoleReveal = false
@@ -425,17 +435,26 @@ final class GameSession {
         return !boolValue(alive)
     }
 
+    /// Dead set for the phase being viewed (web PlayerList uses history.states[stateViewing].dead).
+    /// Live phase uses the running set; past phases (and every review phase) use the history map.
+    var viewedDeadIds: Set<String> {
+        if !isReview && isViewingLive { return deadIds }
+        return deadByPhase[viewingPhaseId] ?? deadIds
+    }
+
     var villagePlayers: [GamePlayer] {
         let ordered = orderedPlayers(players)
         if currentPhaseId < 0, !finished {
             return ordered.filter { !$0.left }
         }
-        return ordered.filter { !deadIds.contains($0.id) }
+        let dead = viewedDeadIds
+        return ordered.filter { !dead.contains($0.id) }
     }
 
     var graveyardPlayers: [GamePlayer] {
         guard isGameInProgress || finished else { return [] }
-        return orderedPlayers(players).filter { deadIds.contains($0.id) }
+        let dead = viewedDeadIds
+        return orderedPlayers(players).filter { dead.contains($0.id) }
     }
 
     /// Same as desktop `getOrderedPlayers`. Do not sort by name.
@@ -1150,7 +1169,9 @@ final class GameSession {
         ingestingHistory = true
         defer { ingestingHistory = false }
         guard let states = data as? [String: Any] else { return }
-        let keys = states.keys.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }
+        // Web order: Pregame (-1), 0, 1, …, then Postgame (-2) last (its dead map includes the final lynch).
+        func rank(_ k: String) -> Int { let i = Int(k) ?? 0; return i == -2 ? Int.max : i }
+        let keys = states.keys.sorted { rank($0) < rank($1) }
         var lines: [ChatLine] = []
         for key in keys {
             guard let state = states[key] as? [String: Any] else { continue }
@@ -1164,6 +1185,7 @@ final class GameSession {
             if let d = state["dayCount"] as? Double { phaseDay = Int(d) }
             ensurePhase(id: phaseId, name: phaseName, dayCount: phaseDay)
             applyDeadMap(state["dead"])
+            deadByPhase[phaseId] = Self.deadSet(state["dead"])
             applyKnownRolesMap(state["roles"])
             if key == keys.last {
                 currentPhaseId = phaseId
@@ -2135,6 +2157,20 @@ final class GameSession {
             quotable: false,
             fromState: phaseId
         )
+    }
+
+    private static func deadSet(_ any: Any?) -> Set<String> {
+        if let dict = any as? [String: Any] {
+            return Set(dict.compactMap { k, v in
+                switch v {
+                case let b as Bool: return b ? k : nil
+                case let n as NSNumber: return n.boolValue ? k : nil
+                default: return nil
+                }
+            })
+        }
+        if let arr = any as? [Any] { return Set(arr.compactMap { $0 as? String }) }
+        return []
     }
 
     private func applyDeadMap(_ any: Any?) {

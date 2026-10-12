@@ -1262,7 +1262,9 @@ private struct GameTownPane: View {
             }
             UMAvatarView(player: player, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                PlayerNameView(player: player, fontSize: 16, dead: dead)
+                // Graveyard keeps custom name colors (dead-red is for chat lines only).
+                PlayerNameView(player: player, fontSize: 16)
+                    .opacity(dead ? 0.7 : 1)
                 if player.id == session.selfId {
                     HStack(spacing: 6) {
                         Text("you").font(.caption2).foregroundStyle(UMTheme.muted)
