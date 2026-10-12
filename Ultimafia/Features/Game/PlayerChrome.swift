@@ -89,7 +89,7 @@ struct UMAvatarView: View {
     }
 
     init(player: GamePlayer, size: CGFloat = 28) {
-        self.init(userId: player.userId, hasAvatar: player.avatar, name: player.name, size: size)
+        self.init(userId: player.userId, hasAvatar: player.avatar, name: player.name, size: size, square: player.squareAvatar)
     }
 
     var body: some View {
@@ -368,21 +368,14 @@ struct PlayerNameView: View {
 }
 
 extension GamePlayer {
+    /// Web: only the name (player list + chat nameplates) gets `name-font-<key>`; message text never does.
     func displayFont(size: CGFloat) -> Font {
-        switch (nameFont ?? "default").lowercased() {
-        case "slab", "georgia":
-            return .system(size: size, weight: .semibold, design: .serif)
-        case "mono":
-            return .system(size: size, weight: .semibold, design: .monospaced)
-        case "poppins", "trebuchet", "verdana":
-            return .system(size: size, weight: .semibold, design: .rounded)
-        case "bettynoir", "nabla":
-            return .system(size: size, weight: .bold, design: .serif)
-        case "autophobia", "spooky":
-            return .system(size: size, weight: .medium, design: .serif)
-        default:
-            return .system(size: size, weight: .semibold)
+        let key = (nameFont ?? "default").lowercased()
+        if key != "default", let ps = UMNameFonts.shared.postScriptName(for: key) {
+            // Variable faces (Roboto) default to their thin master; ask for the web's semibold-ish weight.
+            return .custom(ps, fixedSize: size).weight(key == "poppins" ? .heavy : .semibold)
         }
+        return .system(size: size, weight: .semibold)
     }
 
     var bodyColor: Color {

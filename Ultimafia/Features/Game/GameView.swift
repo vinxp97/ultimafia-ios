@@ -644,7 +644,8 @@ private struct ChatRow: View {
                         userId: player?.userId,
                         hasAvatar: player?.avatar ?? false,
                         name: player?.name ?? line.senderName,
-                        size: 28
+                        size: 28,
+                        square: player?.squareAvatar ?? false
                     )
                     Group {
                         if let player {
@@ -744,7 +745,8 @@ private struct ChatRow: View {
             userId: player?.userId,
             hasAvatar: player?.avatar ?? false,
             name: player?.name ?? line.senderName,
-            size: 18
+            size: 18,
+            square: player?.squareAvatar ?? false
         )
         .offset(y: -1.5)
         .padding(.top, 2)

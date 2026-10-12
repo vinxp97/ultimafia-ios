@@ -9,6 +9,7 @@ struct UltimafiaApp: App {
             ContentView()
                 .environment(appModel)
                 .tint(UMTheme.blood)
+                .task { UMNameFonts.shared.loadIfNeeded() }
         }
     }
 }

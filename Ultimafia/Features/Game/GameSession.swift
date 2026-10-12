@@ -10,6 +10,8 @@ struct GamePlayer: Identifiable, Hashable {
     var textColorHex: String?
     var nameColorHex: String?
     var nameFont: String?
+    /// In-game avatar shape (web PR #3051). Server sends top-level `avatarShape` ("square"/"circle").
+    var squareAvatar: Bool = false
     var animatedNameColor: String?
     var nameGradientColorA: String?
     var nameGradientColorB: String?
@@ -1239,6 +1241,7 @@ final class GameSession {
             textColorHex: umColorString(settings["textColor"]),
             nameColorHex: umColorString(settings["nameColor"]),
             nameFont: settings["nameFont"] as? String,
+            squareAvatar: ((obj["avatarShape"] as? String) ?? (settings["gameAvatarShape"] as? String)) == "square",
             animatedNameColor: settings["animatedNameColor"] as? String,
             nameGradientColorA: umColorString(settings["nameGradientColorA"]),
             nameGradientColorB: umColorString(settings["nameGradientColorB"]),
