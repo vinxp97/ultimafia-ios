@@ -8,6 +8,10 @@ struct SetupSearchView: View {
     @State private var page = 1
     @State private var pages = 1
     @State private var loading = false
+    /// Next-page fetch in flight (guards duplicate infinite-scroll loads).
+    @State private var loadingMore = false
+    /// Bumped on every reset so a stale next-page response is dropped.
+    @State private var generation = 0
     @State private var error: String?
     @State private var hosting: SetupInfo?
 
@@ -19,17 +23,17 @@ struct SetupSearchView: View {
                 if let error {
                     Text(error).font(.footnote).foregroundStyle(UMTheme.mafia)
                 }
-                ForEach(setups) { setup in
+                ForEach(Array(setups.enumerated()), id: \.element.id) { index, setup in
                     SetupSearchCard(setup: setup) { hosting = setup }
+                        .onAppear {
+                            // Infinite scroll: prefetch when one of the last few rows appears.
+                            if index >= setups.count - 3 { Task { await loadMore() } }
+                        }
                 }
-                if loading {
+                if loading || loadingMore {
                     ProgressView().tint(UMTheme.blood).frame(maxWidth: .infinity).padding()
                 } else if setups.isEmpty, error == nil {
                     Text("No setups found.").foregroundStyle(UMTheme.muted).frame(maxWidth: .infinity).padding()
-                } else if page < pages {
-                    Button("Load more") { Task { await load(reset: false) } }
-                        .frame(maxWidth: .infinity)
-                        .tint(UMTheme.blood)
                 }
             }
             .padding(16)
@@ -89,13 +93,22 @@ struct SetupSearchView: View {
         .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 10))
     }
 
+    private func loadMore() async {
+        guard !loading, !loadingMore, page < pages, error == nil else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        await load(reset: false)
+    }
+
     private func load(reset: Bool) async {
+        if reset { generation += 1 }
+        let gen = generation
         let next = reset ? 1 : page + 1
-        loading = true
-        defer { loading = false }
+        if reset { loading = true }
+        defer { if reset, gen == generation { loading = false } }
         do {
             let result = try await APIClient.shared.searchSetups(filter: filter, query: query, page: next)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, gen == generation else { return }
             if reset { setups = result.setups } else {
                 let known = Set(setups.map(\.id))
                 setups += result.setups.filter { !known.contains($0.id) }
@@ -106,6 +119,7 @@ struct SetupSearchView: View {
         } catch is CancellationError {
         } catch {
             if (error as? URLError)?.code == .cancelled { return }
+            guard gen == generation else { return }
             self.error = error.localizedDescription
         }
     }
