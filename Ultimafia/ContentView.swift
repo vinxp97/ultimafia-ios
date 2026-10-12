@@ -42,11 +42,15 @@ struct MainTabs: View {
     @State private var tab = "play"
     @State private var keyboardShown = false
 
-    private enum BarItem: String { case leave, lobby, game, create, you }
+    private enum BarItem: String { case leave, back, lobby, game, create, you }
 
     /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Lobby, Create, You.
+    /// Reviewing (Play tab): Back takes Leave's spot; seated keeps Game, else Create.
     private var items: [BarItem] {
-        app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.lobby, .create, .you]
+        if tab == "play", app.isOnReview {
+            return app.seatedGameId != nil ? [.back, .lobby, .game, .you] : [.back, .lobby, .create, .you]
+        }
+        return app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.lobby, .create, .you]
     }
 
     private var selected: BarItem {
@@ -60,6 +64,9 @@ struct MainTabs: View {
             if let session = app.game {
                 if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
             }
+        case .back:
+            // Same as the old review top-bar arrow: close the review (no leave endpoint).
+            app.closeReview()
         case .lobby:
             tab = "play"
             if !app.path.isEmpty { app.goToLobby() } else { app.lobbyScrollToTop += 1 }
@@ -81,6 +88,7 @@ struct MainTabs: View {
     private func info(_ item: BarItem) -> (String, String) {
         switch item {
         case .leave: ("Leave", "arrow.left")
+        case .back: ("Back", "arrow.left")
         case .lobby: ("Lobby", "list.bullet.rectangle")
         case .game: ("Game", "gamecontroller")
         case .create: ("Create", "plus.circle")

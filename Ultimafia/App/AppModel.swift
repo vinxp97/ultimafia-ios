@@ -56,6 +56,11 @@ final class AppModel {
     }
 
     /// Game or review screen on top: the screens where the app bar can be collapsed with Hide.
+    var isOnReview: Bool {
+        if case .review = path.last { return true }
+        return false
+    }
+
     var isOnCollapsibleGameScreen: Bool {
         switch path.last {
         case .game, .review: return true

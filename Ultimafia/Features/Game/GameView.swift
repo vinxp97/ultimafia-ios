@@ -52,7 +52,7 @@ private struct GameScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            GameHeader(session: session, onClose: session.isReview ? onLeave : nil)
+            GameHeader(session: session)
             SetupRoleStrip(session: session)
             Divider().overlay(UMTheme.line)
             Group {
