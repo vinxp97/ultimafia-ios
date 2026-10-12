@@ -227,12 +227,19 @@ private struct GameChatPane: View {
         session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
     }
 
-    /// Messages below the lowest one currently on screen (off-screen or behind the keyboard).
+    /// Every line that has ever been on screen (or was already there when the chat opened).
+    @State private var seenLineIds: Set<String> = []
+
+    private func markAllSeen() {
+        seenLineIds.formUnion(chatLines.map(\.id))
+    }
+
+    /// Unseen = live messages that have never been on screen. Reviews have no incoming messages.
     private func recomputeUnread() {
-        guard !stickToBottom else { unreadCount = 0; return }
-        let lines = chatLines
-        guard let lastSeen = lines.lastIndex(where: { visibleLineIds.contains($0.id) }) else { return }
-        unreadCount = lines.count - 1 - lastSeen
+        guard !session.isReview, session.isViewingLive else { unreadCount = 0; return }
+        seenLineIds.formUnion(visibleLineIds)
+        if stickToBottom { markAllSeen(); unreadCount = 0; return }
+        unreadCount = chatLines.reduce(0) { $0 + (seenLineIds.contains($1.id) ? 0 : 1) }
     }
 
     var body: some View {
@@ -336,8 +343,9 @@ private struct GameChatPane: View {
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 0) {
-                        if !stickToBottom {
+                        if !stickToBottom, !session.isReview {
                             Button {
+                                markAllSeen()
                                 unreadCount = 0
                                 stickToBottom = true
                                 jumpToLatest(proxy: proxy)
@@ -367,6 +375,7 @@ private struct GameChatPane: View {
                 }
                 .onChange(of: session.displayedMessages.count) { old, new in
                     if stickToBottom {
+                        markAllSeen()
                         unreadCount = 0
                         jumpToLatestIfPinned(proxy: proxy)
                     } else {
@@ -374,6 +383,7 @@ private struct GameChatPane: View {
                     }
                 }
                 .onChange(of: session.viewingPhaseId) { _, _ in
+                    markAllSeen()
                     unreadCount = 0
                     stickToBottom = true
                     jumpToLatest(proxy: proxy)
@@ -385,6 +395,7 @@ private struct GameChatPane: View {
                     }
                 }
                 .onAppear {
+                    markAllSeen()
                     stickToBottom = true
                     jumpToLatest(proxy: proxy)
                 }
