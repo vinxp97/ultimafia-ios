@@ -155,6 +155,24 @@ final class UMImageCache: @unchecked Sendable {
         session.configuration.urlCache?.removeAllCachedResponses()
     }
 
+    static let didPurge = Notification.Name("UMImageCache.didPurge")
+
+    /// After a confirmed upload/removal: drop `urls` from memory frames, both URLCaches and the
+    /// custom-asset disk cache, refetch fresh bytes, then tell visible views to reload.
+    func purge(_ urls: [URL]) async {
+        for url in urls {
+            memory.removeObject(forKey: url as NSURL)
+            customKeys.withLock { _ = $0.remove(url) }
+            let req = URLRequest(url: url)
+            session.configuration.urlCache?.removeCachedResponse(for: req)
+            URLCache.shared.removeCachedResponse(for: req)
+        }
+        await UMCustomAssetCache.shared.purge(urls)
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.didPurge, object: nil, userInfo: ["urls": urls])
+        }
+    }
+
     func data(for url: URL) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }
         if UMCustomAssetCache.isCustomUserAsset(url) {
@@ -182,6 +200,8 @@ struct AnimatedWebPView: View {
     @State private var frames: [UMPlatformImage] = []
     @State private var delays: [Double] = []
     @State private var index = 0
+    /// Bumped when this URL is purged after an upload, forcing a reload.
+    @State private var revision = 0
 
     var body: some View {
         Group {
@@ -204,7 +224,10 @@ struct AnimatedWebPView: View {
                 Color.clear
             }
         }
-        .task(id: url.absoluteString) {
+        .onReceive(NotificationCenter.default.publisher(for: UMImageCache.didPurge)) { note in
+            if let urls = note.userInfo?["urls"] as? [URL], urls.contains(url) { revision += 1 }
+        }
+        .task(id: "\(url.absoluteString)#\(revision)") {
             await load()
             while !Task.isCancelled, frames.count > 1 {
                 let delay = delays.indices.contains(index) ? delays[index] : 0.1

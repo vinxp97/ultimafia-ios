@@ -65,6 +65,15 @@ actor UMCustomAssetCache {
         return try await task.value
     }
 
+    /// Delete cached copies of `urls` and refetch them from the server (post-upload freshness).
+    func purge(_ urls: [URL]) async {
+        for url in urls where Self.isCustomUserAsset(url) {
+            try? FileManager.default.removeItem(at: Self.file(for: url))
+            refreshedAvatars.insert(url)
+            _ = try? await fetch(url)
+        }
+    }
+
     /// Warm the disk cache; already-cached files are skipped.
     func prefetch(_ urls: [URL]) async {
         await withTaskGroup(of: Void.self) { group in

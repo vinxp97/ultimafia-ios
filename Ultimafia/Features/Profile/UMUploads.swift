@@ -68,6 +68,18 @@ nonisolated struct UMUploadSpec: Sendable {
     }
 }
 
+/// Site upload URLs (/uploads/...) to purge from every app cache after a confirmed upload/removal.
+enum UMUploadURLs {
+    private static func u(_ name: String) -> URL { URL(string: "https://ultimafia.com/uploads/\(name)")! }
+    static func avatar(_ uid: String) -> [URL] { [u("\(uid)_avatar.webp")] }
+    static func banner(_ uid: String) -> [URL] { ["webp", "gif", "png", "jpg"].map { u("\(uid)_banner.\($0)") } }
+    static func forumBanner(_ uid: String) -> [URL] { [u("\(uid)_forumBanner.webp")] }
+    static func profileBackground(_ uid: String) -> [URL] { [u("\(uid)_profileBackground.webp")] }
+    static func familyAvatar(_ fid: String) -> [URL] { [u("\(fid)_family_avatar.webp")] }
+    static func familyBanner(_ fid: String) -> [URL] { ["webp", "gif", "png", "jpg"].map { u("\(fid)_family_banner.\($0)") } }
+    static func familyBackground(_ fid: String) -> [URL] { [u("\(fid)_familyBackground.webp")] }
+}
+
 /// Image types the site's pickers accept for these uploads (accept="image/*"; server: GIF/PNG/JPEG/WebP).
 let umUploadImageTypes: [UTType] = [.png, .jpeg, .webP, .gif, .heic]
 
@@ -122,6 +134,8 @@ struct UMImageUploadButton: View {
     let spec: UMUploadSpec
     var label: String
     var disabled = false
+    /// Cached URLs replaced by this upload; purged only after the server confirms success.
+    var purge: [URL] = []
     var onUploaded: () async -> Void
 
     @State private var photoItem: PhotosPickerItem?
@@ -255,6 +269,7 @@ struct UMImageUploadButton: View {
                                               filename: "upload.\(ext)", mimeType: sendMime, data: body) { p in
                 progress = p
             }
+            if !purge.isEmpty { await UMImageCache.shared.purge(purge) }
             done = "\(spec.title) uploaded."
             await onUploaded()
         } catch {

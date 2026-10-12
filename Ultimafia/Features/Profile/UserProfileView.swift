@@ -946,7 +946,7 @@ struct UMMarkdownView: View {
     }
 
     private func resolveUMURL(_ url: URL) -> URL {
-        if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+        if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" || scheme == "mailto" {
             return url
         }
         let base = URL(string: "https://ultimafia.com/")!

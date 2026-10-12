@@ -533,12 +533,12 @@ private struct UserSettingsTab: View {
         Section("Profile") {
             UploadRow(title: "Avatar", sitePath: "/user/profile",
                       info: "Square crop, saved at 100×100 by the server (static max 1 MB). Animated GIF/WebP needs Animated Profile Picture from the Shop.") {
-                UMImageUploadButton(spec: .avatar(animated: user?.owns("animatedAvatar") ?? false), label: "Upload Avatar") { await refreshUser() }
+                UMImageUploadButton(spec: .avatar(animated: user?.owns("animatedAvatar") ?? false), label: "Upload Avatar", purge: UMUploadURLs.avatar(user?.id ?? "")) { await refreshUser() }
             }
             if customProfile || (user?.owns("animatedBanner") ?? false) {
                 UploadRow(title: "Profile Banner", sitePath: "/user/profile",
                           info: "3:1 crop, saved at 900×300. Animated GIF/WebP (max 20 MB, frames ≤1800×600) needs Animated Profile Banner.") {
-                    UMImageUploadButton(spec: .banner(animated: user?.owns("animatedBanner") ?? false), label: "Upload Banner") { await refreshUser() }
+                    UMImageUploadButton(spec: .banner(animated: user?.owns("animatedBanner") ?? false), label: "Upload Banner", purge: UMUploadURLs.banner(user?.id ?? "")) { await refreshUser() }
                 }
             }
             SettingColor(model: model, title: "Background Color", prop: "backgroundColor", defaultHex: "#535353", disabled: !customProfile)
@@ -564,10 +564,10 @@ private struct UserSettingsTab: View {
                           info: "Replaces the default diamond pattern on your profile page (max 5 MB, any shape).",
                           onRemove: {
                     confirm = ConfirmAction(title: "Remove background?", message: "Are you sure you wish to remove your profile background?", button: "Remove") {
-                        Task { await model.call("DELETE", "user/profileBackground", success: "Profile background removed") }
+                        Task { if await model.call("DELETE", "user/profileBackground", success: "Profile background removed") { await UMImageCache.shared.purge(UMUploadURLs.profileBackground(app.user?.id ?? "")) } }
                     }
                 }) {
-                    UMImageUploadButton(spec: .profileBackground, label: "Upload Background Image") { await model.load() }
+                    UMImageUploadButton(spec: .profileBackground, label: "Upload Background Image", purge: UMUploadURLs.profileBackground(app.user?.id ?? "")) { await model.load() }
                 }
             }
             if user?.owns("forumBanner") == true {
@@ -575,10 +575,10 @@ private struct UserSettingsTab: View {
                           info: "Slim banner above your forum post header (5:1 crop, saved at 500×100, max 2 MB).",
                           onRemove: {
                     confirm = ConfirmAction(title: "Remove forum banner?", message: "Are you sure you wish to remove your forum banner?", button: "Remove") {
-                        Task { await model.call("DELETE", "user/forumBanner", success: "Forum banner removed") }
+                        Task { if await model.call("DELETE", "user/forumBanner", success: "Forum banner removed") { await UMImageCache.shared.purge(UMUploadURLs.forumBanner(app.user?.id ?? "")) } }
                     }
                 }) {
-                    UMImageUploadButton(spec: .forumBanner, label: "Upload Forum Banner") { await model.load() }
+                    UMImageUploadButton(spec: .forumBanner, label: "Upload Forum Banner", purge: UMUploadURLs.forumBanner(app.user?.id ?? "")) { await model.load() }
                 }
             }
             if user?.owns("profileBackground") == true {
@@ -855,14 +855,15 @@ private struct AccountSettingsTab: View {
 // MARK: - Cookies
 
 private struct CookieSettingsTab: View {
-    @State private var browser: UMBrowserItem?
 
     var body: some View {
         Section {
             Text("On the website, cookie preferences are stored in your browser and apply to that device only. The app doesn't use browser cookies for tracking, so here is what each category means in the app.")
                 .font(.footnote).foregroundStyle(UMTheme.muted)
                 .listRowBackground(UMTheme.card)
-            Button("Privacy Policy") { browser = UMBrowserItem(url: URL(string: "https://ultimafia.com/policy/privacy")!) }
+            NavigationLink("Privacy Policy") { UMLegalView(title: "Privacy Policy", markdown: UMLegalText.privacyPolicy) }
+                .listRowBackground(UMTheme.card)
+            NavigationLink("Terms of Service") { UMLegalView(title: "Terms of Service", markdown: UMLegalText.termsOfService) }
                 .listRowBackground(UMTheme.card)
         } header: {
             Text("Cookie Preferences")
@@ -874,7 +875,6 @@ private struct CookieSettingsTab: View {
         } footer: {
             Text("To change cookie choices for the website itself, use Settings > Cookies on ultimafia.com in your browser.")
         }
-        .sheet(item: $browser) { item in UMInAppBrowser(url: item.url) { browser = nil } }
     }
 
     private func row(_ title: String, on: Bool, _ detail: String) -> some View {
@@ -977,7 +977,7 @@ private struct FamilySettingsTab: View {
         Section("Images") {
             UploadRow(title: "Family Avatar", sitePath: "/user/settings/family",
                       info: "Square crop, saved at 100×100 (static max 1 MB; animated needs the Animated Avatar perk, max 25 MB).") {
-                UMImageUploadButton(spec: .familyAvatar(animated: perks.contains("familyAnimatedAvatar")), label: "Upload New Avatar") { await model.loadFamily() }
+                UMImageUploadButton(spec: .familyAvatar(animated: perks.contains("familyAnimatedAvatar")), label: "Upload New Avatar", purge: UMUploadURLs.familyAvatar(id)) { await model.loadFamily() }
             }
             UploadRow(title: "Family Banner", sitePath: "/user/settings/family",
                       info: perks.contains("familyBanner")
@@ -985,21 +985,21 @@ private struct FamilySettingsTab: View {
                         : "Your family must buy the Family Banner perk first.",
                       onRemove: b("banner") ? {
                 confirm = ConfirmAction(title: "Remove banner?", message: "Remove the family banner?", button: "Remove") {
-                    Task { if await model.call("DELETE", "family/\(id)/banner", success: "Family banner removed") { await model.loadFamily() } }
+                    Task { if await model.call("DELETE", "family/\(id)/banner", success: "Family banner removed") { await UMImageCache.shared.purge(UMUploadURLs.familyBanner(id)); await model.loadFamily() } }
                 }
             } : nil) {
                 UMImageUploadButton(spec: .familyBanner(id: id, animated: perks.contains("familyAnimatedBanner")),
                                     label: perks.contains("familyAnimatedBanner") ? "Upload / Crop Banner" : "Upload Banner",
-                                    disabled: !perks.contains("familyBanner")) { await model.loadFamily() }
+                                    disabled: !perks.contains("familyBanner"), purge: UMUploadURLs.familyBanner(id)) { await model.loadFamily() }
             }
             UploadRow(title: "Family Background", sitePath: "/user/settings/family",
                       info: "Replaces the default pattern on the family page (max 5 MB).",
                       onRemove: b("background") ? {
                 confirm = ConfirmAction(title: "Remove background?", message: "Are you sure you wish to remove the family background?", button: "Remove") {
-                    Task { if await model.call("DELETE", "family/\(id)/background", success: "Family background removed") { await model.loadFamily() } }
+                    Task { if await model.call("DELETE", "family/\(id)/background", success: "Family background removed") { await UMImageCache.shared.purge(UMUploadURLs.familyBackground(id)); await model.loadFamily() } }
                 }
             } : nil) {
-                UMImageUploadButton(spec: .familyBackground(id: id), label: "Upload Background Image") { await model.loadFamily() }
+                UMImageUploadButton(spec: .familyBackground(id: id), label: "Upload Background Image", purge: UMUploadURLs.familyBackground(id)) { await model.loadFamily() }
             }
             if b("background") {
                 Picker("Background Display Mode", selection: Binding<String>(
