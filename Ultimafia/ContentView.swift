@@ -41,22 +41,9 @@ struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @State private var tab = "play"
 
-    /// Leave lives in the tab bar as a fake tab: selecting it pops the confirm and snaps back.
-    private var tabSelection: Binding<String> {
-        Binding(
-            get: { tab },
-            set: { new in
-                guard new == "leave" else { tab = new; return }
-                if let session = app.game {
-                    if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
-                }
-            }
-        )
-    }
-
     var body: some View {
         ZStack {
-            TabView(selection: tabSelection) {
+            TabView(selection: $tab) {
                 if app.game != nil {
                     Color.clear
                         .tabItem { Label("Leave", systemImage: "arrow.left") }
@@ -74,6 +61,13 @@ struct MainTabs: View {
                     .toolbar(app.hideAppTabs ? .hidden : .automatic, for: .tabBar)
             }
             .toolbarBackground(UMTheme.card, for: .tabBar)
+            .onChange(of: tab) { old, new in
+                guard new == "leave" else { return }
+                tab = old == "leave" ? "play" : old
+                if let session = app.game {
+                    if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
+                }
+            }
 
             if let session = app.game {
                 ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
