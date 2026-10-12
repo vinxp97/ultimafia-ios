@@ -1218,6 +1218,9 @@ private struct GameTownPane: View {
     @State private var pickingPlayerId: String?
     /// Post-game only: the row whose Report/Block bar is open.
     @State private var moderatingPlayerId: String?
+    /// Measured natural height of the Report/Block bar (for the clipped reveal).
+    @State private var moderationBarHeight: CGFloat = 44
+    private static let revealAnimation = Animation.easeInOut(duration: 0.25)
 
     /// Ended game still on screen, or a review; never yourself or anonymous (no userId) players.
     private func canModerate(_ player: GamePlayer) -> Bool {
@@ -1256,12 +1259,26 @@ private struct GameTownPane: View {
     }
 
     private func townRow(_ player: GamePlayer, dead: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let open = moderatingPlayerId == player.id
+        return VStack(alignment: .leading, spacing: 0) {
+            // Header never changes size or position; only the area below it opens.
             townRowContent(player, dead: dead)
-            if moderatingPlayerId == player.id && canModerate(player) {
+            if canModerate(player) {
+                // Always in the tree (no insert/remove); a top-anchored clipped height reveal.
                 UMPlayerModerationBar(player: player, gameId: session.gameId)
+                    .padding(.top, 8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                        if h > 0 { moderationBarHeight = h }
+                    }
+                    .frame(height: open ? moderationBarHeight : 0, alignment: .top)
+                    .clipped()
+                    .opacity(open ? 1 : 0)
+                    .allowsHitTesting(open)
+                    .accessibilityHidden(!open)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .listRowBackground(UMTheme.card)
     }
 
@@ -1297,14 +1314,19 @@ private struct GameTownPane: View {
             }
             Spacer()
             if canModerate(player) {
-                Image(systemName: moderatingPlayerId == player.id ? "chevron.up" : "ellipsis")
+                Image(systemName: "chevron.down")
                     .foregroundStyle(UMTheme.muted)
+                    .frame(width: 24, height: 24)
+                    .rotationEffect(.degrees(moderatingPlayerId == player.id ? 180 : 0))
+                    .accessibilityLabel(moderatingPlayerId == player.id ? "Hide report and block" : "Report or block")
             }
         }
         .contentShape(Rectangle())
         .onTapGesture {
             guard canModerate(player) else { return }
-            withAnimation(.snappy) { moderatingPlayerId = moderatingPlayerId == player.id ? nil : player.id }
+            withAnimation(Self.revealAnimation) {
+                moderatingPlayerId = moderatingPlayerId == player.id ? nil : player.id
+            }
         }
     }
 
