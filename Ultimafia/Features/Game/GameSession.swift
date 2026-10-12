@@ -339,7 +339,8 @@ final class GameSession {
     }
 
     var showComposer: Bool {
-        guard !isReview, !spectate, isViewingLive else { return false }
+        // Spectators may only talk in the Spectator Meeting (server Spectator.js "speak"); canTalk encodes that.
+        guard !isReview, isViewingLive else { return false }
         return canTalk || speechChannels.contains(where: { $0.canTalk })
     }
 
@@ -1415,7 +1416,7 @@ final class GameSession {
                 let channel = SpeechChannel(
                     id: id,
                     name: (obj["name"] as? String) ?? "Chat",
-                    canTalk: can && amMember && !spectate,
+                    canTalk: can && amMember && (!spectate || (obj["name"] as? String) == "Spectator Meeting"),
                     abilities: abilities
                 )
                 nextSpeech.removeAll { $0.id == id }

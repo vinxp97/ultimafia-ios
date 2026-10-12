@@ -225,7 +225,7 @@ struct GameRow: View {
                 } else if game.isFinished {
                     Button("Review") { app.openReview(game.id) }
                         .buttonStyle(.bordered)
-                } else {
+                } else if game.spectating == true {
                     Button("Spectate") { app.openGame(game, spectate: true) }
                         .buttonStyle(.bordered)
                 }
