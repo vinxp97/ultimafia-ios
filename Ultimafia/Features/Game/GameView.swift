@@ -1852,7 +1852,6 @@ private struct MeetingBlock: View {
                             ForEach(pickIds, id: \.self) { id in
                                 if let tp = session.player(for: id) {
                                     UMAvatarView(player: tp, size: 22)
-                                        .overlay(Circle().stroke(UMTheme.roleMention, lineWidth: 2).padding(-2))
                                 }
                             }
                         }
