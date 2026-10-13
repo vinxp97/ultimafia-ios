@@ -343,6 +343,12 @@ private struct GameChatPane: View {
     @State private var atTop = false
     @State private var visibleLineIds: Set<String> = []
     @State private var visibleBuffer = VisibleIdBuffer()
+    /// Phase whose rows the scroll tracking belongs to. Only changed by the phase-switch handler, so
+    /// visibility callbacks fired while the content swaps can't write the new rows into the old
+    /// phase (or old-offset rows into the new one).
+    @State private var trackedPhase: Int?
+    /// True while a phase switch restores its position; tracking and auto-follow stand down.
+    @State private var restoringScroll = false
 
     private var chatLines: [ChatLine] {
         session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
@@ -408,12 +414,16 @@ private struct GameChatPane: View {
                         visibleLineIds = buffer.pending
                         let first = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
                         session.chatAnchorId = first
-                        if let first { session.phaseScrollAnchors[session.viewingPhaseId] = first }
+                        if !restoringScroll, let first, let phase = trackedPhase, phase == session.viewingPhaseId {
+                            session.phaseScrollAnchors[phase] = first
+                        }
                         recomputeUnread()
                     }
                 }
                 .pointerScrolling()
-                .defaultScrollAnchor(.bottom)
+                // Bottom anchoring only while following the latest. On a past/review phase it kept
+                // re-pinning to the bottom as lazy rows measured, undoing the restored position.
+                .defaultScrollAnchor(stickToBottom ? .bottom : .top)
                 .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .top) {
                     if !atTop {
@@ -517,7 +527,7 @@ private struct GameChatPane: View {
                 }
                 .onChange(of: session.displayedMessages.count) { old, new in
                     // Review: a phase's lines are static; never auto-follow to the bottom.
-                    if session.isReview { return }
+                    if session.isReview || restoringScroll { return }
                     if stickToBottom {
                         markAllSeen()
                         unreadCount = 0
@@ -528,6 +538,19 @@ private struct GameChatPane: View {
                 }
                 .onChange(of: session.viewingPhaseId) { oldPhase, newPhase in
                     session.phasePinned[oldPhase] = stickToBottom
+                    trackedPhase = newPhase
+                    restoringScroll = true
+                    // Re-assert after the new rows have laid out, then let tracking resume.
+                    let restore = session.phaseScrollAnchors[newPhase]
+                    for delay in [0.05, 0.15, 0.3] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            guard session.viewingPhaseId == newPhase else { return }
+                            if stickToBottom { jumpToLatest(proxy: proxy) }
+                            else if let restore, chatLines.contains(where: { $0.id == restore }) { proxy.scrollTo(restore, anchor: .top) }
+                            else { proxy.scrollTo("chat-top", anchor: .top) }
+                            if delay == 0.3 { restoringScroll = false }
+                        }
+                    }
                     markAllSeen()
                     unreadCount = 0
                     let forceTop = session.reviewScrollTopPending
@@ -584,6 +607,7 @@ private struct GameChatPane: View {
                         jumpToLatest(proxy: proxy)
                     }
                     session.chatHasOpened = true
+                    trackedPhase = session.viewingPhaseId
                 }
                 .onChange(of: stickToBottom) { _, pinned in
                     session.chatPinnedToBottom = pinned
