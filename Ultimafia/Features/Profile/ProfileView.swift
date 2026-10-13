@@ -30,7 +30,15 @@ struct ProfileView: View {
                     HStack(spacing: 14) {
                         if let me {
                             UMAvatarView(player: me, size: 52)
-                            PlayerNameView(player: me, fontSize: 20)
+                            VStack(alignment: .leading, spacing: 6) {
+                                PlayerNameView(player: me, fontSize: 20)
+                                // Live /user/info balances (web navbar fields): emoji + number only.
+                                HStack(spacing: 14) {
+                                    balance("🪙", app.user?.coins?.value ?? 0, "coins")
+                                    balance("💛", app.user?.goldHearts?.value ?? 0, "gold hearts")
+                                    balance("❤️", app.user?.redHearts?.value ?? 0, "red hearts")
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -100,11 +108,8 @@ struct ProfileView: View {
                         ReadyBell.applyVolume()
                     }
                 }
-                Section("Status") {
-                    row("Coins", "\(app.user?.coins?.value ?? 0)")
-                    row("Red hearts", "\(app.user?.redHearts?.value ?? 0)")
-                    row("Gold hearts", "\(app.user?.goldHearts?.value ?? 0)")
-                    if let game = app.user?.inGameId {
+                if let game = app.user?.inGameId {
+                    Section("Status") {
                         row("In game", game)
                     }
                 }
@@ -163,6 +168,8 @@ struct ProfileView: View {
             .navigationTitle("You")
             // Web asks before silencing alerts; declining leaves them at 10%.
             .task { cacheBytes = UMCacheLocation.bytes() }
+            .task { await app.refreshUserInfo() }
+            .refreshable { await app.refreshUserInfo() }
             .task(id: app.user?.id) { await loadTrophies() }
             .sheet(item: $selectedTrophy) { UMTrophyDetailSheet(trophy: $0) }
             .confirmationDialog("Clear cached media?", isPresented: $confirmClearCache, titleVisibility: .visible) {
@@ -289,5 +296,17 @@ struct UMCreditsFooter: View {
         .font(.caption2)
         .foregroundStyle(UMTheme.muted)
         .multilineTextAlignment(.center)
+    }
+}
+
+
+extension ProfileView {
+    fileprivate func balance(_ emoji: String, _ value: Int, _ label: String) -> some View {
+        Text("\(emoji) \(value)")
+            .font(.subheadline.monospacedDigit().weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+            .accessibilityLabel("\(value) \(label)")
     }
 }

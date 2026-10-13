@@ -468,6 +468,12 @@ final class AppModel {
         Task { await session.start() }
     }
 
+    /// Re-read GET user/info (coins, hearts, …); keeps the current user on failure.
+    func refreshUserInfo() async {
+        guard isSignedIn, let info = try? await APIClient.shared.userInfo(), info.id != nil else { return }
+        user = info
+    }
+
     func detachFromGame() {
         hideAppTabs = false
         game?.disconnectWithoutLeaving()
