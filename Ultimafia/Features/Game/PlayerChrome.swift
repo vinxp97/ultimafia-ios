@@ -27,7 +27,7 @@ func platformImage(_ image: UMPlatformImage) -> Image {
 }
 
 
-enum UMAvatarURL {
+nonisolated enum UMAvatarURL {
     static func live(userId: String) -> URL? {
         URL(string: "https://ultimafia.com/uploads/\(userId)_avatar.webp")
     }
