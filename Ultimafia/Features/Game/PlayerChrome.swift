@@ -218,6 +218,7 @@ struct AnimatedWebPView: View {
     var fitHeight: CGFloat? = nil
     /// Show only the first frame (no animation loop).
     var freeze: Bool = false
+    var interpolation: Image.Interpolation? = nil
     @State private var frames: [UMPlatformImage] = []
     @State private var delays: [Double] = []
     @State private var index = 0
@@ -228,13 +229,11 @@ struct AnimatedWebPView: View {
         Group {
             if let image = frames.indices.contains(index) ? frames[index] : frames.first {
                 if let h = fitHeight {
-                    platformImage(image)
-                        .resizable()
+                    resizableImage(image)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: h * Self.aspect(image), height: h)
                 } else {
-                    platformImage(image)
-                        .resizable()
+                    resizableImage(image)
                         .scaledToFill()
                 }
             } else if let h = fitHeight {
@@ -259,6 +258,12 @@ struct AnimatedWebPView: View {
                 }
             }
         }
+    }
+
+    private func resizableImage(_ image: UMPlatformImage) -> Image {
+        let image = platformImage(image).resizable()
+        if let interpolation { return image.interpolation(interpolation) }
+        return image
     }
 
     private static func aspect(_ image: UMPlatformImage) -> CGFloat {
