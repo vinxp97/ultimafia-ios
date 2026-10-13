@@ -415,6 +415,7 @@ final class GameSession {
     }
 
     var speechPlaceholder: String {
+        if isDraftOnly { return "Draft a message for day…" }
         if isSpeakCoolingDown {
             return "Please do not spam! \(speakCooldownSecondsLeft)s"
         }
@@ -426,7 +427,16 @@ final class GameSession {
     var showComposer: Bool {
         // Spectators may only talk in the Spectator Meeting (server Spectator.js "speak"); canTalk encodes that.
         guard !isReview, isViewingLive else { return false }
-        return canTalk || speechChannels.contains(where: { $0.canTalk })
+        return canTalk || speechChannels.contains(where: { $0.canTalk }) || isDraftOnly
+    }
+
+    /// Seated player in a running game with no meeting they can speak in right now (e.g. town at
+    /// night): the composer stays up so they can prepare a message, but nothing is sent and no
+    /// typing events go out. The draft lives in the game view, so it survives into the next phase.
+    var isDraftOnly: Bool {
+        guard !isReview, isViewingLive, !spectate, isGameInProgress, !finished,
+              let me = selfId, players.contains(where: { $0.id == me }) else { return false }
+        return !(canTalk || speechChannels.contains(where: { $0.canTalk }))
     }
 
 
@@ -835,7 +845,7 @@ final class GameSession {
 
     @discardableResult
     func speak(_ text: String) -> Bool {
-        guard !isSpeakCoolingDown else { return false }
+        guard !isSpeakCoolingDown, !isDraftOnly else { return false }
         let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(UMConfig.maxChatLength))
         guard !trimmed.isEmpty else { return false }
         if trimmed.hasPrefix("/") {
@@ -876,7 +886,7 @@ final class GameSession {
     }
 
     func noteTyping() {
-        guard !typingSuppressed else { return }
+        guard !typingSuppressed, !isDraftOnly else { return }
         guard isViewingLive, !spectate, canTalk else { return }
         guard currentSpeechOption.abilityName == nil else { return }
         let meetingId = selectedSpeechMeetingId
