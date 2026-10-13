@@ -6,6 +6,20 @@ struct ContentView: View {
 
     var body: some View {
         Group {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-UMDiagReplay") {
+                DiagReplayView()
+            } else if app.isRestoring {
+                ZStack {
+                    UMTheme.bg.ignoresSafeArea()
+                    ProgressView().tint(UMTheme.blood)
+                }
+            } else if app.isSignedIn {
+                MainTabs()
+            } else {
+                LoginView()
+            }
+            #else
             if app.isRestoring {
                 ZStack {
                     UMTheme.bg.ignoresSafeArea()
@@ -16,6 +30,7 @@ struct ContentView: View {
             } else {
                 LoginView()
             }
+            #endif
         }
         .preferredColorScheme(.dark)
         .task {

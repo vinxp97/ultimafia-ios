@@ -281,6 +281,7 @@ struct UMCreditsFooter: View {
     static let devName = "Z"
     static let devUserId = UMProfileCache.devUserId
     @Environment(AppModel.self) private var app
+    @State private var showDiagnostics = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -295,7 +296,10 @@ struct UMCreditsFooter: View {
                 .accessibilityHint("Opens Z's profile")
             }
             Text("UltiMafia © \(String(Calendar.current.component(.year, from: Date()))) - VCCC LLC - All Rights Reserved")
+                // Hidden: long-press opens the diagnostics log.
+                .onLongPressGesture(minimumDuration: 1.0) { showDiagnostics = true }
         }
+        .sheet(isPresented: $showDiagnostics) { DiagnosticsView() }
         .font(.caption2)
         .foregroundStyle(UMTheme.muted)
         .multilineTextAlignment(.center)

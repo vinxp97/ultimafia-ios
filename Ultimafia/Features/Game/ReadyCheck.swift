@@ -22,9 +22,11 @@ enum UMAudioSession {
         queue.async {
             let session = AVAudioSession.sharedInstance()
             if session.category != .playback || !session.categoryOptions.contains(.mixWithOthers) {
-                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                do { try session.setCategory(.playback, mode: .default, options: [.mixWithOthers]) }
+                catch { UMDiag.log("audio", "setCategory failed: \(error.localizedDescription)") }
             }
-            try? session.setActive(true)
+            do { try session.setActive(true) }
+            catch { UMDiag.log("audio", "setActive failed: \(error.localizedDescription)") }
         }
         #endif
     }
@@ -63,7 +65,7 @@ enum ReadyBell {
             next.prepareToPlay()
             next.play()
             player = next
-        } catch {}
+        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
     }
 
     private static func activateSession() {
@@ -168,7 +170,7 @@ enum GameSFX {
             alertPlayers = alertPlayers.filter { id in playing.contains { ObjectIdentifier($0) == id } }
             if alert { alertPlayers.insert(ObjectIdentifier(next)) }
             playing.append(next)
-        } catch {}
+        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
     }
 
     @MainActor
@@ -187,7 +189,7 @@ enum GameSFX {
             if wait > 0.05 {
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             }
-        } catch {}
+        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
     }
 
     private static func activateSession() {
@@ -295,7 +297,7 @@ enum GameMusic {
             next.play()
             player?.stop()
             player = next
-        } catch {}
+        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
     }
 
     private static func activateSession() {

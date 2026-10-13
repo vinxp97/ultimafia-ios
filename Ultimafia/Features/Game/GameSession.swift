@@ -1,4 +1,6 @@
 import Foundation
+import QuartzCore
+import os
 import Observation
 
 struct GamePlayer: Identifiable, Hashable {
@@ -1134,6 +1136,11 @@ final class GameSession {
         socket.disconnect()
     }
 
+    #if DEBUG
+    /// DiagReplay: feed a synthetic socket event through the real handler.
+    func debugFeed(_ event: String, _ data: Any?) { handle(event, data) }
+    #endif
+
     private func handle(_ event: String, _ data: Any?) {
         switch event {
         case "connected":
@@ -1206,6 +1213,7 @@ final class GameSession {
             if var line = parseMessage(data) {
                 line.fromState = currentPhaseId
                 let isNew = !seenMessageIds.contains(line.id)
+                if isNew, !isQuiet { UMDiag.messageReceived(line.id) }
                 appendLine(line)
                 if isNew, !isQuiet, mentionsSelf(line) {
                     GameSFX.play("ping")
@@ -2000,6 +2008,16 @@ final class GameSession {
         if let d = obj["dayCount"] as? Int { day = d }
         if let d = obj["dayCount"] as? Double { day = Int(d) }
         let phaseChanged = id != currentPhaseId
+        if phaseChanged {
+            UMDiag.log("phase", "start \(currentPhaseId) -> \(id) \(name)")
+            let started = CACurrentMediaTime()
+            let spID = UMDiag.signposter.makeSignpostID()
+            let sp = UMDiag.signposter.beginInterval("phaseChange", id: spID)
+            DispatchQueue.main.async {
+                UMDiag.signposter.endInterval("phaseChange", sp)
+                UMDiag.log("phase", "end \(id) after \(Int((CACurrentMediaTime() - started) * 1000))ms (next runloop)")
+            }
+        }
         stateName = name
         dayCount = day
         ensurePhase(id: id, name: name, dayCount: day)

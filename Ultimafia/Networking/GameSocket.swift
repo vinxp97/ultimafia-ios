@@ -1,4 +1,5 @@
 import Foundation
+import QuartzCore
 
 struct SocketEvent {
     var name: String
@@ -28,6 +29,7 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         }
         session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
         task = session?.webSocketTask(with: request)
+        UMDiag.log("socket", "connect port \(port)")
         listen()
         task?.resume()
         pingTimer = Timer.scheduledTimer(withTimeInterval: UMConfig.pingInterval, repeats: true) { [weak self] _ in
@@ -57,11 +59,13 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol proto: String?) {
         isOpen = true
+        UMDiag.log("socket", "open")
         send("p")
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         isOpen = false
+        UMDiag.log("socket", "closed code \(closeCode.rawValue)")
         onDisconnect?()
         onEvent?("disconnected", nil)
     }
@@ -70,7 +74,8 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         task?.receive { [weak self] result in
             guard let self else { return }
             switch result {
-            case .failure:
+            case .failure(let error):
+                UMDiag.log("socket", "receive failed: \(error.localizedDescription)")
                 self.isOpen = false
                 self.onDisconnect?()
                 self.onEvent?("disconnected", nil)
@@ -81,9 +86,18 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
                 case .data(let d): text = String(data: d, encoding: .utf8)
                 @unknown default: text = nil
                 }
-                if let text, let parsed = parse(text) {
-                    self.lastObjectJSON = parsed.2
-                    self.onEvent?(parsed.0, parsed.1)
+                if let text {
+                    let t0 = CACurrentMediaTime()
+                    if let parsed = parse(text) {
+                        let t1 = CACurrentMediaTime()
+                        self.lastObjectJSON = parsed.2
+                        self.onEvent?(parsed.0, parsed.1)
+                        let t2 = CACurrentMediaTime()
+                        let parseMs = Int((t1 - t0) * 1000), handleMs = Int((t2 - t1) * 1000)
+                        if parsed.0 != "p" && parsed.0 != "typing" {
+                            UMDiag.log("evt", "\(parsed.0) \(text.utf8.count)B parse \(parseMs)ms handle \(handleMs)ms")
+                        }
+                    }
                 }
                 self.listen()
             }

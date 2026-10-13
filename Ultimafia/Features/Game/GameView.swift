@@ -104,6 +104,8 @@ private struct GameScreen: View {
         .onChange(of: session.displaced) { _, displaced in
             if displaced { onDetach() }
         }
+        .onAppear { UMDiag.log("view", "game screen appear \(session.gameId)") }
+        .onDisappear { UMDiag.log("view", "game screen disappear \(session.gameId)") }
         .task { await RoleCatalog.shared.load() }
         // Warm the on-disk custom asset cache: own maps once, then every player's maps/avatars.
         .task(id: session.players.count) { await prefetchCustomAssets() }
@@ -385,6 +387,8 @@ private struct GameChatPane: View {
                         ForEach(session.viewingNewspapers) { paper in
                             NewspaperCard(issue: paper, session: session)
                                 .id("newspaper-\(paper.id)")
+                                .onAppear { UMDiag.log("view", "newspaper appear \(paper.id)") }
+                                .onDisappear { UMDiag.log("view", "newspaper disappear \(paper.id)") }
                         }
                         ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
                             ChatRow(
@@ -394,6 +398,7 @@ private struct GameChatPane: View {
                                 layout: chatLayout
                             )
                             .id(line.id)
+                            .onAppear { UMDiag.messageRendered(line.id) }
                         }
                         Color.clear
                             .frame(height: 1)

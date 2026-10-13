@@ -4,6 +4,11 @@ import SwiftUI
 struct UltimafiaApp: App {
     @State private var appModel = AppModel()
 
+    init() {
+        UMDiag.log("app", "launch \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
+        UMDiag.startWatchdog()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

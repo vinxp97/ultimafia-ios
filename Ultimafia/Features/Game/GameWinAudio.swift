@@ -68,7 +68,7 @@ enum GameWinMusic {
             next.play()
             playing.removeAll { !$0.isPlaying }
             playing.append(next)
-        } catch {}
+        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
     }
 
     private static func bundledURL(_ name: String) -> URL? {
