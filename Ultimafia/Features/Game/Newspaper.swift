@@ -78,7 +78,8 @@ enum NewspaperCopy {
         guard let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
         if let role = extract(text, marker: "'s role is ") {
             guard isExposed(role) else { return nil }
-            return ("\(playerName)'s role was: \(reformatRole(role)).", role)
+            let raw = normalizeRole(role)
+            return ("\(playerName)'s role was: \(reformatRole(raw)).", raw)
         }
         if let alignment = extract(text, marker: "'s alignment is ") {
             guard isExposed(alignment) else { return nil }
@@ -100,6 +101,17 @@ enum NewspaperCopy {
         if v == "???" || v == "?" { return false }
         if v.contains("unknown") || v.contains("janitor") || v.contains("cleaned") { return false }
         return true
+    }
+
+    /// Death reveals (incl. day condemnations) arrive as "Cop (Insane/Telepathic)"
+    /// (Role.getRevealText); role chips/icons want the "Cop:Insane/Telepathic" form.
+    static func normalizeRole(_ role: String) -> String {
+        let t = role.trimmingCharacters(in: .whitespaces)
+        guard !t.contains(":"), t.hasSuffix(")"), let open = t.lastIndex(of: "(") else { return t }
+        let name = t[..<open].trimmingCharacters(in: .whitespaces)
+        let mods = t[t.index(after: open)..<t.index(before: t.endIndex)].trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return t }
+        return mods.isEmpty ? name : "\(name):\(mods)"
     }
 
     static func reformatRole(_ role: String) -> String {
