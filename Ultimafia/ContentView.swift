@@ -25,6 +25,9 @@ struct ContentView: View {
         .task {
             await RoleCatalog.shared.load()
         }
+        .task {
+            await UMTerminology.shared.load()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 if app.game != nil { GameBackgroundHold.start() }

@@ -69,6 +69,8 @@ struct EmoteText: View {
     var roleColor: Color = UMTheme.roleMention
 
     @State private var selectedRole: MentionedRole?
+    @State private var selectedTerm: UMTerminology.Term?
+    @AppStorage("um.hideTerminology") private var hideTerminology = false
 
     private struct MentionedRole: Identifiable {
         var id: String { name }
@@ -88,6 +90,7 @@ struct EmoteText: View {
     var body: some View {
         let catalog = RoleCatalog.shared
         let _ = catalog.isReady
+        let _ = UMTerminology.shared.version
         let pieces = tokenize()
         FlowWrap(spacing: 3) {
             ForEach(pieces) { piece in
@@ -95,6 +98,9 @@ struct EmoteText: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .sheet(item: $selectedTerm) { term in
+            UMTermSheet(term: term)
+        }
         .sheet(item: $selectedRole) { mention in
             RoleDetailsSheet(
                 roleRaw: mention.name,
@@ -126,11 +132,37 @@ struct EmoteText: View {
             AnimatedWebPView(url: url, showsPlaceholder: false, fitHeight: piece.sticker ? Self.stickerHeight : (piece.large ? 28 : emoteSize))
                 .fixedSize()
         } else {
-            Text(piece.text ?? "")
+            termText(piece.text ?? "")
                 .font(italic ? .body.italic() : .body)
                 .foregroundStyle(color)
                 .fixedSize(horizontal: false, vertical: true)
+                .environment(\.openURL, OpenURLAction { url in
+                    guard url.scheme == UMTermSheet.scheme,
+                          let key = url.host(percentEncoded: false) ?? url.host,
+                          let term = UMTerminology.shared.term(key.removingPercentEncoding ?? key) else { return .systemAction }
+                    selectedTerm = term
+                    return .handled
+                })
         }
+    }
+
+    /// Chat text with game terms dotted-underlined and tappable (web slangify: player chat only,
+    /// so system/newspaper text is left alone). Player names and links are never matched.
+    private func termText(_ s: String) -> Text {
+        guard !system, !hideTerminology else { return Text(s) }
+        let names = Set(players.map { $0.name.lowercased() })
+        let hits = UMTerminology.shared.matches(in: s, excluded: names)
+        guard !hits.isEmpty else { return Text(s) }
+        var attr = AttributedString(s)
+        for hit in hits {
+            guard let lo = AttributedString.Index(hit.range.lowerBound, within: attr),
+                  let hi = AttributedString.Index(hit.range.upperBound, within: attr) else { continue }
+            let encoded = hit.key.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? hit.key
+            attr[lo..<hi].link = URL(string: "\(UMTermSheet.scheme)://\(encoded)")
+            attr[lo..<hi].underlineStyle = Text.LineStyle(pattern: .dot, color: nil)
+            attr[lo..<hi].foregroundColor = color
+        }
+        return Text(attr)
     }
 
     private func tokenize() -> [Piece] {
@@ -215,5 +247,31 @@ struct EmoteText: View {
             return UMMediaURL.resolve(path)
         }
         return nil
+    }
+}
+
+extension UMTerminology.Term: Identifiable { var id: String { key } }
+
+struct UMTermSheet: View {
+    static let scheme = "umterm"
+    let term: UMTerminology.Term
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(term.definition)
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .background(UMTheme.bg.ignoresSafeArea())
+            .navigationTitle(term.key)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.fraction(0.3), .medium])
     }
 }

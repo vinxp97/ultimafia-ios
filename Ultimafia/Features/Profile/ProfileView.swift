@@ -8,6 +8,7 @@ struct ProfileView: View {
     @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
+    @AppStorage("um.hideTerminology") private var hideTerminology = false
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
     @AppStorage("um.sfxVolume") private var sfxVolume = 1.0
     @AppStorage("um.deathSoundVolume") private var deathSoundVolume = 1.0
@@ -52,6 +53,8 @@ struct ProfileView: View {
                     Toggle("Show Voting Log", isOn: $showVotingLog)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
+                        .listRowBackground(UMTheme.card)
+                    Toggle("Hide Game Terminology", isOn: $hideTerminology)
                         .listRowBackground(UMTheme.card)
                 }
                 if !trophies.isEmpty {
@@ -171,6 +174,7 @@ struct ProfileView: View {
                         for dir in [UMCacheLocation.nameFonts, UMCacheLocation.sounds, UMProfileCache.directory] {
                             try? FileManager.default.removeItem(at: dir)
                         }
+                        UMTerminology.shared.cacheCleared()
                         cacheBytes = 0
                         clearedMessage = "Cleared \(Self.mb(freed)) of cached media."
                     }
