@@ -968,12 +968,14 @@ final class GameSession {
     /// Spectators (incl. you when spectating), from the server's `spectators` broadcast:
     /// seat id -> the same player-info shape as `players` (name, avatar, colors, emotes).
     var spectatorPlayers: [String: GamePlayer] = [:]
+    /// Every seat id ever seen as a player (incl. ones that left pregame), never listed as spectators.
+    @ObservationIgnored private var formerPlayerIds: Set<String> = []
     /// Ids of "Spectator Meeting" chats (only spectators are members, so only they get its lines).
     @ObservationIgnored private var spectatorMeetingIds: Set<String> = []
 
     var spectatorList: [GamePlayer] {
         spectatorPlayers.values
-            .filter { s in !players.contains { $0.id == s.id } }
+            .filter { s in !formerPlayerIds.contains(s.id) && !players.contains { $0.id == s.id } }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -1116,18 +1118,25 @@ final class GameSession {
             applySetup(data)
         case "players":
             players = parsePlayers(data, keyOrder: umJSONTopLevelKeys(socket.lastObjectJSON))
+            formerPlayerIds.formUnion(players.map(\.id))
         case "spectators":
             var next: [String: GamePlayer] = [:]
-            for p in parsePlayers(data) { next[p.id] = p }
+            // Server getAllSpectatorInfo also sends spectatorsOld, which includes players who left
+            // pregame (createPlayerGoneObj); those seats are never spectators.
+            for p in parsePlayers(data) where !formerPlayerIds.contains(p.id) { next[p.id] = p }
             spectatorPlayers = next
         case "playerJoin":
             if let p = parsePlayer(data) {
+                formerPlayerIds.insert(p.id)
+                spectatorPlayers[p.id] = nil
                 players.removeAll { $0.id == p.id }
                 players.append(p)
                 players = orderedPlayers(players)
             }
         case "playerLeave":
             if let id = stringValue(data) {
+                formerPlayerIds.insert(id)
+                spectatorPlayers[id] = nil
                 players.removeAll { $0.id == id }
                 dropTyper(id)
             }
