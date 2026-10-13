@@ -1620,7 +1620,7 @@ private struct MeetingBlock: View {
                         .foregroundStyle(UMTheme.muted)
                 }
             }
-            if session.isReview {
+            if meeting.inputType == "text", session.isReview {
                 reviewLines
             } else if meeting.inputType == "text" {
                 if clickable {
@@ -1638,19 +1638,23 @@ private struct MeetingBlock: View {
                     }
                 }
             } else {
-                // Options are exactly the server's `targets` (web ActionSelect), never the member list.
-                ForEach(voterLines, id: \.id) { line in
-                    HStack(spacing: 4) {
-                        Text(line.who).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text("votes").font(.subheadline).foregroundStyle(UMTheme.muted)
-                        Text(line.picks).font(.subheadline.weight(.semibold))
-                            .foregroundStyle(UMTheme.roleMention).lineLimit(1)
+                // "Voter votes Target" lines (only players who voted), then one row per option.
+                // Options come from the server's `targets` (must-condemn setups omit "*").
+                if !voterLines.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(voterLines, id: \.id) { line in
+                            let who = Text(line.who).fontWeight(.bold).foregroundStyle(.white)
+                            let verb = Text(" \(session.isReview ? Self.reviewVerb(meeting.actionName) : "votes") ")
+                                .foregroundStyle(UMTheme.muted)
+                            let what = Text(line.picks).fontWeight(.bold).foregroundStyle(UMTheme.roleMention)
+                            Text("\(who)\(verb)\(what)")
+                                .font(.subheadline)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
-                if session.spectate {
-                    spectatorTally
-                } else {
-                    ForEach(meeting.targets, id: \.self) { target in
+                VStack(spacing: 6) {
+                    ForEach(orderedTargets, id: \.self) { target in
                         targetRow(target)
                     }
                 }
@@ -1715,29 +1719,18 @@ private struct MeetingBlock: View {
         return w + "ed"
     }
 
-    /// Spectators: read-only vote counts (who votes for whom is listed above); no buttons.
-    @ViewBuilder
-    private var spectatorTally: some View {
-        let voted = meeting.targets.filter { meeting.count(for: $0) > 0 }
-        if voted.isEmpty {
-            if voterLines.isEmpty {
-                Text("No votes yet").font(.caption).foregroundStyle(UMTheme.muted)
-            }
-        } else {
-            ForEach(voted, id: \.self) { target in
-                HStack {
-                    Text(session.voteLabel(target, meeting: meeting)).lineLimit(1)
-                    Spacer()
-                    Text("\(meeting.count(for: target))")
-                        .font(.subheadline.weight(.bold).monospacedDigit())
-                        .foregroundStyle(UMTheme.muted)
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(UMTheme.elevated.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityElement(children: .combine)
-            }
-        }
+    /// Options in Village (player-list) order, alive players only, then non-player options
+    /// ("No One", Yes/No, …) in server order. Meetings that only target dead players
+    /// (e.g. revive) keep those, in player-list order.
+    private var orderedTargets: [String] {
+        let targets = meeting.targets
+        let playerIds = Set(session.players.map(\.id))
+        let alive = session.villagePlayers.map(\.id).filter(targets.contains)
+        let others = targets.filter { !playerIds.contains($0) }
+        if !alive.isEmpty { return alive + others }
+        let deadOrdered = session.graveyardPlayers.map(\.id).filter(targets.contains)
+        let rest = targets.filter { playerIds.contains($0) && !deadOrdered.contains($0) }
+        return deadOrdered + rest + others
     }
 
     private func targetRow(_ target: String) -> some View {
@@ -1748,23 +1741,28 @@ private struct MeetingBlock: View {
             guard canTap else { return }
             session.vote(meetingId: meeting.id, selection: target)
         } label: {
-            HStack {
+            HStack(spacing: 8) {
                 Text(session.voteLabel(target, meeting: meeting))
-                Spacer()
-                if mine {
-                    Text("YOUR VOTE")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(UMTheme.village)
-                }
+                    .font(.body)
+                    .foregroundStyle(mine ? Color.white : UMTheme.muted)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
                 Text("\(count)")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .font(.footnote.monospacedDigit())
                     .foregroundStyle(UMTheme.muted)
             }
-            .padding(10)
-            .background(mine ? UMTheme.blood.opacity(0.35) : UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(mine ? UMTheme.blood.opacity(0.22) : UMTheme.elevated.opacity(0.7),
+                        in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .stroke(mine ? UMTheme.blood.opacity(0.6) : .clear, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .disabled(!canTap)
+        .accessibilityLabel("\(session.voteLabel(target, meeting: meeting)), \(count) vote\(count == 1 ? "" : "s")\(mine ? ", your vote" : "")")
     }
 }
 

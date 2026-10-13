@@ -181,8 +181,15 @@ extension GameSession {
             let targets = slashTargets(for: "vote")
             var selection: String?
             if let p = exactPlayer(rest, in: targets) { selection = p.id }
-            else if rest.isEmpty || rest.lowercased() == "nl" { selection = m.targets.contains("*") ? "*" : nil }
-            guard let selection else { return .error(rest.isEmpty || rest.lowercased() == "nl" ? "No one isn't an option here" : "Can't vote “\(rest)”") }
+            let noOneWords: Set<String> = ["", "nl", "no one", "noone", "none", "nobody"]
+            let wantsNoOne = noOneWords.contains(rest.lowercased())
+            if selection == nil, wantsNoOne {
+                // Must-condemn setups: the server leaves "*" out of targets and rejects it.
+                selection = m.targets.contains("*") ? "*" : nil
+            }
+            guard let selection else {
+                return .error(wantsNoOne ? "This setup requires a condemnation, so you can't vote no one." : "Can't vote “\(rest)”")
+            }
             if m.selections(of: selfId).contains(selection) { return .handled }
             vote(meetingId: m.id, selection: selection)
             return .handled
