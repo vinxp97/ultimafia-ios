@@ -63,7 +63,7 @@ private struct GameScreen: View {
                         // iPad landscape: Village 25% | Chat 50% | Act 25%, each scrolling on its own.
                         // selectedPanel is kept untouched so rotating back restores the same tab.
                         HStack(spacing: 0) {
-                            GameTownPane(session: session)
+                            GameTownPane(session: session, compact: true)
                                 .frame(width: geo.size.width * 0.25)
                             Divider().overlay(UMTheme.line)
                             GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader)
@@ -1356,6 +1356,8 @@ private struct ChatRow: View {
 
 private struct GameTownPane: View {
     var session: GameSession
+    /// iPad three-column Village column: dense rows so 10+ players fit without scrolling.
+    var compact = false
     @Environment(AppModel.self) private var app
     @State private var pickingPlayerId: String?
     /// Post-game only: the row whose Report/Block bar is open.
@@ -1387,22 +1389,24 @@ private struct GameTownPane: View {
             if !session.spectatorList.isEmpty, !session.isReview {
                 Section("Spectators") {
                     ForEach(session.spectatorList) { spectator in
-                        HStack(spacing: 8) {
+                        HStack(spacing: compact ? 6 : 8) {
                             UMAvatarView(userId: spectator.userId, hasAvatar: spectator.avatar,
-                                         name: spectator.name, size: 24, square: spectator.squareAvatar)
-                            PlayerNameView(player: spectator, fontSize: 14, dead: false)
+                                         name: spectator.name, size: compact ? 18 : 24, square: spectator.squareAvatar)
+                            PlayerNameView(player: spectator, fontSize: compact ? 12 : 14, dead: false)
                                 .lineLimit(1)
                             Text("(spectator)")
-                                .font(.system(size: 13))
+                                .font(.system(size: compact ? 11 : 13))
                                 .foregroundStyle(UMTheme.deadName)
                                 .lineLimit(1)
                                 .fixedSize()
                         }
+                        .modifier(CompactTownRow(on: compact))
                     }
                 }
             }
         }
         .scrollContentBackground(.hidden)
+        .modifier(CompactTownList(on: compact))
         .pointerScrolling()
         .confirmationDialog("Mark role as", isPresented: pickingBinding, titleVisibility: .visible) {
             ForEach(session.guessableRoles) { role in
@@ -1439,19 +1443,21 @@ private struct GameTownPane: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .listRowBackground(UMTheme.card)
+        .modifier(CompactTownRow(on: compact))
     }
 
     private func townRowContent(_ player: GamePlayer, dead: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: compact ? 6 : 10) {
             if session.isGameInProgress {
-                RoleGuessBadge(session: session, player: player) {
+                RoleGuessBadge(session: session, player: player, size: compact ? 20 : 30) {
                     pickingPlayerId = player.id
                 }
             }
-            UMAvatarView(player: player, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
+            UMAvatarView(player: player, size: compact ? 22 : 36)
+            VStack(alignment: .leading, spacing: compact ? 0 : 2) {
                 // Graveyard keeps custom name colors (dead-red is for chat lines only).
-                PlayerNameView(player: player, fontSize: 16)
+                PlayerNameView(player: player, fontSize: compact ? 13 : 16)
+                    .lineLimit(1)
                     .opacity(dead ? 0.7 : 1)
                 if player.id == session.selfId {
                     HStack(spacing: 6) {
@@ -1475,7 +1481,7 @@ private struct GameTownPane: View {
             if session.readyCheckActive, !dead {
                 let ready = session.readyPlayerIds.contains(player.id)
                 Text(ready ? "✅" : "❌")
-                    .font(.system(size: 15))
+                    .font(.system(size: compact ? 12 : 15))
                     .accessibilityLabel(ready ? "Ready" : "Not ready")
             }
             if canModerate(player) {
@@ -1500,6 +1506,33 @@ private struct GameTownPane: View {
             get: { pickingPlayerId != nil },
             set: { if !$0 { pickingPlayerId = nil } }
         )
+    }
+}
+
+/// iPad column only: tight insets, no min row height, no extra row/section gaps.
+private struct CompactTownRow: ViewModifier {
+    var on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.listRowInsets(EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
+        } else {
+            content
+        }
+    }
+}
+
+private struct CompactTownList: ViewModifier {
+    var on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .environment(\.defaultMinListRowHeight, 0)
+                .listRowSpacing(0)
+                .listSectionSpacing(4)
+                .contentMargins(.top, 4, for: .scrollContent)
+        } else {
+            content
+        }
     }
 }
 

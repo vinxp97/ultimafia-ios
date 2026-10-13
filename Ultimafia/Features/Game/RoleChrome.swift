@@ -773,6 +773,7 @@ struct RoleDetailsSheet: View {
 struct RoleGuessBadge: View {
     var session: GameSession
     var player: GamePlayer
+    var size: CGFloat = 30
     var onNeedPick: () -> Void
 
     var body: some View {
@@ -787,9 +788,9 @@ struct RoleGuessBadge: View {
                             .font(.headline.weight(.bold))
                             .foregroundStyle(UMTheme.muted)
                     }
-                    .frame(width: 30, height: 30)
+                    .frame(width: size, height: size)
                 case .maybe(let role), .sure(let role):
-                    RoleIconView(role: role, gameType: session.setupGameType, size: 30)
+                    RoleIconView(role: role, gameType: session.setupGameType, size: size)
                 }
                 if guess.isUncertain {
                     Text("?")
@@ -801,7 +802,7 @@ struct RoleGuessBadge: View {
                         .offset(x: 4, y: 4)
                 }
             }
-            .frame(width: 34, height: 34)
+            .frame(width: size + 4, height: size + 4)
         }
         .buttonStyle(.plain)
         .disabled(player.id == session.selfId)
