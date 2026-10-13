@@ -944,7 +944,11 @@ private struct ChatComposer: View {
                     textColor: cooling ? .white : .label,
                     maxLength: UMConfig.maxChatLength,
                     onReturn: send,
-                    onTab: { cooling ? false : (completeMedia() || completeName()) },
+                    onTab: {
+                        // Text ending in whitespace (e.g. right after a completion's trailing space): no-op.
+                        guard !cooling, let last = draft.last, !last.isWhitespace else { return true }
+                        return completeMedia() || completeName()
+                    },
                     onShortcut: { session.performShortcut($0) }
                 )
                 .padding(10)

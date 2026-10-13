@@ -172,7 +172,11 @@ struct UMComposerField: UIViewRepresentable {
                 parent.onReturn()
                 return false
             }
-            if text == "\t" { return !parent.onTab() }
+            if text == "\t" {
+                // Hardware Tab only ever completes; never insert a literal tab, even when nothing matched.
+                _ = parent.onTab()
+                return false
+            }
             if text.contains(where: \.isNewline) {
                 // Pasted multi-line text: flatten to one line (chat messages are single-line).
                 let flat = text.replacingOccurrences(of: "\r\n", with: " ")
