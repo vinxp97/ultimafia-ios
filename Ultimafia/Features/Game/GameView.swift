@@ -51,26 +51,44 @@ private struct GameScreen: View {
     var onDetach: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            GameHeader(session: session)
-            SetupRoleStrip(session: session)
-            Divider().overlay(UMTheme.line)
-            Group {
-                switch selectedPanel {
-                case 1:
-                    GameTownPane(session: session)
-                case 2:
-                    GameActPane(session: session)
-                default:
-                    GameChatPane(
-                        session: session,
-                        draft: $draft,
-                        chatFocused: chatFocused
-                    )
+        GeometryReader { geo in
+            let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
+            VStack(spacing: 0) {
+                GameHeader(session: session)
+                SetupRoleStrip(session: session)
+                Divider().overlay(UMTheme.line)
+                Group {
+                    if threeColumns {
+                        // iPad landscape: Village 25% | Chat 50% | Act 25%, each scrolling on its own.
+                        // selectedPanel is kept untouched so rotating back restores the same tab.
+                        HStack(spacing: 0) {
+                            GameTownPane(session: session)
+                                .frame(width: geo.size.width * 0.25)
+                            Divider().overlay(UMTheme.line)
+                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused)
+                                .frame(maxWidth: .infinity)
+                            Divider().overlay(UMTheme.line)
+                            GameActPane(session: session)
+                                .frame(width: geo.size.width * 0.25)
+                        }
+                    } else {
+                        switch selectedPanel {
+                        case 1:
+                            GameTownPane(session: session)
+                        case 2:
+                            GameActPane(session: session)
+                        default:
+                            GameChatPane(
+                                session: session,
+                                draft: $draft,
+                                chatFocused: chatFocused
+                            )
+                        }
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GamePanelPicker(session: session, selectedPanel: $selectedPanel, showsPanelTabs: !threeColumns)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            GamePanelPicker(session: session, selectedPanel: $selectedPanel)
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
@@ -125,6 +143,22 @@ private struct GameScreen: View {
     }
 }
 
+/// iPad-only layout decisions for the game screen. iPhone always keeps the tabbed layout.
+enum UMGameLayout {
+    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+    /// Three columns only on iPad, in landscape, with a window wide enough for ~340 pt side
+    /// columns (full screen 11"/13"; narrow Split View / Stage Manager windows keep the tabs).
+    static func usesThreeColumns(_ size: CGSize) -> Bool {
+        isPad && size.width > size.height && size.width >= 1000
+    }
+
+    /// One-row header (name, roles, phases, timer) on iPad when there's room.
+    static func usesWideHeader(_ width: CGFloat) -> Bool {
+        isPad && width >= 700
+    }
+}
+
 private struct GameHeader: View {
     var session: GameSession
     var onClose: (() -> Void)? = nil
@@ -176,15 +210,18 @@ private struct GameHeader: View {
 private struct GamePanelPicker: View {
     var session: GameSession
     @Binding var selectedPanel: Int
+    var showsPanelTabs = true
     @Environment(AppModel.self) private var app
     @State private var showGuides = false
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
 
     var body: some View {
         HStack(spacing: 4) {
-            tabBtn("Village", 1, "person.3")
-            tabBtn("Chat", 0, "text.bubble")
-            tabBtn("Act", 2, "hand.raised")
+            if showsPanelTabs {
+                tabBtn("Village", 1, "person.3")
+                tabBtn("Chat", 0, "text.bubble")
+                tabBtn("Act", 2, "hand.raised")
+            }
             if showSetupGuides, session.setupId != nil { guidesBtn }
             hideBtn
         }
