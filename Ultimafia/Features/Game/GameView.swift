@@ -1674,18 +1674,6 @@ private struct MeetingBlock: View {
     /// Web useAction `notClickable`.
     private var locked: Bool { meeting.lockedAfterVote(selfId: session.selfId) }
 
-    /// Members who have voted, with their picks (read-only, above the options).
-    /// Hidden when the server marks votes invisible.
-    private var voterLines: [(id: String, who: String, picks: String)] {
-        guard !meeting.votesInvisible else { return [] }
-        var ids = meeting.members.map(\.id).filter { !meeting.selections(of: $0).isEmpty }
-        for (voter, _) in meeting.ballot where !ids.contains(voter) { ids.append(voter) }
-        return ids.map { id in
-            (id, session.displayVoter(id, meeting: meeting),
-             meeting.selections(of: id).map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", "))
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
@@ -1716,23 +1704,18 @@ private struct MeetingBlock: View {
                     }
                 }
             } else {
-                // "Voter votes Target" lines (only players who voted), then one row per option.
-                // Options come from the server's `targets` (must-condemn setups omit "*").
-                if !voterLines.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(voterLines, id: \.id) { line in
-                            let who = Text(line.who).fontWeight(.bold).foregroundStyle(.white)
-                            let verb = Text(" \(session.isReview ? Self.reviewVerb(meeting.actionName) : "votes") ")
-                                .foregroundStyle(UMTheme.muted)
-                            let what = Text(line.picks).fontWeight(.bold).foregroundStyle(UMTheme.roleMention)
-                            Text("\(who)\(verb)\(what)")
-                                .font(.subheadline)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
+                // One card row per option: [count] Name votes <their pick>; non-player options
+                // ("No One", …) after a separator. Options come from the server's `targets`
+                // (must-condemn setups omit "*").
+                let split = splitTargets
                 VStack(spacing: 6) {
-                    ForEach(orderedTargets, id: \.self) { target in
+                    ForEach(split.players, id: \.self) { target in
+                        targetRow(target)
+                    }
+                    if !split.players.isEmpty, !split.others.isEmpty {
+                        Divider().overlay(UMTheme.line).padding(.vertical, 2)
+                    }
+                    ForEach(split.others, id: \.self) { target in
                         targetRow(target)
                     }
                 }
@@ -1811,26 +1794,57 @@ private struct MeetingBlock: View {
         return deadOrdered + rest + others
     }
 
+    private var splitTargets: (players: [String], others: [String]) {
+        let ids = Set(session.players.map(\.id))
+        let all = orderedTargets
+        return (all.filter(ids.contains), all.filter { !ids.contains($0) })
+    }
+
+    private var leaderCount: Int {
+        meeting.targets.map { meeting.count(for: $0) }.max() ?? 0
+    }
+
     private func targetRow(_ target: String) -> some View {
         let mine = meeting.selections(of: session.selfId).contains(target)
         let count = meeting.count(for: target)
         let canTap = clickable && !locked
+        let isPlayer = session.players.contains { $0.id == target }
+        let label = session.voteLabel(target, meeting: meeting)
+        let theirPick: String = {
+            guard isPlayer, !meeting.votesInvisible else { return "" }
+            return meeting.selections(of: target).map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", ")
+        }()
+        let leader = count > 0 && count == leaderCount
         return Button {
             guard canTap else { return }
             session.vote(meetingId: meeting.id, selection: target)
         } label: {
             HStack(spacing: 8) {
-                Text(session.voteLabel(target, meeting: meeting))
-                    .font(.body)
-                    .foregroundStyle(mine ? Color.white : UMTheme.muted)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
                 Text("\(count)")
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(UMTheme.muted)
+                    .font(.footnote.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .frame(minWidth: 26, minHeight: 20)
+                    .background(leader ? Color(red: 0.78, green: 0.29, blue: 0.29) : Color(red: 0.24, green: 0.45, blue: 0.75),
+                                in: Capsule())
+                Text(label)
+                    .font(.body.weight(isPlayer ? .bold : .regular))
+                    .foregroundStyle(isPlayer ? Color.white : UMTheme.muted)
+                    .lineLimit(1)
+                if !theirPick.isEmpty {
+                    Text("votes")
+                        .font(.body)
+                        .foregroundStyle(UMTheme.muted)
+                        .fixedSize()
+                    Text(theirPick)
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(UMTheme.roleMention)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(mine ? UMTheme.blood.opacity(0.22) : UMTheme.elevated.opacity(0.7),
                         in: RoundedRectangle(cornerRadius: 10))
@@ -1840,7 +1854,7 @@ private struct MeetingBlock: View {
         }
         .buttonStyle(.plain)
         .disabled(!canTap)
-        .accessibilityLabel("\(session.voteLabel(target, meeting: meeting)), \(count) vote\(count == 1 ? "" : "s")\(mine ? ", your vote" : "")")
+        .accessibilityLabel("\(label), \(count) vote\(count == 1 ? "" : "s")\(theirPick.isEmpty ? "" : ", votes \(theirPick)")\(mine ? ", your vote" : "")")
     }
 }
 
