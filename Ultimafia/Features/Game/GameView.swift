@@ -1669,6 +1669,7 @@ private struct GameActPane: View {
 private struct MeetingBlock: View {
     var session: GameSession
     var meeting: VoteMeeting
+    @AppStorage("um.voteListDisplay") private var voteListDisplay = "avatars"
     @State private var textDraft = ""
 
     private var clickable: Bool {
@@ -1814,10 +1815,9 @@ private struct MeetingBlock: View {
         let canTap = clickable && !locked
         let isPlayer = session.players.contains { $0.id == target }
         let label = session.voteLabel(target, meeting: meeting)
-        let theirPick: String = {
-            guard isPlayer, !meeting.votesInvisible else { return "" }
-            return meeting.selections(of: target).map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", ")
-        }()
+        let pickIds: [String] = (isPlayer && !meeting.votesInvisible) ? meeting.selections(of: target) : []
+        let theirPick = pickIds.map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", ")
+        let avatars = voteListDisplay != "names"
         let leader = count > 0 && count == leaderCount
         return Button {
             guard canTap else { return }
@@ -1831,19 +1831,37 @@ private struct MeetingBlock: View {
                     .frame(minWidth: 26, minHeight: 20)
                     .background(leader ? Color(red: 0.78, green: 0.29, blue: 0.29) : Color(red: 0.24, green: 0.45, blue: 0.75),
                                 in: Capsule())
-                Text(label)
-                    .font(.body.weight(isPlayer ? .bold : .regular))
-                    .foregroundStyle(isPlayer ? Color.white : UMTheme.muted)
-                    .lineLimit(1)
+                if avatars, isPlayer, let p = session.player(for: target) {
+                    UMAvatarView(player: p, size: 24)
+                } else {
+                    Text(label)
+                        .font(.body.weight(isPlayer ? .bold : .regular))
+                        .foregroundStyle(isPlayer ? Color.white : UMTheme.muted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+                }
                 if !theirPick.isEmpty {
                     Text("votes")
                         .font(.body)
                         .foregroundStyle(UMTheme.muted)
                         .fixedSize()
-                    Text(theirPick)
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(UMTheme.roleMention)
-                        .lineLimit(1)
+                    if avatars, pickIds.allSatisfy({ session.player(for: $0) != nil }) {
+                        HStack(spacing: 4) {
+                            ForEach(pickIds, id: \.self) { id in
+                                if let tp = session.player(for: id) {
+                                    UMAvatarView(player: tp, size: 22)
+                                        .overlay(Circle().stroke(UMTheme.roleMention, lineWidth: 2).padding(-2))
+                                }
+                            }
+                        }
+                    } else {
+                        Text(theirPick)
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(UMTheme.roleMention)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
                 Spacer(minLength: 0)
             }
