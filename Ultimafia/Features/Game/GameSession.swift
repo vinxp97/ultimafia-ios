@@ -473,7 +473,19 @@ final class GameSession {
     /// " (dead)" suffix: reviews show it to everyone; live games only to dead viewers.
     /// Uses the message's own alive flag (same as the red line); falls back to the
     /// dead set of the message's phase only when the flag is missing.
+    /// Line sent in the Postgame phase (live: phase -2; history/review: its stored state).
+    func isPostgameLine(_ line: ChatLine) -> Bool {
+        (line.fromState ?? (isReview ? nil : currentPhaseId)) == -2
+    }
+
+    /// Dead-chat styling (red name/body). Postgame lines use the sender's own colors; earlier-phase
+    /// dead lines keep their historical red.
+    func deadStyled(_ line: ChatLine) -> Bool {
+        line.senderWasDead && !isPostgameLine(line)
+    }
+
     func showsDeadSuffix(_ line: ChatLine) -> Bool {
+        if isPostgameLine(line) { return false }
         if !isReview {
             guard let me = selfId, deadIds.contains(me) else { return false }
         }

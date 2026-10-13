@@ -193,7 +193,7 @@ struct RoleRevealOverlay: View {
                                 HStack(spacing: 8) {
                                     UMAvatarView(player: mate, size: 28)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        PlayerNameView(player: mate, fontSize: 16, dead: session.isDead(mate.id))
+                                        PlayerNameView(player: mate, fontSize: 16, dead: session.currentPhaseId != -2 && session.isDead(mate.id))
                                         if let r = session.knownRoles[mate.id] {
                                             Text(r.split(separator: ":").first.map(String.init) ?? r)
                                                 .font(.caption2)

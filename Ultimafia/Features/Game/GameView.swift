@@ -1177,7 +1177,7 @@ private struct ChatRow: View {
                     Group {
                         if let player {
                             HStack(spacing: 0) {
-                                PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                                PlayerNameView(player: player, fontSize: 14, dead: session.deadStyled(line))
                                 if session.showsDeadSuffix(line) {
                                     Text(" (dead)")
                                         .font(.system(size: 14))
@@ -1302,7 +1302,7 @@ private struct ChatRow: View {
                 quoteAuthorLabel
             } else if let player {
                 HStack(spacing: 0) {
-                                PlayerNameView(player: player, fontSize: 14, dead: line.senderWasDead)
+                                PlayerNameView(player: player, fontSize: 14, dead: session.deadStyled(line))
                                 if session.showsDeadSuffix(line) {
                                     Text(" (dead)")
                                         .font(.system(size: 14))
@@ -1348,7 +1348,7 @@ private struct ChatRow: View {
     }
 
     private func chatBodyColor(player: GamePlayer?) -> Color {
-        if line.senderWasDead || session.isSpectatorLine(line) { return .red }
+        if session.deadStyled(line) || session.isSpectatorLine(line) { return .red }
         return player?.bodyColor ?? .white
     }
 
@@ -1468,7 +1468,7 @@ private struct GameTownPane: View {
                 // Graveyard keeps custom name colors (dead-red is for chat lines only).
                 PlayerNameView(player: player, fontSize: dim(16, 13, 17))
                     .lineLimit(1)
-                    .opacity(dead ? 0.7 : 1)
+                    .opacity(dead && session.currentPhaseId != -2 ? 0.7 : 1)
                 if player.id == session.selfId {
                     HStack(spacing: 6) {
                         Text("you").font(.caption2).foregroundStyle(UMTheme.muted)
