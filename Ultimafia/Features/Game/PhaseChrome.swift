@@ -24,11 +24,11 @@ struct PhaseBar: View {
                                 session.viewPhase(phase.id)
                             } label: {
                                 VStack(spacing: 2) {
-                                    Image(systemName: icon(for: phase.name))
+                                    Image(systemName: Self.icon(for: phase.name))
                                         .font(.title3)
                                         .foregroundStyle(phase.id == session.viewingPhaseId ? UMTheme.blood : UMTheme.muted)
                                         .frame(width: 32, height: 28)
-                                    Text(shortLabel(phase))
+                                    Text(Self.shortLabel(phase))
                                         .font(.caption2.weight(phase.id == session.viewingPhaseId ? .bold : .regular))
                                         .foregroundStyle(phase.id == session.viewingPhaseId ? .white : UMTheme.muted)
                                         .lineLimit(1)
@@ -61,7 +61,7 @@ struct PhaseBar: View {
         .background(UMTheme.card)
     }
 
-    private func icon(for name: String) -> String {
+    static func icon(for name: String) -> String {
         let n = name.lowercased()
         if n.contains("pregame") { return "house.fill" }
         if n.contains("night") { return "moon.fill" }
@@ -72,13 +72,92 @@ struct PhaseBar: View {
         return "circle.fill"
     }
 
-    private func shortLabel(_ phase: GamePhase) -> String {
+    static func shortLabel(_ phase: GamePhase) -> String {
         let n = phase.name
         if let day = phase.dayCount, n == "Day" || n == "Night" {
             return "\(n) \(day)"
         }
         if n.lowercased() == "pregame" { return "Pre" }
         return n
+    }
+}
+
+/// iPad one-row header: at most `visible` phase chips; chevrons or a horizontal swipe page to
+/// older/newer phases. Follows the newest phase unless the user paged back.
+struct PagedPhaseBar: View {
+    var session: GameSession
+    var visible = 6
+    /// nil = pinned to the newest page.
+    @State private var start: Int?
+
+    var body: some View {
+        let phases = session.sortedPhases
+        let maxStart = max(0, phases.count - visible)
+        let s = min(start ?? maxStart, maxStart)
+        let window = phases.isEmpty ? [] : Array(phases[s..<min(phases.count, s + visible)])
+        HStack(spacing: 2) {
+            Button { page(-1, s, maxStart) } label: {
+                Image(systemName: "chevron.left").font(.footnote.weight(.bold)).frame(width: 22, height: 32)
+            }
+            .buttonStyle(.plain)
+            .disabled(s == 0)
+            .foregroundStyle(s == 0 ? UMTheme.muted.opacity(0.4) : .white)
+            .accessibilityLabel("Older phases")
+
+            HStack(spacing: 8) {
+                ForEach(window) { phase in
+                    let on = phase.id == session.viewingPhaseId
+                    Button { session.viewPhase(phase.id) } label: {
+                        VStack(spacing: 1) {
+                            Image(systemName: PhaseBar.icon(for: phase.name))
+                                .font(.body)
+                                .foregroundStyle(on ? UMTheme.blood : UMTheme.muted)
+                                .frame(width: 28, height: 22)
+                            Text(PhaseBar.shortLabel(phase))
+                                .font(.caption2.weight(on ? .bold : .regular))
+                                .foregroundStyle(on ? .white : UMTheme.muted)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(on ? 1 : 0.55)
+                }
+            }
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20).onEnded { v in
+                    if v.translation.width < -30 { page(1, s, maxStart) }
+                    else if v.translation.width > 30 { page(-1, s, maxStart) }
+                }
+            )
+            .animation(.snappy(duration: 0.2), value: s)
+
+            Button { page(1, s, maxStart) } label: {
+                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).frame(width: 22, height: 32)
+            }
+            .buttonStyle(.plain)
+            .disabled(s >= maxStart)
+            .foregroundStyle(s >= maxStart ? UMTheme.muted.opacity(0.4) : .white)
+            .accessibilityLabel("Newer phases")
+        }
+        .onChange(of: session.viewingPhaseId) { _, id in reveal(id) }
+    }
+
+    private func page(_ delta: Int, _ s: Int, _ maxStart: Int) {
+        let n = min(max(0, s + delta * visible), maxStart)
+        start = n >= maxStart ? nil : n
+    }
+
+    /// Keep the viewed phase on screen when it changes elsewhere (bottom arrows, review, live).
+    private func reveal(_ id: Int) {
+        let phases = session.sortedPhases
+        guard let i = phases.firstIndex(where: { $0.id == id }) else { return }
+        let maxStart = max(0, phases.count - visible)
+        let s = min(start ?? maxStart, maxStart)
+        var n = s
+        if i < s { n = i } else if i >= s + visible { n = i - visible + 1 }
+        start = n >= maxStart ? nil : n
     }
 }
 

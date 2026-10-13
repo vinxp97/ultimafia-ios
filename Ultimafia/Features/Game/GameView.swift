@@ -53,9 +53,10 @@ private struct GameScreen: View {
     var body: some View {
         GeometryReader { geo in
             let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
+            let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
             VStack(spacing: 0) {
-                GameHeader(session: session)
-                SetupRoleStrip(session: session)
+                GameHeader(session: session, wide: wideHeader)
+                if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
                     if threeColumns {
@@ -65,7 +66,7 @@ private struct GameScreen: View {
                             GameTownPane(session: session)
                                 .frame(width: geo.size.width * 0.25)
                             Divider().overlay(UMTheme.line)
-                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused)
+                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader)
                                 .frame(maxWidth: .infinity)
                             Divider().overlay(UMTheme.line)
                             GameActPane(session: session)
@@ -81,7 +82,8 @@ private struct GameScreen: View {
                             GameChatPane(
                                 session: session,
                                 draft: $draft,
-                                chatFocused: chatFocused
+                                chatFocused: chatFocused,
+                                showsPhaseBar: !wideHeader
                             )
                         }
                     }
@@ -155,12 +157,14 @@ enum UMGameLayout {
 
     /// One-row header (name, roles, phases, timer) on iPad when there's room.
     static func usesWideHeader(_ width: CGFloat) -> Bool {
-        isPad && width >= 700
+        isPad && width >= 820
     }
 }
 
 private struct GameHeader: View {
     var session: GameSession
+    /// iPad: setup name, roles strip, paged phases and timer in one row.
+    var wide = false
     var onClose: (() -> Void)? = nil
 
     var body: some View {
@@ -184,6 +188,7 @@ private struct GameHeader: View {
             Text(session.setupName ?? session.gameType ?? "Game")
                 .font(.headline)
                 .lineLimit(1)
+                .frame(maxWidth: wide ? 220 : nil, alignment: .leading)
             if session.finished, !session.isReview {
                 Text("Finished")
                     .font(.caption)
@@ -197,7 +202,15 @@ private struct GameHeader: View {
                         .foregroundStyle(left < 10 ? UMTheme.mafia : UMTheme.village)
                 }
             }
-            Spacer(minLength: 8)
+            if wide {
+                SetupRoleStrip(session: session)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
+                PagedPhaseBar(session: session, visible: 6)
+                    .fixedSize()
+            } else {
+                Spacer(minLength: 8)
+            }
             PhaseTimerBadge(session: session)
         }
         .padding(.horizontal, 12)
@@ -295,6 +308,7 @@ private struct GameChatPane: View {
     var session: GameSession
     @Binding var draft: String
     var chatFocused: Binding<Bool>
+    var showsPhaseBar = true
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
@@ -332,7 +346,7 @@ private struct GameChatPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PhaseBar(session: session)
+            if showsPhaseBar { PhaseBar(session: session) }
             ScrollViewReader { proxy in
                 ScrollView {
                     let lines = chatLines
