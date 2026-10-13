@@ -151,9 +151,11 @@ private struct GameScreen: View {
         var urls: [URL] = []
         for p in session.players {
             paths += Array(p.customEmotes.values) + Array(p.customStickers.values)
-            if p.avatar, let id = p.userId, !id.isEmpty, let u = UMAvatarURL.live(userId: id) { urls.append(u) }
+            if let path = p.deckAvatarPath, let u = UMAvatarURL.deck(path: path) { urls.append(u) }
+            else if p.avatar, let id = p.userId, !id.isEmpty, let u = UMAvatarURL.live(userId: id) { urls.append(u) }
         }
         urls += paths.compactMap(UMMediaURL.resolve)
+        urls += UMDeckCache.avatarURLs(deckIds: session.anonymousDeckIds)
         await UMCustomAssetCache.shared.prefetch(urls)
     }
 
@@ -1193,7 +1195,8 @@ private struct ChatRow: View {
                         hasAvatar: player?.avatar ?? false,
                         name: player?.name ?? line.senderName,
                         size: 28,
-                        square: player?.squareAvatar ?? false
+                        square: player?.squareAvatar ?? false,
+                        deckPath: player?.deckAvatarPath
                     )
                     Group {
                         if let player {
@@ -1306,7 +1309,8 @@ private struct ChatRow: View {
             hasAvatar: player?.avatar ?? false,
             name: player?.name ?? line.senderName,
             size: 18,
-            square: player?.squareAvatar ?? false
+            square: player?.squareAvatar ?? false,
+            deckPath: player?.deckAvatarPath
         )
         .offset(y: -1.5)
         .padding(.top, 2)

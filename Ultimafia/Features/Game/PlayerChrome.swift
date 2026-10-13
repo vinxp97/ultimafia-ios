@@ -31,6 +31,16 @@ enum UMAvatarURL {
     static func live(userId: String) -> URL? {
         URL(string: "https://ultimafia.com/uploads/\(userId)_avatar.webp")
     }
+
+    /// Web Avatar: a string avatar containing "decks" is shown from `/uploads<path>`.
+    static func deckPath(_ raw: Any?) -> String? {
+        guard let s = raw as? String, s.contains("decks") else { return nil }
+        return s.hasPrefix("/") ? s : "/" + s
+    }
+
+    static func deck(path: String) -> URL? {
+        URL(string: "https://ultimafia.com/uploads\(path)")
+    }
 }
 
 enum UMDefaultAvatar {
@@ -79,22 +89,29 @@ struct UMAvatarView: View {
     var name: String = ""
     var size: CGFloat = 28
     var square: Bool = false
+    /// Anonymous deck avatar path; wins over the user avatar.
+    var deckPath: String? = nil
 
-    init(userId: String?, hasAvatar: Bool, name: String = "", size: CGFloat = 28, square: Bool = false) {
+    init(userId: String?, hasAvatar: Bool, name: String = "", size: CGFloat = 28, square: Bool = false, deckPath: String? = nil) {
         self.userId = userId
         self.hasAvatar = hasAvatar
+        self.deckPath = deckPath
         self.name = name
         self.size = size
         self.square = square
     }
 
     init(player: GamePlayer, size: CGFloat = 28) {
-        self.init(userId: player.userId, hasAvatar: player.avatar, name: player.name, size: size, square: player.squareAvatar)
+        self.init(userId: player.userId, hasAvatar: player.avatar, name: player.name, size: size,
+                  square: player.squareAvatar, deckPath: player.deckAvatarPath)
     }
 
     var body: some View {
         Group {
-            if hasAvatar, let userId, !userId.isEmpty, let url = UMAvatarURL.live(userId: userId) {
+            if let deckPath, let url = UMAvatarURL.deck(path: deckPath) {
+                // Deck images go through UMCustomAssetCache (/uploads/), so they're on disk after first use.
+                AnimatedWebPView(url: url, freeze: UMViewerPrefs.shared.disableAnimatedAvatars)
+            } else if hasAvatar, let userId, !userId.isEmpty, let url = UMAvatarURL.live(userId: userId) {
                 // Site "Disable Animated Avatars": other users' avatars show a still first frame.
                 let prefs = UMViewerPrefs.shared
                 AnimatedWebPView(url: url, freeze: prefs.disableAnimatedAvatars && userId != prefs.myUserId)

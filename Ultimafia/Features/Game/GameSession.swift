@@ -6,6 +6,11 @@ struct GamePlayer: Identifiable, Hashable {
     var name: String
     var userId: String?
     var avatar: Bool = false
+    /// Anonymous deck avatar path ("/decks/<profileId>.webp"); the server sends it in `avatar`
+    /// as a string instead of a bool (Player.makeAnonymous).
+    var deckAvatarPath: String? = nil
+    /// Deck profile id for anonymous players (web uses it as avatarId).
+    var anonId: String? = nil
     var left: Bool = false
     var textColorHex: String?
     var nameColorHex: String?
@@ -213,6 +218,8 @@ final class GameSession {
     var selfId: String?
     var hostId: String?
     var finished = false
+    /// Anonymous decks in this game (options.anonymousDeck ids); their profiles are cached on disk.
+    var anonymousDeckIds: [String] = []
     var rankedGame = false
     var competitiveGame = false
     var graveyardParticipation = false
@@ -1143,6 +1150,10 @@ final class GameSession {
         case "options":
             if let o = data as? [String: Any] {
                 rankedGame = (o["ranked"] as? Bool) ?? false
+                if let decks = o["anonymousDeck"] as? [Any], !decks.isEmpty {
+                    UMDeckCache.store(decks)
+                    anonymousDeckIds = decks.compactMap { ($0 as? [String: Any])?["id"] as? String }
+                }
                 competitiveGame = (o["competitive"] as? Bool) ?? false
                 graveyardParticipation = (o["graveyardParticipation"] as? Bool) ?? false
             }
@@ -1528,11 +1539,20 @@ final class GameSession {
     private func parsePlayer(_ data: Any?) -> GamePlayer? {
         guard let obj = data as? [String: Any], let id = obj["id"] as? String else { return nil }
         let settings = (obj["settings"] as? [String: Any]) ?? obj
+        let rawAvatar = obj["avatar"] ?? (obj["user"] as? [String: Any])?["avatar"]
+        let deckPath = UMAvatarURL.deckPath(rawAvatar)
+        let anonId: String? = {
+            if let s = obj["anonId"] as? String { return s }
+            if let n = obj["anonId"] as? NSNumber { return n.stringValue }
+            return nil
+        }()
         return GamePlayer(
             id: id,
             name: obj["name"] as? String ?? "Player",
             userId: (obj["userId"] as? String) ?? (obj["user"] as? [String: Any])?["id"] as? String,
-            avatar: boolValue(obj["avatar"]) || boolValue((obj["user"] as? [String: Any])?["avatar"]),
+            avatar: deckPath != nil || boolValue(obj["avatar"]) || boolValue((obj["user"] as? [String: Any])?["avatar"]),
+            deckAvatarPath: deckPath,
+            anonId: anonId,
             left: boolValue(obj["left"]),
             textColorHex: umColorString(settings["textColor"]),
             nameColorHex: umColorString(settings["nameColor"]),

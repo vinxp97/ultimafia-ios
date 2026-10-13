@@ -26,6 +26,7 @@ nonisolated enum UMCacheLocation {
     static var images: URL { root.appendingPathComponent("UMImages", isDirectory: true) }
     static var nameFonts: URL { dir("UMNameFonts") }
     static var sounds: URL { dir("Sounds") }
+    static var anonDecks: URL { dir("AnonDecks") }
 
     /// Move the old Caches/ folders and sound files here once, then remove the leftovers.
     private static func migrateFromCachesOnce(into root: URL) {
