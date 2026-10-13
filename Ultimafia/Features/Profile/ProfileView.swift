@@ -321,7 +321,7 @@ extension ProfileView {
             settingPicker("Player List Size", caption: "Size of the player list on iPad landscape.",
                           selection: $playerListSize, options: [("Compact", "compact"), ("Expanded", "expanded")])
         }
-        settingPicker("Vote List Display", caption: "Show voters and their votes as avatars or names.",
+        settingPicker("Vote List Display", caption: "Show who they vote for as avatars or names.",
                       selection: $voteListDisplay, options: [("Avatars", "avatars"), ("Names", "names")])
     }
 

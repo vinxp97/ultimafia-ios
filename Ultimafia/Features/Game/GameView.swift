@@ -1825,17 +1825,18 @@ private struct MeetingBlock: View {
         } label: {
             HStack(spacing: 8) {
                 Text("\(count)")
-                    .font(.footnote.monospacedDigit().weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)
                     .frame(minWidth: 26, minHeight: 20)
                     .background(leader ? Color(red: 0.78, green: 0.29, blue: 0.29) : Color(red: 0.24, green: 0.45, blue: 0.75),
                                 in: Capsule())
-                if avatars, isPlayer, let p = session.player(for: target) {
+                // Voter is always an avatar; the setting only changes how their pick is shown.
+                if isPlayer, let p = session.player(for: target) {
                     UMAvatarView(player: p, size: 24)
                 } else {
                     Text(label)
-                        .font(.body.weight(isPlayer ? .bold : .regular))
+                        .font(.system(size: 14, weight: isPlayer ? .semibold : .regular))
                         .foregroundStyle(isPlayer ? Color.white : UMTheme.muted)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -1843,7 +1844,7 @@ private struct MeetingBlock: View {
                 }
                 if !theirPick.isEmpty {
                     Text("votes")
-                        .font(.body)
+                        .font(.system(size: 11))
                         .foregroundStyle(UMTheme.muted)
                         .fixedSize()
                     if avatars, pickIds.allSatisfy({ session.player(for: $0) != nil }) {
@@ -1857,7 +1858,7 @@ private struct MeetingBlock: View {
                         }
                     } else {
                         Text(theirPick)
-                            .font(.body.weight(.bold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(UMTheme.roleMention)
                             .lineLimit(1)
                             .truncationMode(.tail)
