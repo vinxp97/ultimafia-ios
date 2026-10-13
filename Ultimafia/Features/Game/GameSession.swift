@@ -483,11 +483,11 @@ final class GameSession {
         return deadByPhase[phase]?.contains(line.senderId) ?? false
     }
 
+    /// Web PlayerList: every section filters `!p.left`. The server's "players" payload also carries
+    /// `playersGone` (people who left pregame, flagged in `left[]`), so they must be dropped in every phase.
     var villagePlayers: [GamePlayer] {
-        let ordered = orderedPlayers(players)
-        if currentPhaseId < 0, !finished {
-            return ordered.filter { !$0.left }
-        }
+        let ordered = orderedPlayers(players).filter { !$0.left }
+        if currentPhaseId < 0, !finished { return ordered }
         let dead = viewedDeadIds
         return ordered.filter { !dead.contains($0.id) }
     }
@@ -495,7 +495,7 @@ final class GameSession {
     var graveyardPlayers: [GamePlayer] {
         guard isGameInProgress || finished else { return [] }
         let dead = viewedDeadIds
-        return orderedPlayers(players).filter { dead.contains($0.id) }
+        return orderedPlayers(players).filter { !$0.left && dead.contains($0.id) }
     }
 
     /// Same as desktop `getOrderedPlayers`. Do not sort by name.
