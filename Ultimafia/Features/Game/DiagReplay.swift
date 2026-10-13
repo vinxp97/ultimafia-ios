@@ -47,6 +47,11 @@ struct DiagReplayView: View {
             UMDiag.log("replay", "send m2-\(n)")
             s.debugFeed("message", msg(n, phase: 2)); try? await Task.sleep(for: .milliseconds(250))
         }
+        for (i, t) in ["An Alien followed by a long sentence that should wrap across the whole paragraph",
+                       "Player5 claimed Cop, but I think the Alien probed them last night and the Mafia will hit the Doctor next, so watch the votes"].enumerated() {
+            s.debugFeed("message", ["id": "wrap\(i)", "senderId": "p\(4 + i)", "content": t,
+                                    "time": Date().timeIntervalSince1970 * 1000, "meetingId": "village"])
+        }
         UMDiag.log("replay", "done")
     }
 }

@@ -46,11 +46,10 @@ func umRoleMentionText(_ attr: AttributedString, gameType: String) -> Text {
 }
 
 /// Bundled role icon scaled for inline text. Remote-only icons are skipped (text still styled).
-private func umRoleIconImage(_ name: String, gameType: String) -> UIImage? {
+func umRoleIconImage(_ name: String, gameType: String, side: CGFloat = 16) -> UIImage? {
     let roleName = name.split(separator: ":").first.map(String.init) ?? name
     guard let url = RoleArt.roleURL(gameType: gameType, name: roleName), url.isFileURL,
           let image = UIImage(contentsOfFile: url.path) else { return nil }
-    let side: CGFloat = 16
     return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
         image.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
     }

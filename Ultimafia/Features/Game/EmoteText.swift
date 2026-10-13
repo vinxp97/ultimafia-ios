@@ -35,8 +35,11 @@ struct FlowWrap: Layout {
         }
         for sub in subviews {
             let available = width.isFinite ? max(width - x, 0) : .infinity
+            // Natural (single-line) width decides the row: proposing only the leftover width
+            // made text wrap inside a narrow column beside the previous piece.
+            let ideal = sub.sizeThatFits(.unspecified)
             var size = sub.sizeThatFits(ProposedViewSize(width: available, height: nil))
-            if x > 0, width.isFinite, size.width > available + 0.5 {
+            if x > 0, width.isFinite, ideal.width > available + 0.5 {
                 centerRow()
                 rowStart = items.count
                 y += rowH + spacing
@@ -91,12 +94,30 @@ struct EmoteText: View {
         let catalog = RoleCatalog.shared
         let _ = catalog.isReady
         let _ = UMTerminology.shared.version
-        let pieces = tokenize()
+        let segments = Self.segments(tokenize())
         FlowWrap(spacing: 3) {
-            ForEach(pieces) { piece in
-                pieceView(piece)
+            ForEach(segments) { seg in
+                if seg.pieces.count == 1, seg.pieces[0].text == nil || seg.pieces[0].player != nil {
+                    pieceView(seg.pieces[0])
+                } else {
+                    runText(seg.pieces)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
+        .environment(\.openURL, OpenURLAction { url in
+            let key = (url.host(percentEncoded: false) ?? url.host ?? "")
+            let name = key.removingPercentEncoding ?? key
+            if url.scheme == UMTermSheet.scheme, let term = UMTerminology.shared.term(name) {
+                selectedTerm = term
+                return .handled
+            }
+            if url.scheme == UMRoleMentionItem.scheme, !name.isEmpty {
+                selectedRole = MentionedRole(name: name)
+                return .handled
+            }
+            return .systemAction
+        })
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .sheet(item: $selectedTerm) { term in
             UMTermSheet(term: term)
@@ -108,6 +129,52 @@ struct EmoteText: View {
                 otherRoles: otherRoles
             )
         }
+    }
+
+    /// Consecutive text and role pieces render as ONE Text so a message wraps as a single
+    /// paragraph; only avatars, emotes and stickers stay separate views in the flow.
+    private struct Segment: Identifiable {
+        let id: Int
+        var pieces: [Piece]
+    }
+
+    private static func segments(_ pieces: [Piece]) -> [Segment] {
+        var out: [Segment] = []
+        var run: [Piece] = []
+        func flush() {
+            if !run.isEmpty { out.append(Segment(id: out.count, pieces: run)); run = [] }
+        }
+        for p in pieces {
+            if p.player == nil, p.url == nil {
+                run.append(p)
+            } else {
+                flush()
+                out.append(Segment(id: out.count, pieces: [p]))
+            }
+        }
+        flush()
+        return out
+    }
+
+    private func runText(_ pieces: [Piece]) -> Text {
+        let type = gameType.isEmpty ? "Mafia" : gameType
+        let base: Font = italic ? .body.italic() : .body
+        var out = Text("")
+        for p in pieces {
+            if let role = p.role {
+                if let icon = umRoleIconImage(role, gameType: type, side: max(14, emoteSize - 2)) {
+                    out = Text("\(out)\(Text(Image(uiImage: icon)).baselineOffset(-3))\u{00A0}")
+                }
+                var attr = AttributedString(p.text ?? role)
+                let encoded = role.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? role
+                attr.link = URL(string: "\(UMRoleMentionItem.scheme)://\(encoded)")
+                attr.foregroundColor = roleColor
+                out = Text("\(out)\(Text(attr).font(base.weight(.semibold)).foregroundColor(roleColor))")
+            } else {
+                out = Text("\(out)\(termText(p.text ?? "").font(base).foregroundColor(color))")
+            }
+        }
+        return out
     }
 
     @ViewBuilder
