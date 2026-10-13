@@ -19,7 +19,7 @@ enum GameWinMusic {
     }
 
     static func stop() {
-        playing.forEach { $0.stop() }
+        UMAudioSession.stop(playing)
         playing.removeAll()
     }
 
@@ -59,16 +59,14 @@ enum GameWinMusic {
 
     static func playWin(_ fileName: String) {
         guard let url = bundledURL(fileName) else { return }
-        activateSession()
-        do {
-            let next = try AVAudioPlayer(contentsOf: url)
-            next.currentTime = 0
-            next.volume = GameAudio.music
-            next.prepareToPlay()
-            next.play()
+        let volume = GameAudio.music
+        Task { @MainActor in
+            guard let next = await UMAudioSession.startPlayer(fileName, volume: volume, make: {
+                try AVAudioPlayer(contentsOf: url)
+            }) else { return }
             playing.removeAll { !$0.isPlaying }
             playing.append(next)
-        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
+        }
     }
 
     private static func bundledURL(_ name: String) -> URL? {

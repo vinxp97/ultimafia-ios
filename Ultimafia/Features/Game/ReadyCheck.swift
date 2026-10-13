@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import UserNotifications
 import AVFoundation
+import QuartzCore
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -10,25 +11,82 @@ import AppKit
 #endif
 
 
-/// AVAudioSession setCategory/setActive must not run on the main thread (Hang Risk).
-enum UMAudioSession {
-    private static let queue = DispatchQueue(label: "com.ultimafia.audiosession")
+/// Box so a player can cross from the audio queue back to the main actor.
+nonisolated final class UMPlayerBox: @unchecked Sendable {
+    let players: [AVAudioPlayer]
+    init(_ players: [AVAudioPlayer]) { self.players = players }
+}
+
+/// All AVAudioSession and AVAudioPlayer create/prepare/play/stop work runs on one serial queue,
+/// never the main thread. Starting a player on main implicitly activates the session there
+/// ("AVAudioSession Hang Risk"), which on device can stall the UI (and the socket, whose delegate
+/// queue is main) for seconds, e.g. bell + music change + death sound at a phase change.
+nonisolated enum UMAudioSession {
+    static let queue = DispatchQueue(label: "com.ultimafia.audiosession", qos: .userInitiated)
+    private nonisolated(unsafe) static var active = false
+    private nonisolated(unsafe) static var observing = false
 
     /// Fire-and-forget, off the main thread. Always `.playback` + `.mixWithOthers` so Spotify /
-    /// Apple Music keep playing under game sounds. Re-asserted on each call (cheap) in case another
-    /// component changed the category; never deactivated, so other apps are never stopped by us.
+    /// Apple Music keep playing under game sounds; never deactivated.
     static func activatePlayback() {
+        queue.async { ensureActive() }
+    }
+
+    /// Queue only. Activates once; interruptions / media-server resets make the next call re-activate.
+    private static func ensureActive() {
         #if os(iOS)
-        queue.async {
-            let session = AVAudioSession.sharedInstance()
-            if session.category != .playback || !session.categoryOptions.contains(.mixWithOthers) {
-                do { try session.setCategory(.playback, mode: .default, options: [.mixWithOthers]) }
-                catch { UMDiag.log("audio", "setCategory failed: \(error.localizedDescription)") }
+        let session = AVAudioSession.sharedInstance()
+        if !observing {
+            observing = true
+            for name in [AVAudioSession.interruptionNotification, AVAudioSession.mediaServicesWereResetNotification] {
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { _ in
+                    queue.async { active = false }
+                }
             }
-            do { try session.setActive(true) }
-            catch { UMDiag.log("audio", "setActive failed: \(error.localizedDescription)") }
         }
+        if active, session.category == .playback, session.categoryOptions.contains(.mixWithOthers) { return }
+        let t0 = CACurrentMediaTime()
+        if session.category != .playback || !session.categoryOptions.contains(.mixWithOthers) {
+            do { try session.setCategory(.playback, mode: .default, options: [.mixWithOthers]) }
+            catch { UMDiag.log("audio", "setCategory failed: \(error.localizedDescription)") }
+        }
+        do { try session.setActive(true); active = true }
+        catch { UMDiag.log("audio", "setActive failed: \(error.localizedDescription)") }
+        let ms = Int((CACurrentMediaTime() - t0) * 1000)
+        if ms >= 50 { UMDiag.log("audio", "session activation \(ms)ms (audio queue)") }
         #endif
+    }
+
+    /// Creates, prepares and starts a player on the audio queue; returns it on the caller once playing.
+    static func startPlayer(_ label: String, volume: Float, loops: Int = 0,
+                            make: @escaping @Sendable () throws -> AVAudioPlayer) async -> AVAudioPlayer? {
+        let box: UMPlayerBox? = await withCheckedContinuation { cont in
+            queue.async {
+                ensureActive()
+                let t0 = CACurrentMediaTime()
+                do {
+                    let p = try make()
+                    p.numberOfLoops = loops
+                    p.volume = volume
+                    p.prepareToPlay()
+                    p.play()
+                    let ms = Int((CACurrentMediaTime() - t0) * 1000)
+                    if ms >= 50 { UMDiag.log("audio", "start \(label) \(ms)ms (audio queue)") }
+                    cont.resume(returning: UMPlayerBox([p]))
+                } catch {
+                    UMDiag.log("audio", "player error \(label): \(error.localizedDescription)")
+                    cont.resume(returning: nil)
+                }
+            }
+        }
+        return box?.players.first
+    }
+
+    /// Stops players on the audio queue (AVAudioPlayer.stop can block too).
+    static func stop(_ players: [AVAudioPlayer]) {
+        guard !players.isEmpty else { return }
+        let box = UMPlayerBox(players)
+        queue.async { box.players.forEach { $0.stop() } }
     }
 }
 
@@ -45,7 +103,7 @@ enum ReadyBell {
     static func stop() {
         loadTask?.cancel()
         loadTask = nil
-        player?.stop()
+        if let player { UMAudioSession.stop([player]) }
         player = nil
     }
 
@@ -58,14 +116,11 @@ enum ReadyBell {
         activateSession()
         guard let url = await fileURL() else { return }
         guard !Task.isCancelled else { return }
-        do {
-            let next = try AVAudioPlayer(contentsOf: url)
-            next.numberOfLoops = -1
-            next.volume = GameAudio.alert
-            next.prepareToPlay()
-            next.play()
-            player = next
-        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
+        guard let next = await UMAudioSession.startPlayer("urgent", volume: GameAudio.alert, loops: -1, make: {
+            try AVAudioPlayer(contentsOf: url)
+        }) else { return }
+        if Task.isCancelled { UMAudioSession.stop([next]); return }
+        player = next
     }
 
     private static func activateSession() {
@@ -126,9 +181,8 @@ enum GameSFX {
     }
 
     static func stopNonImportant() {
-        playing.forEach { $0.stop() }
+        UMAudioSession.stop(playing + deathPlaying)
         playing.removeAll()
-        deathPlaying.forEach { $0.stop() }
         deathPlaying.removeAll()
     }
 
@@ -139,12 +193,12 @@ enum GameSFX {
     static func play(_ name: String) {
         let alert = GameAudio.alertSounds.contains(name)
         if let url = bundledURL(name) {
-            playFile(url, alert: alert)
+            Task { @MainActor in await playFile(url, alert: alert) }
             return
         }
         Task { @MainActor in
             guard let url = await fileURL(name) else { return }
-            playFile(url, alert: alert)
+            await playFile(url, alert: alert)
         }
     }
 
@@ -159,18 +213,14 @@ enum GameSFX {
     }
 
     @MainActor
-    private static func playFile(_ url: URL, alert: Bool = false) {
-        activateSession()
-        do {
-            let next = try AVAudioPlayer(contentsOf: url)
-            next.volume = alert ? GameAudio.alert : GameAudio.sfx
-            next.prepareToPlay()
-            next.play()
-            playing.removeAll { !$0.isPlaying }
-            alertPlayers = alertPlayers.filter { id in playing.contains { ObjectIdentifier($0) == id } }
-            if alert { alertPlayers.insert(ObjectIdentifier(next)) }
-            playing.append(next)
-        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
+    private static func playFile(_ url: URL, alert: Bool = false) async {
+        guard let next = await UMAudioSession.startPlayer(url.lastPathComponent,
+                                                          volume: alert ? GameAudio.alert : GameAudio.sfx,
+                                                          make: { try AVAudioPlayer(contentsOf: url) }) else { return }
+        playing.removeAll { !$0.isPlaying }
+        alertPlayers = alertPlayers.filter { id in playing.contains { ObjectIdentifier($0) == id } }
+        if alert { alertPlayers.insert(ObjectIdentifier(next)) }
+        playing.append(next)
     }
 
     @MainActor
@@ -179,10 +229,9 @@ enum GameSFX {
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return }
-            let next = try AVAudioPlayer(data: data)
-            next.volume = GameAudio.death
-            next.prepareToPlay()
-            next.play()
+            guard let next = await UMAudioSession.startPlayer(url.lastPathComponent, volume: GameAudio.death, make: {
+                try AVAudioPlayer(data: data)
+            }) else { return }
             deathPlaying.removeAll { !$0.isPlaying }
             deathPlaying.append(next)
             let wait = min(next.duration, 6)
@@ -271,7 +320,7 @@ enum GameMusic {
     static func stop() {
         loadTask?.cancel()
         loadTask = nil
-        player?.stop()
+        if let player { UMAudioSession.stop([player]) }
         player = nil
         current = nil
     }
@@ -289,15 +338,12 @@ enum GameMusic {
         activateSession()
         guard let url = await fileURL(path) else { return }
         guard !Task.isCancelled, current == path else { return }
-        do {
-            let next = try AVAudioPlayer(contentsOf: url)
-            next.numberOfLoops = -1
-            next.volume = volume(for: path)
-            next.prepareToPlay()
-            next.play()
-            player?.stop()
-            player = next
-        } catch { UMDiag.log("audio", "player error: \(error.localizedDescription)") }
+        guard let next = await UMAudioSession.startPlayer(path, volume: volume(for: path), loops: -1, make: {
+            try AVAudioPlayer(contentsOf: url)
+        }) else { return }
+        guard !Task.isCancelled, current == path else { UMAudioSession.stop([next]); return }
+        if let player { UMAudioSession.stop([player]) }
+        player = next
     }
 
     private static func activateSession() {
