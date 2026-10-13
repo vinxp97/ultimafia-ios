@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
-import GameController
 
 /// Chat input backed by UITextView so Return never ends editing: the delegate catches "\n",
 /// calls `onReturn` (send) and returns false, so the view never resigns first responder and
@@ -49,29 +48,7 @@ struct UMComposerField: UIViewRepresentable {
             label.widthAnchor.constraint(lessThanOrEqualTo: tv.widthAnchor),
         ])
         context.coordinator.placeholderLabel = label
-        context.coordinator.applyTraits(tv)
-        context.coordinator.observeKeyboards(tv)
         return tv
-    }
-
-    /// iPad + hardware keyboard: hide the floating shortcuts bar (undo/redo/paste, keyboard
-    /// options, predictions). Empty bar button groups remove the shortcut buttons; turning off
-    /// autocorrect/spellcheck/inline prediction removes the suggestion strip, so the bar has
-    /// nothing to show. iPhone and iPad with the on-screen keyboard keep their defaults.
-    /// The floating dictation mic has no public opt-out (dictation can't be disabled per field).
-    ///
-    /// `hardware` is only true once UIKit has actually presented the hardware-keyboard UI (no
-    /// software keyboard on screen) while GameController also reports a keyboard. GCKeyboard alone
-    /// can report one when UIKit still shows the on-screen keyboard or has none to show; stripping
-    /// the bar then removed the iPadOS keyboard button, so tapping the composer brought up nothing.
-    static func applyHardwareKeyboardTraits(_ tv: UITextView, hardware: Bool) {
-        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
-        let auto: UITextAutocorrectionType = hardware ? .no : .default
-        let spell: UITextSpellCheckingType = hardware ? .no : .default
-        let inline: UITextInlinePredictionType = hardware ? .no : .default
-        if tv.autocorrectionType != auto { tv.autocorrectionType = auto }
-        if tv.spellCheckingType != spell { tv.spellCheckingType = spell }
-        if tv.inlinePredictionType != inline { tv.inlinePredictionType = inline }
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
@@ -137,74 +114,7 @@ struct UMComposerField: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: UMComposerField
         weak var placeholderLabel: UILabel?
-        private var keyboardObservers: [NSObjectProtocol] = []
-        /// The system's own bar groups, saved at the moment we clear them (not at view creation,
-        /// when UIKit hasn't populated them yet; restoring that empty snapshot was what made the
-        /// show-keyboard / dictation button vanish until a rotation rebuilt the bar).
-        private var savedGroups: (leading: [UIBarButtonItemGroup], trailing: [UIBarButtonItemGroup])?
-
-        /// Confirmed hardware-keyboard mode (see applyHardwareKeyboardTraits). Starts false so the
-        /// first focus always gets the stock bar and on-screen keyboard behavior.
-        private var hardwareMode = false
-
-        func applyTraits(_ tv: UITextView) {
-            guard UIDevice.current.userInterfaceIdiom == .pad else { return }
-            UMComposerField.applyHardwareKeyboardTraits(tv, hardware: hardwareMode)
-            let item = tv.inputAssistantItem
-            if hardwareMode, savedGroups == nil {
-                savedGroups = (item.leadingBarButtonGroups, item.trailingBarButtonGroups)
-                item.leadingBarButtonGroups = []
-                item.trailingBarButtonGroups = []
-            } else if !hardwareMode, let saved = savedGroups {
-                item.leadingBarButtonGroups = saved.leading
-                item.trailingBarButtonGroups = saved.trailing
-                savedGroups = nil
-            }
-            if tv.isFirstResponder { tv.reloadInputViews() }
-        }
-
-        private func setHardwareMode(_ on: Bool, _ tv: UITextView) {
-            guard on != hardwareMode else { return }
-            hardwareMode = on
-            applyTraits(tv)
-        }
         init(_ parent: UMComposerField) { self.parent = parent }
-
-        deinit { keyboardObservers.forEach(NotificationCenter.default.removeObserver) }
-
-        /// Live: keyboard frame changes decide software vs hardware; attach/detach resets to stock
-        /// so UIKit can bring up (or drop) the on-screen keyboard, then the next frame re-decides.
-        func observeKeyboards(_ tv: UITextView) {
-            guard UIDevice.current.userInterfaceIdiom == .pad, keyboardObservers.isEmpty else { return }
-            for name in [Notification.Name.GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
-                keyboardObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self, weak tv] _ in
-                    guard let self, let tv else { return }
-                    MainActor.assumeIsolated { self.setHardwareMode(false, tv) }
-                })
-            }
-            for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardDidChangeFrameNotification,
-                         UIResponder.keyboardWillShowNotification, UIResponder.keyboardDidShowNotification,
-                         UIResponder.keyboardWillHideNotification, UIResponder.keyboardDidHideNotification] {
-            keyboardObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self, weak tv] note in
-                guard let self, let tv else { return }
-                let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
-                MainActor.assumeIsolated {
-                    guard tv.isFirstResponder else { self.setHardwareMode(false, tv); return }
-                    let screen = tv.window?.screen.bounds ?? UIScreen.main.bounds
-                    let visible = screen.intersection(end).height
-                    // Only when nothing at all is on screen. A collapsed / minimized / floating software
-                    // keyboard still shows the slim bar (visible > 0); clearing it there removed the
-                    // show-keyboard / dictation button for good. Any visible frame restores the stock bar.
-                    self.setHardwareMode(GCKeyboard.coalesced != nil && visible < 1, tv)
-                }
-            })
-            }
-        }
-
-        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
-            applyTraits(textView)
-            return true
-        }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             if text == "\n" {
@@ -242,8 +152,6 @@ struct UMComposerField: UIViewRepresentable {
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            // Next focus starts from the stock bar again.
-            setHardwareMode(false, textView)
             if parent.isFocused { parent.isFocused = false }
         }
     }
