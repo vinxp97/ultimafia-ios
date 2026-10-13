@@ -985,8 +985,23 @@ final class GameSession {
     /// Ids of "Spectator Meeting" chats (only spectators are members, so only they get its lines).
     @ObservationIgnored private var spectatorMeetingIds: Set<String> = []
 
+    /// Server order of the `spectators` payload (spectators, then spectatorsOld = join order).
+    @ObservationIgnored private var spectatorOrder: [String] = []
+
+    /// One entry per person: a re-joining spectator gets a new seat id each time (and old ones stay
+    /// in spectatorsOld), so dedupe by account id (name if absent), keeping the current seat.
+    /// `spectatorPlayers` keeps every id, so chat lines from older seats still resolve.
     var spectatorList: [GamePlayer] {
-        spectatorPlayers.values
+        let ordered = spectatorOrder.compactMap { spectatorPlayers[$0] }
+            + spectatorPlayers.values.filter { !spectatorOrder.contains($0.id) }
+        var latest: [String: GamePlayer] = [:]
+        for s in ordered {
+            let key = (s.userId?.isEmpty == false ? s.userId! : "name:" + s.name.lowercased())
+            // Payload lists current spectators first, then spectatorsOld (JS keeps first insertion
+            // position), so the first seat per person is the one that's here now if any.
+            if latest[key] == nil { latest[key] = s }
+        }
+        return latest.values
             .filter { s in !formerPlayerIds.contains(s.id) && !players.contains { $0.id == s.id } }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -1135,7 +1150,12 @@ final class GameSession {
             var next: [String: GamePlayer] = [:]
             // Server getAllSpectatorInfo also sends spectatorsOld, which includes players who left
             // pregame (createPlayerGoneObj); those seats are never spectators.
-            for p in parsePlayers(data) where !formerPlayerIds.contains(p.id) { next[p.id] = p }
+            var order: [String] = []
+            for p in parsePlayers(data, keyOrder: umJSONTopLevelKeys(socket.lastObjectJSON)) where !formerPlayerIds.contains(p.id) {
+                next[p.id] = p
+                order.append(p.id)
+            }
+            spectatorOrder = order
             spectatorPlayers = next
         case "playerJoin":
             if let p = parsePlayer(data) {
