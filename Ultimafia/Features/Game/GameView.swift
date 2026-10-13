@@ -346,15 +346,6 @@ private final class VisibleIdBuffer {
     var scheduled = false
 }
 
-private struct ChatScrollPin: Equatable {
-    var atBottom: Bool
-    var atTop: Bool
-    var contentH: CGFloat
-    var containerH: CGFloat
-    /// Scrolled past the end of the content (blank chat until the user drags).
-    var overscrolled: Bool = false
-}
-
 private struct GameChatPane: View {
     var session: GameSession
     @Binding var draft: String
@@ -363,14 +354,9 @@ private struct GameChatPane: View {
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
-    @State private var stickToBottom = true
-    /// Finger on the chat or a fling still decelerating. Only user scrolling may unpin/repin
-    /// the chat; layout changes (new rows, send, keyboard, rotation) must not.
-    @State private var userScrolling = false
-    @State private var lastPinAtBottom = true
+    @State private var transcriptScroll = UMTranscriptScrollController()
     @State private var unreadCount = 0
     @State private var composerOverlayHeight: CGFloat = 0
-    @State private var atTop = false
     @State private var visibleLineIds: Set<String> = []
     @State private var visibleBuffer = VisibleIdBuffer()
     /// Phase whose rows the scroll tracking belongs to. Only changed by the phase-switch handler, so
@@ -379,6 +365,7 @@ private struct GameChatPane: View {
     @State private var trackedPhase: Int?
     /// True while a phase switch restores its position; tracking and auto-follow stand down.
     @State private var restoringScroll = false
+    @State private var restoreGeneration = UUID()
 
     private var chatLines: [ChatLine] {
         session.displayedMessages.filter { showVotingLog || !$0.isVoteLog }
@@ -394,11 +381,29 @@ private struct GameChatPane: View {
         seenLineIds.formUnion(chatLines.map(\.id))
     }
 
+    private func noteVisibility(_ id: String, visible: Bool, phase: Int) {
+        guard phase == trackedPhase, phase == session.viewingPhaseId else { return }
+        let buffer = visibleBuffer
+        if visible { buffer.pending.insert(id) } else { buffer.pending.remove(id) }
+        guard !buffer.scheduled else { return }
+        buffer.scheduled = true
+        DispatchQueue.main.async {
+            buffer.scheduled = false
+            guard !restoringScroll, phase == trackedPhase, phase == session.viewingPhaseId else { return }
+            guard buffer.pending != visibleLineIds else { return }
+            visibleLineIds = buffer.pending
+            let first = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
+            session.chatAnchorId = first
+            if let first { session.phaseScrollAnchors[phase] = first }
+            recomputeUnread()
+        }
+    }
+
     /// Unseen = live messages that have never been on screen. Reviews have no incoming messages.
     private func recomputeUnread() {
         guard !session.isReview, session.isViewingLive else { unreadCount = 0; return }
         seenLineIds.formUnion(visibleLineIds)
-        if stickToBottom { markAllSeen(); unreadCount = 0; return }
+        if transcriptScroll.isFollowingLatest { markAllSeen(); unreadCount = 0; return }
         unreadCount = chatLines.reduce(0) { $0 + (seenLineIds.contains($1.id) ? 0 : 1) }
     }
 
@@ -406,8 +411,9 @@ private struct GameChatPane: View {
         VStack(spacing: 0) {
             if showsPhaseBar { PhaseBar(session: session) }
             ScrollViewReader { proxy in
-                ScrollView {
+            ScrollView(.vertical) {
                     let lines = chatLines
+                    let phase = session.viewingPhaseId
                     LazyVStack(alignment: .leading, spacing: chatLayout == .compact ? 4 : 2) {
                         Color.clear
                             .frame(height: 1)
@@ -427,42 +433,29 @@ private struct GameChatPane: View {
                             )
                             .id(line.id)
                             .onAppear { UMDiag.messageRendered(line.id) }
+                            .onScrollVisibilityChange(threshold: 0.6) { visible in
+                                noteVisibility(line.id, visible: visible, phase: phase)
+                            }
                         }
                         Color.clear
                             .frame(height: 1)
                             .id("chat-bottom")
                     }
-                    .scrollTargetLayout()
-                    .padding(12)
-                    .padding(.bottom, 16)
-                }
-                .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.6) { ids in
-                    let buffer = visibleBuffer
-                    buffer.pending = Set(ids)
-                    guard !buffer.scheduled else { return }
-                    buffer.scheduled = true
-                    DispatchQueue.main.async {
-                        buffer.scheduled = false
-                        guard buffer.pending != visibleLineIds else { return }
-                        visibleLineIds = buffer.pending
-                        let first = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
-                        session.chatAnchorId = first
-                        if !restoringScroll, let first, let phase = trackedPhase, phase == session.viewingPhaseId {
-                            session.phaseScrollAnchors[phase] = first
-                        }
-                        recomputeUnread()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        UMTranscriptScrollBridge(controller: transcriptScroll)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
                 }
                 .pointerScrolling()
                 .contentMargins(.bottom, composerOverlayHeight, for: .scrollContent)
-                // Bottom anchoring only while following the latest. On a past/review phase it kept
-                // re-pinning to the bottom as lazy rows measured, undoing the restored position.
-                .defaultScrollAnchor(stickToBottom ? .bottom : .top)
                 .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .top) {
-                    if !atTop {
+                    if !transcriptScroll.isAtTop {
                         Button {
-                            jumpToTop(proxy: proxy)
+                            jumpToTop()
                         } label: {
                             Image(systemName: "chevron.up")
                                 .font(.body.weight(.bold))
@@ -476,7 +469,7 @@ private struct GameChatPane: View {
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if showTypingIndicator, stickToBottom {
+                    if showTypingIndicator, transcriptScroll.isFollowingLatest {
                         VStack(alignment: .trailing, spacing: 6) {
                             ForEach(session.typingPlayers) { player in
                                 HStack(spacing: 4) {
@@ -492,59 +485,12 @@ private struct GameChatPane: View {
                         .padding(.top, 4)
                     }
                 }
-                .onScrollGeometryChange(for: ChatScrollPin.self) { geo in
-                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height.rounded(), containerH: geo.containerSize.height.rounded(), overscrolled: pastEnd(geo))
-                } action: { old, pin in
-                    if atTop != pin.atTop { atTop = pin.atTop }
-                    lastPinAtBottom = pin.atBottom
-                    // Content shrank under the offset (lazy rows measured smaller than estimated after
-                    // a big history batch): the view sat past the end, showing an empty chat until the
-                    // user dragged. pinnedToLatest counts that as "at bottom", so nothing corrected it.
-                    if pin.overscrolled, !old.overscrolled, !userScrolling {
-                        UMDiag.log("scroll", "past end (content \(Int(pin.contentH)) container \(Int(pin.containerH))), snapping back")
-                        DispatchQueue.main.async {
-                            guard !userScrolling else { return }
-                            if stickToBottom { jumpToLatest(proxy: proxy) } else if let last = chatLines.last?.id { proxy.scrollTo(last, anchor: .bottom) }
-                        }
-                    }
-                    // Root cause of the "stuck after sending" bug: this used to treat any frame that
-                    // wasn't at the bottom as the user scrolling up. After a send/new row the lazy
-                    // rows finish measuring a frame after scrollTo, so the view briefly sat short of
-                    // the bottom and got unpinned for good. Now only user scrolling changes the pin.
-                    if userScrolling {
-                        if stickToBottom != pin.atBottom {
-                            stickToBottom = pin.atBottom
-                            recomputeUnread()
-                        }
-                        return
-                    }
-                    // Layout change (new rows, keyboard, composer, rotation/columns): stay pinned.
-                    if stickToBottom, !session.isReview,
-                       !pin.atBottom || abs(pin.containerH - old.containerH) > 1 {
-                        // Defer the scroll so it doesn't re-trigger geometry updates within this frame.
-                        DispatchQueue.main.async {
-                            if stickToBottom, !userScrolling { jumpToLatest(proxy: proxy) }
-                        }
-                    }
-                }
-                .onScrollPhaseChange { old, phase in
-                    let isUser: (ScrollPhase) -> Bool = { $0 == .interacting || $0 == .decelerating || $0 == .tracking }
-                    let user = isUser(phase)
-                    if user != userScrolling { userScrolling = user }
-                    // Scroll settled after the user moved it: pinned iff they ended at the bottom.
-                    if phase == .idle, isUser(old), !session.isReview, stickToBottom != lastPinAtBottom {
-                        stickToBottom = lastPinAtBottom
-                        recomputeUnread()
-                    }
-                }
                 .overlay(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        if !stickToBottom, !session.isReview {
+                        if !transcriptScroll.isAtBottom, !session.isReview {
                             Button {
                                 markAllSeen()
                                 unreadCount = 0
-                                stickToBottom = true
-                                jumpToLatest(proxy: proxy)
+                                jumpToLatest()
                             } label: {
                                 Text(unreadCount > 0 ? "\(unreadCount) unseen message\(unreadCount == 1 ? "" : "s") ↓" : "Scroll to latest message ↓")
                                     .font(.caption.weight(.semibold))
@@ -557,112 +503,82 @@ private struct GameChatPane: View {
                             .padding(.bottom, composerOverlayHeight + 8)
                             .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) unseen messages, scroll to latest" : "Scroll to latest message")
                         }
-
-                    }
                 }
-                .onChange(of: session.displayedMessages.count) { old, new in
-                    // Review: a phase's lines are static; never auto-follow to the bottom.
-                    if session.isReview || restoringScroll { return }
-                    if stickToBottom {
-                        markAllSeen()
-                        unreadCount = 0
-                        jumpToLatestIfPinned(proxy: proxy)
-                    } else {
-                        recomputeUnread()
-                    }
+                .onChange(of: session.displayedMessages.count) { _, _ in
+                    // Phase restoration owns navigation while the rows swap.
+                    guard !restoringScroll else { return }
+                    jumpToLatestIfPinned()
                 }
                 .onChange(of: session.viewingPhaseId) { oldPhase, newPhase in
-                    session.phasePinned[oldPhase] = stickToBottom
+                    session.phasePinned[oldPhase] = transcriptScroll.isFollowingLatest
+                    transcriptScroll.setFollowingAllowed(!session.isReview && session.isViewingLive)
                     trackedPhase = newPhase
-                    restoringScroll = true
-                    // Re-assert after the new rows have laid out, then let tracking resume.
-                    let restore = session.phaseScrollAnchors[newPhase]
-                    for delay in [0.05, 0.15, 0.3] {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                            guard session.viewingPhaseId == newPhase else { return }
-                            if stickToBottom { jumpToLatest(proxy: proxy) }
-                            else if let restore, chatLines.contains(where: { $0.id == restore }) { proxy.scrollTo(restore, anchor: .top) }
-                            else { proxy.scrollTo("chat-top", anchor: .top) }
-                            if delay == 0.3 { restoringScroll = false }
-                        }
-                    }
+                    visibleBuffer.pending.removeAll()
+                    visibleLineIds.removeAll()
                     markAllSeen()
                     unreadCount = 0
                     let forceTop = session.reviewScrollTopPending
                     session.reviewScrollTopPending = false
-                    // Live phase of a running game: keep following the bottom unless the user had
-                    // scrolled up there, then return to where they were.
-                    if !session.isReview, !forceTop, newPhase == session.currentPhaseId {
-                        if session.phasePinned[newPhase] == false,
-                           let anchor = session.phaseScrollAnchors[newPhase],
-                           chatLines.contains(where: { $0.id == anchor }) {
-                            stickToBottom = false
-                            proxy.scrollTo(anchor, anchor: .top)
-                            DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
-                            recomputeUnread()
-                        } else {
-                            stickToBottom = true
-                            jumpToLatest(proxy: proxy)
-                        }
-                        return
-                    }
-                    // Any other phase (and every review phase): its own remembered spot, or its top
-                    // (newspaper if any, else first message) the first time it's opened.
-                    stickToBottom = false
-                    if !forceTop, let anchor = session.phaseScrollAnchors[newPhase],
-                       chatLines.contains(where: { $0.id == anchor }) {
-                        proxy.scrollTo(anchor, anchor: .top)
-                        // Again after the new phase's rows lay out.
-                        DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
+                    let live = !session.isReview && !forceTop && newPhase == session.currentPhaseId
+                    let anchor = forceTop ? nil : session.phaseScrollAnchors[newPhase]
+                    if live, session.phasePinned[newPhase] != false || anchor == nil {
+                        restoringScroll = false
+                        restoreGeneration = UUID()
+                        jumpToLatest()
                     } else {
-                        jumpToTop(proxy: proxy)
-                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
-                    }
-                }
-                .onChange(of: chatFocused.wrappedValue) { _, focused in
-                    guard focused, stickToBottom else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        if stickToBottom { jumpToLatest(proxy: proxy) }
+                        restorePhasePosition(anchor: anchor, phase: newPhase, proxy: proxy)
                     }
                 }
                 .onAppear {
-                    // Returning from the lobby: restore position and keep unseen messages unseen.
+                    transcriptScroll.setFollowingAllowed(!session.isReview && session.isViewingLive)
+                    trackedPhase = session.viewingPhaseId
                     if session.chatHasOpened, !session.chatPinnedToBottom, let anchor = session.chatAnchorId,
                        chatLines.contains(where: { $0.id == anchor }) {
-                        stickToBottom = false
-                        DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
+                        restorePhasePosition(anchor: anchor, phase: session.viewingPhaseId, proxy: proxy)
                         recomputeUnread()
-                    } else if session.isReview && session.reviewScrollTopPending {
+                    } else if session.isReview || !session.isViewingLive {
+                        let anchor = session.reviewScrollTopPending ? nil : session.phaseScrollAnchors[session.viewingPhaseId]
                         session.reviewScrollTopPending = false
                         markAllSeen()
-                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
+                        restorePhasePosition(anchor: anchor, phase: session.viewingPhaseId, proxy: proxy)
                     } else {
+                        // The native bridge follows actual UIKit bounds as rows/keyboard lay out.
                         markAllSeen()
-                        stickToBottom = true
-                        jumpToLatest(proxy: proxy)
+                        session.chatPinnedToBottom = true
+                        jumpToLatest()
                     }
                     session.chatHasOpened = true
                     trackedPhase = session.viewingPhaseId
                 }
-                .onChange(of: stickToBottom) { _, pinned in
-                    session.chatPinnedToBottom = pinned
+                .onChange(of: session.isViewingLive) { _, live in
+                    // A phase switch must record the old pin before changing the policy.
+                    guard trackedPhase == session.viewingPhaseId else { return }
+                    transcriptScroll.setFollowingAllowed(!session.isReview && live)
                 }
-                .onChange(of: session.chatJumpTopTick) { _, _ in jumpToTop(proxy: proxy) }
+                .onChange(of: transcriptScroll.isFollowingLatest) { _, pinned in
+                    session.chatPinnedToBottom = pinned
+                    recomputeUnread()
+                }
+                .onChange(of: transcriptScroll.isAtBottom) { _, bottom in
+                    if bottom { recomputeUnread() }
+                }
+                .onChange(of: session.chatJumpTopTick) { _, _ in jumpToTop() }
                 .onChange(of: session.chatJumpBottomTick) { _, _ in
-                    // Jump to the newest line and resume following.
                     markAllSeen()
                     unreadCount = 0
-                    stickToBottom = true
-                    jumpToLatest(proxy: proxy)
+                    jumpToLatest()
                 }
             }
         }
         .overlay(alignment: .bottom) {
-            // Only the pills draw a glass background; transcript content continues behind them.
+            // Outside the transcript scroll hierarchy, but floating above its content rather
+            // than reserving a separate opaque strip. Only the pills draw a glass background.
             if session.showComposer {
                 ChatComposer(session: session, draft: $draft, chatFocused: chatFocused)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                        if abs(composerOverlayHeight - height) > 0.25 { composerOverlayHeight = height }
+                        if abs(composerOverlayHeight - height) > 0.25 {
+                            composerOverlayHeight = height
+                        }
                     }
             }
         }
@@ -671,40 +587,54 @@ private struct GameChatPane: View {
         }
     }
 
-    private func pinnedToLatest(_ geo: ScrollGeometry) -> Bool {
-        let slack: CGFloat = 48
-        if geo.contentSize.height <= geo.containerSize.height + slack {
-            return true
+    /// Scoped navigation retries only for a phase switch, never geometry or draft updates.
+    private func restorePhasePosition(anchor: String?, phase: Int, proxy: ScrollViewProxy) {
+        transcriptScroll.pauseFollowing()
+        restoringScroll = true
+        let generation = UUID()
+        restoreGeneration = generation
+        let target = anchor.flatMap { id in chatLines.contains(where: { $0.id == id }) ? id : nil }
+        for delay in [0.05, 0.15, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard restoringScroll, restoreGeneration == generation,
+                      trackedPhase == phase, session.viewingPhaseId == phase else { return }
+                if let target { proxy.scrollTo(target, anchor: .top) }
+                else { transcriptScroll.requestTop() }
+                if delay == 0.3 {
+                    restoringScroll = false
+                    visibleLineIds = visibleBuffer.pending
+                    if let first = chatLines.first(where: { visibleLineIds.contains($0.id) })?.id {
+                        session.chatAnchorId = first
+                        session.phaseScrollAnchors[phase] = first
+                    }
+                    recomputeUnread()
+                }
+            }
         }
-        return geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - slack
     }
 
-    private func pastEnd(_ geo: ScrollGeometry) -> Bool {
-        let maxY = geo.contentSize.height + geo.contentInsets.bottom - geo.containerSize.height
-        return geo.contentOffset.y > max(maxY, -geo.contentInsets.top) + 24
-    }
-
-    private func pinnedToTop(_ geo: ScrollGeometry) -> Bool {
-        geo.contentOffset.y <= 24
-    }
-
-    private func jumpToLatestIfPinned(proxy: ScrollViewProxy) {
-        guard session.isViewingLive, let last = session.displayedMessages.last else { return }
+    private func jumpToLatestIfPinned() {
+        guard !session.isReview, session.isViewingLive, let last = session.displayedMessages.last else { return }
         let mine = last.senderId == session.selfId
-        if stickToBottom || mine {
-            stickToBottom = true
-            jumpToLatest(proxy: proxy)
+        if transcriptScroll.isFollowingLatest || mine {
+            markAllSeen()
+            unreadCount = 0
+            jumpToLatest()
+        } else {
+            recomputeUnread()
         }
     }
 
-    private func jumpToLatest(proxy: ScrollViewProxy) {
-        let target = session.displayedMessages.last?.id ?? "chat-bottom"
-        proxy.scrollTo(target, anchor: .bottom)
+    private func jumpToLatest() {
+        restoringScroll = false
+        restoreGeneration = UUID()
+        transcriptScroll.requestLatest()
     }
 
-    private func jumpToTop(proxy: ScrollViewProxy) {
-        stickToBottom = false
-        proxy.scrollTo("chat-top", anchor: .top)
+    private func jumpToTop() {
+        restoringScroll = false
+        restoreGeneration = UUID()
+        transcriptScroll.requestTop()
     }
 }
 
