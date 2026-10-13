@@ -928,7 +928,26 @@ final class GameSession {
     }
 
     func player(for senderId: String) -> GamePlayer? {
-        players.first(where: { $0.id == senderId }) ?? knownPlayers[senderId]
+        players.first(where: { $0.id == senderId }) ?? knownPlayers[senderId] ?? spectatorPlayers[senderId]
+    }
+
+    /// Spectators (incl. you when spectating), from the server's `spectators` broadcast:
+    /// seat id -> the same player-info shape as `players` (name, avatar, colors, emotes).
+    var spectatorPlayers: [String: GamePlayer] = [:]
+    /// Ids of "Spectator Meeting" chats (only spectators are members, so only they get its lines).
+    @ObservationIgnored private var spectatorMeetingIds: Set<String> = []
+
+    var spectatorList: [GamePlayer] {
+        spectatorPlayers.values
+            .filter { s in !players.contains { $0.id == s.id } }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Line written by a spectator (in the Spectator Meeting, or by a known spectator seat).
+    func isSpectatorLine(_ line: ChatLine) -> Bool {
+        guard !line.isServer, !line.isQuote else { return false }
+        if let m = line.meetingId, spectatorMeetingIds.contains(m) { return true }
+        return spectatorPlayers[line.senderId] != nil && !players.contains { $0.id == line.senderId }
     }
 
     private func applyIncomingTyping(_ data: Any?) {
@@ -1062,6 +1081,10 @@ final class GameSession {
             applySetup(data)
         case "players":
             players = parsePlayers(data, keyOrder: umJSONTopLevelKeys(socket.lastObjectJSON))
+        case "spectators":
+            var next: [String: GamePlayer] = [:]
+            for p in parsePlayers(data) { next[p.id] = p }
+            spectatorPlayers = next
         case "playerJoin":
             if let p = parsePlayer(data) {
                 players.removeAll { $0.id == p.id }
@@ -1477,7 +1500,7 @@ final class GameSession {
         if senderId == "server" { name = "Server" }
         else if senderId == "vote" { name = "Vote" }
         else if senderId == "anonymous" { name = "Anonymous" }
-        else { name = players.first(where: { $0.id == senderId })?.name ?? (obj["senderName"] as? String) ?? "Player" }
+        else { name = players.first(where: { $0.id == senderId })?.name ?? spectatorPlayers[senderId]?.name ?? (obj["senderName"] as? String) ?? "Player" }
         let isQuote = boolValue(obj["isQuote"])
         return ChatLine(
             id: (obj["id"] as? String) ?? UUID().uuidString,
@@ -1544,6 +1567,7 @@ final class GameSession {
                     abilities: abilities
                 )
                 nextSpeech.removeAll { $0.id == id }
+                if channel.name == "Spectator Meeting" { spectatorMeetingIds.insert(id) }
                 if amMember || spectate {
                     nextSpeech.append(channel)
                 }

@@ -1147,6 +1147,11 @@ private struct ChatRow: View {
                                         .font(.system(size: 14))
                                         .foregroundStyle(UMTheme.deadName)
                                 }
+                                if session.isSpectatorLine(line) {
+                                    Text(" (spectator)")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(UMTheme.deadName)
+                                }
                             }
                         } else {
                             Text(line.senderId == "anonymous" ? "Anonymous" : line.senderName)
@@ -1267,6 +1272,11 @@ private struct ChatRow: View {
                                         .font(.system(size: 14))
                                         .foregroundStyle(UMTheme.deadName)
                                 }
+                                if session.isSpectatorLine(line) {
+                                    Text(" (spectator)")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(UMTheme.deadName)
+                                }
                             }
             } else {
                 Text(line.senderId == "anonymous" ? "Anonymous" : line.senderName)
@@ -1302,7 +1312,7 @@ private struct ChatRow: View {
     }
 
     private func chatBodyColor(player: GamePlayer?) -> Color {
-        if line.senderWasDead { return .red }
+        if line.senderWasDead || session.isSpectatorLine(line) { return .red }
         return player?.bodyColor ?? .white
     }
 
@@ -1339,6 +1349,23 @@ private struct GameTownPane: View {
                 Section("Graveyard") {
                     ForEach(session.graveyardPlayers) { player in
                         townRow(player, dead: true)
+                    }
+                }
+            }
+            if !session.spectatorList.isEmpty, !session.isReview {
+                Section("Spectators") {
+                    ForEach(session.spectatorList) { spectator in
+                        HStack(spacing: 8) {
+                            UMAvatarView(userId: spectator.userId, hasAvatar: spectator.avatar,
+                                         name: spectator.name, size: 24, square: spectator.squareAvatar)
+                            PlayerNameView(player: spectator, fontSize: 14, dead: false)
+                                .lineLimit(1)
+                            Text("(spectator)")
+                                .font(.system(size: 13))
+                                .foregroundStyle(UMTheme.deadName)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
                     }
                 }
             }
@@ -1620,8 +1647,12 @@ private struct MeetingBlock: View {
                             .foregroundStyle(UMTheme.roleMention).lineLimit(1)
                     }
                 }
-                ForEach(meeting.targets, id: \.self) { target in
-                    targetRow(target)
+                if session.spectate {
+                    spectatorTally
+                } else {
+                    ForEach(meeting.targets, id: \.self) { target in
+                        targetRow(target)
+                    }
                 }
             }
         }
@@ -1682,6 +1713,31 @@ private struct MeetingBlock: View {
             return String(w.dropLast()) + "ied"
         }
         return w + "ed"
+    }
+
+    /// Spectators: read-only vote counts (who votes for whom is listed above); no buttons.
+    @ViewBuilder
+    private var spectatorTally: some View {
+        let voted = meeting.targets.filter { meeting.count(for: $0) > 0 }
+        if voted.isEmpty {
+            if voterLines.isEmpty {
+                Text("No votes yet").font(.caption).foregroundStyle(UMTheme.muted)
+            }
+        } else {
+            ForEach(voted, id: \.self) { target in
+                HStack {
+                    Text(session.voteLabel(target, meeting: meeting)).lineLimit(1)
+                    Spacer()
+                    Text("\(meeting.count(for: target))")
+                        .font(.subheadline.weight(.bold).monospacedDigit())
+                        .foregroundStyle(UMTheme.muted)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(UMTheme.elevated.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .combine)
+            }
+        }
     }
 
     private func targetRow(_ target: String) -> some View {
