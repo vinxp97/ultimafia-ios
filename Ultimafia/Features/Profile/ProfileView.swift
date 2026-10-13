@@ -9,6 +9,7 @@ struct ProfileView: View {
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.hideTerminology") private var hideTerminology = false
+    @AppStorage("um.playerListSize") private var playerListSize = "compact"
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
     @AppStorage("um.sfxVolume") private var sfxVolume = 1.0
     @AppStorage("um.deathSoundVolume") private var deathSoundVolume = 1.0
@@ -64,6 +65,7 @@ struct ProfileView: View {
                         .listRowBackground(UMTheme.card)
                     Toggle("Hide Game Terminology", isOn: $hideTerminology)
                         .listRowBackground(UMTheme.card)
+                    playerListSizePicker
                 }
                 if !trophies.isEmpty {
                     Section("Trophies") {
@@ -308,5 +310,19 @@ extension ProfileView {
             .lineLimit(1)
             .fixedSize()
             .accessibilityLabel("\(value) \(label)")
+    }
+}
+
+extension ProfileView {
+    /// iPad landscape three-column Village column only.
+    @ViewBuilder fileprivate var playerListSizePicker: some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            Picker("Player List Size", selection: $playerListSize) {
+                Text("Compact").tag("compact")
+                Text("Expanded").tag("expanded")
+            }
+            .pickerStyle(.segmented)
+            .listRowBackground(UMTheme.card)
+        }
     }
 }

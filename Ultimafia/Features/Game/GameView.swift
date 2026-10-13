@@ -1358,6 +1358,12 @@ private struct GameTownPane: View {
     var session: GameSession
     /// iPad three-column Village column: dense rows so 10+ players fit without scrolling.
     var compact = false
+    @AppStorage("um.playerListSize") private var playerListSize = "compact"
+    private var expanded: Bool { compact && playerListSize == "expanded" }
+    /// Phone/tab size, iPad-column Compact size, iPad-column Expanded size.
+    private func dim(_ normal: CGFloat, _ small: CGFloat, _ big: CGFloat) -> CGFloat {
+        compact ? (expanded ? big : small) : normal
+    }
     @Environment(AppModel.self) private var app
     @State private var pickingPlayerId: String?
     /// Post-game only: the row whose Report/Block bar is open.
@@ -1389,18 +1395,18 @@ private struct GameTownPane: View {
             if !session.spectatorList.isEmpty, !session.isReview {
                 Section("Spectators") {
                     ForEach(session.spectatorList) { spectator in
-                        HStack(spacing: compact ? 6 : 8) {
+                        HStack(spacing: dim(8, 6, 8)) {
                             UMAvatarView(userId: spectator.userId, hasAvatar: spectator.avatar,
-                                         name: spectator.name, size: compact ? 18 : 24, square: spectator.squareAvatar)
-                            PlayerNameView(player: spectator, fontSize: compact ? 12 : 14, dead: false)
+                                         name: spectator.name, size: dim(24, 18, 32), square: spectator.squareAvatar)
+                            PlayerNameView(player: spectator, fontSize: dim(14, 12, 16), dead: false)
                                 .lineLimit(1)
                             Text("(spectator)")
-                                .font(.system(size: compact ? 11 : 13))
+                                .font(.system(size: dim(13, 11, 14)))
                                 .foregroundStyle(UMTheme.deadName)
                                 .lineLimit(1)
                                 .fixedSize()
                         }
-                        .modifier(CompactTownRow(on: compact))
+                        .modifier(CompactTownRow(on: compact, pad: expanded ? 6 : 3))
                     }
                 }
             }
@@ -1443,20 +1449,20 @@ private struct GameTownPane: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .listRowBackground(UMTheme.card)
-        .modifier(CompactTownRow(on: compact))
+        .modifier(CompactTownRow(on: compact, pad: expanded ? 6 : 3))
     }
 
     private func townRowContent(_ player: GamePlayer, dead: Bool) -> some View {
-        HStack(spacing: compact ? 6 : 10) {
+        HStack(spacing: dim(10, 6, 10)) {
             if session.isGameInProgress {
-                RoleGuessBadge(session: session, player: player, size: compact ? 20 : 30) {
+                RoleGuessBadge(session: session, player: player, size: dim(30, 20, 36)) {
                     pickingPlayerId = player.id
                 }
             }
-            UMAvatarView(player: player, size: compact ? 22 : 36)
-            VStack(alignment: .leading, spacing: compact ? 0 : 2) {
+            UMAvatarView(player: player, size: dim(36, 22, 44))
+            VStack(alignment: .leading, spacing: dim(2, 0, 2)) {
                 // Graveyard keeps custom name colors (dead-red is for chat lines only).
-                PlayerNameView(player: player, fontSize: compact ? 13 : 16)
+                PlayerNameView(player: player, fontSize: dim(16, 13, 17))
                     .lineLimit(1)
                     .opacity(dead ? 0.7 : 1)
                 if player.id == session.selfId {
@@ -1481,7 +1487,7 @@ private struct GameTownPane: View {
             if session.readyCheckActive, !dead {
                 let ready = session.readyPlayerIds.contains(player.id)
                 Text(ready ? "✅" : "❌")
-                    .font(.system(size: compact ? 12 : 15))
+                    .font(.system(size: dim(15, 12, 17)))
                     .accessibilityLabel(ready ? "Ready" : "Not ready")
             }
             if canModerate(player) {
@@ -1512,9 +1518,10 @@ private struct GameTownPane: View {
 /// iPad column only: tight insets, no min row height, no extra row/section gaps.
 private struct CompactTownRow: ViewModifier {
     var on: Bool
+    var pad: CGFloat = 3
     func body(content: Content) -> some View {
         if on {
-            content.listRowInsets(EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
+            content.listRowInsets(EdgeInsets(top: pad, leading: 8, bottom: pad, trailing: 8))
         } else {
             content
         }
