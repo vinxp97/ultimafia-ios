@@ -683,7 +683,8 @@ enum RoleArt {
     static func assetURL(_ path: String) -> URL? {
         let flat = path.replacingOccurrences(of: "/", with: "__")
         let ns = flat as NSString
-        if let local = Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension) {
+        if let local = Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension)
+            ?? Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension, subdirectory: "RoleIcons") {
             return local
         }
         // Not bundled (added to the site after this build): load from the CDN.

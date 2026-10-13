@@ -41,7 +41,8 @@ final class UMNameFonts {
     private func load() async {
         // Bundled copies (Fonts/<CSS family>.ttf) are the primary source.
         for (key, family) in Self.webFamilies {
-            if let url = Bundle.main.url(forResource: family, withExtension: "ttf"),
+            if let url = Bundle.main.url(forResource: family, withExtension: "ttf")
+                ?? Bundle.main.url(forResource: family, withExtension: "ttf", subdirectory: "Fonts"),
                let data = try? Data(contentsOf: url) { register(data, key: key) }
         }
         guard registered.count < Self.webFamilies.count else { return }
