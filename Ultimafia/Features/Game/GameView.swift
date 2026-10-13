@@ -1063,6 +1063,8 @@ private struct ChatComposer: View {
     }
 
     private func send() {
+        // Ready check up: Return accepts it instead of sending (composer may still have focus).
+        if session.needsReadyConfirm { session.acceptReadyCheck(); return }
         guard !session.isSpeakCoolingDown else { return }
         let text = Self.rewriteStickerTokens(draft, stickerNames: Set(stickerMap.keys.map(Self.bareCode)))
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

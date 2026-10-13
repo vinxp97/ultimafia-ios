@@ -606,6 +606,13 @@ final class GameSession {
         typingPlayerIds.compactMap { id in players.first(where: { $0.id == id }) }
     }
 
+    /// Same as tapping "I am Ready" (keyboard Return while the prompt is up).
+    func acceptReadyCheck() {
+        guard needsReadyConfirm else { return }
+        ReadyBell.stop()
+        verifyReady()
+    }
+
     var needsReadyConfirm: Bool {
         guard readyCheckActive, !spectate else { return false }
         if let selfId { return !readyPlayerIds.contains(selfId) }

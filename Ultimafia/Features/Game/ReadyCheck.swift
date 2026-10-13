@@ -448,6 +448,13 @@ struct ReadyCheckOverlay: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(UMTheme.village)
+                        .background {
+                            // Hardware Return/Enter accepts (listed in the Cmd-hold overlay).
+                            Button("Accept Ready Check") { session.acceptReadyCheck() }
+                                .keyboardShortcut(.return, modifiers: [])
+                                .opacity(0)
+                                .accessibilityHidden(true)
+                        }
                     }
                     .padding(.top, 4)
                 }
