@@ -949,8 +949,8 @@ final class GameSession {
     func verifyReady() {
         guard needsReadyConfirm else { return }
         socket.send("readyCheck verify")
-        if let selfId {
-            readyPlayerIds.insert(selfId)
+        if let selfId, readyPlayerIds.insert(selfId).inserted {
+            GameSFX.play("readyCheck")
         }
     }
 
@@ -1099,6 +1099,7 @@ final class GameSession {
             GameWinMusic.unlockSession()
             GameSFX.warm("bell")
             GameSFX.warm("gunshot")
+            GameSFX.warm("readyCheck")
             GameWinMusic.warmCommon()
         case "self":
             if let id = stringValue(data) {
@@ -1227,8 +1228,10 @@ final class GameSession {
         case "readyCheck cancel", "readyCheck success":
             clearReadyCheck()
         case "readyCheck update":
-            if let obj = data as? [String: Any], let id = obj["playerId"] as? String {
-                readyPlayerIds.insert(id)
+            if let obj = data as? [String: Any], let id = obj["playerId"] as? String,
+               readyPlayerIds.insert(id).inserted, !isQuiet {
+                // Web Game.jsx: playAudio("readyCheck") on every "readyCheck update".
+                GameSFX.play("readyCheck")
             }
         default:
             break

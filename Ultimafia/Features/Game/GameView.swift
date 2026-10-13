@@ -1472,6 +1472,12 @@ private struct GameTownPane: View {
                 }
             }
             Spacer()
+            if session.readyCheckActive, !dead {
+                let ready = session.readyPlayerIds.contains(player.id)
+                Text(ready ? "✅" : "❌")
+                    .font(.system(size: 15))
+                    .accessibilityLabel(ready ? "Ready" : "Not ready")
+            }
             if canModerate(player) {
                 Image(systemName: "chevron.down")
                     .foregroundStyle(UMTheme.muted)

@@ -113,7 +113,7 @@ enum GameSFX {
     private static var playing: [AVAudioPlayer] = []
     private static var alertPlayers = Set<ObjectIdentifier>()
     private static var deathPlaying: [AVAudioPlayer] = []
-    private static let localNames: Set<String> = ["bell", "gunshot", "ping"]
+    private static let localNames: Set<String> = ["bell", "gunshot", "ping", "readyCheck"]
 
     static func applyVolume() {
         playing.forEach { $0.volume = alertPlayers.contains(ObjectIdentifier($0)) ? GameAudio.alert : GameAudio.sfx }
