@@ -93,6 +93,7 @@ private struct GameScreen: View {
             }
         }
         .background(UMTheme.bg.ignoresSafeArea())
+        .background { gameShortcuts }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
@@ -124,6 +125,25 @@ private struct GameScreen: View {
         .onDisappear { if !session.isReview { app.isViewingGame = false } }
         // Left the game screen for the lobby (not just another tab): bring the bar back.
         .onDisappear { if !app.isOnCollapsibleGameScreen { app.hideAppTabs = false } }
+    }
+
+    /// Option+Left/Right: phases; Option+Up/Down: chat top/latest. Hidden buttons so the
+    /// shortcuts show in the iPad Cmd-hold overlay; the composer claims the same keys while typing.
+    private var gameShortcuts: some View {
+        ZStack {
+            shortcutButton(.previousPhase, .leftArrow)
+            shortcutButton(.nextPhase, .rightArrow)
+            shortcutButton(.chatTop, .upArrow)
+            shortcutButton(.chatBottom, .downArrow)
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    private func shortcutButton(_ s: UMGameShortcut, _ key: KeyEquivalent) -> some View {
+        Button(s.title) { session.performShortcut(s) }
+            .keyboardShortcut(key, modifiers: .option)
     }
 
     private func prefetchCustomAssets() async {
@@ -545,6 +565,14 @@ private struct GameChatPane: View {
                 .onChange(of: stickToBottom) { _, pinned in
                     session.chatPinnedToBottom = pinned
                 }
+                .onChange(of: session.chatJumpTopTick) { _, _ in jumpToTop(proxy: proxy) }
+                .onChange(of: session.chatJumpBottomTick) { _, _ in
+                    // Jump to the newest line and resume following.
+                    markAllSeen()
+                    unreadCount = 0
+                    stickToBottom = true
+                    jumpToLatest(proxy: proxy)
+                }
             }
         }
     }
@@ -916,7 +944,8 @@ private struct ChatComposer: View {
                     textColor: cooling ? .white : .label,
                     maxLength: UMConfig.maxChatLength,
                     onReturn: send,
-                    onTab: { cooling ? false : (completeMedia() || completeName()) }
+                    onTab: { cooling ? false : (completeMedia() || completeName()) },
+                    onShortcut: { session.performShortcut($0) }
                 )
                 .padding(10)
                 .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))

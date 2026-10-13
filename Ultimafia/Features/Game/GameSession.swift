@@ -22,6 +22,20 @@ struct GamePlayer: Identifiable, Hashable {
     var customStickers: [String: String] = [:]
 }
 
+/// Game-screen hardware keyboard shortcuts (Option+arrows).
+enum UMGameShortcut: CaseIterable {
+    case previousPhase, nextPhase, chatTop, chatBottom
+
+    var title: String {
+        switch self {
+        case .previousPhase: "Previous Phase"
+        case .nextPhase: "Next Phase"
+        case .chatTop: "Jump to Top of Chat"
+        case .chatBottom: "Jump to Latest Message"
+        }
+    }
+}
+
 struct ChatLine: Identifiable, Hashable {
     var id: String
     var senderId: String
@@ -161,6 +175,18 @@ final class GameSession {
     /// Chat scroll state kept across leaving the game screen (lobby round-trip).
     @ObservationIgnored var chatSeenLineIds: Set<String> = []
     @ObservationIgnored var chatAnchorId: String?
+    /// Keyboard shortcut requests for the chat pane (Option+Up / Option+Down).
+    var chatJumpTopTick = 0
+    var chatJumpBottomTick = 0
+
+    func performShortcut(_ shortcut: UMGameShortcut) {
+        switch shortcut {
+        case .previousPhase: viewAdjacentPhase(delta: -1)
+        case .nextPhase: viewAdjacentPhase(delta: 1)
+        case .chatTop: chatJumpTopTick &+= 1
+        case .chatBottom: chatJumpBottomTick &+= 1
+        }
+    }
     @ObservationIgnored var chatPinnedToBottom = true
     @ObservationIgnored var chatHasOpened = false
     let gameId: String

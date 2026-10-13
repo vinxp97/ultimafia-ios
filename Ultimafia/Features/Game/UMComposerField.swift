@@ -15,6 +15,8 @@ struct UMComposerField: UIViewRepresentable {
     var maxLength: Int
     var onReturn: () -> Void
     var onTab: () -> Bool = { false }
+    /// Option+arrow game shortcuts; they take priority over text navigation while typing.
+    var onShortcut: (UMGameShortcut) -> Void = { _ in }
 
     static let font = UIFont.preferredFont(forTextStyle: .body)
     static let maxLines: CGFloat = 4
@@ -22,7 +24,8 @@ struct UMComposerField: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> UITextView {
-        let tv = UITextView()
+        let tv = UMComposerTextView()
+        tv.onShortcut = { [weak coordinator = context.coordinator] s in coordinator?.parent.onShortcut(s) }
         tv.delegate = context.coordinator
         tv.font = Self.font
         tv.adjustsFontForContentSizeCategory = true
@@ -104,6 +107,34 @@ struct UMComposerField: UIViewRepresentable {
         let scroll = fitting > maxH
         if tv.isScrollEnabled != scroll { DispatchQueue.main.async { tv.isScrollEnabled = scroll } }
         return CGSize(width: width, height: h)
+    }
+
+    /// Text view that claims Option+arrows before UIKit's word/paragraph navigation. No
+    /// discoverability titles here: the game screen's SwiftUI shortcuts list them in the
+    /// Cmd-hold overlay, so they aren't shown twice.
+    final class UMComposerTextView: UITextView {
+        var onShortcut: ((UMGameShortcut) -> Void)?
+
+        override var keyCommands: [UIKeyCommand]? {
+            let pairs: [(String, Selector)] = [
+                (UIKeyCommand.inputLeftArrow, #selector(prevPhase)),
+                (UIKeyCommand.inputRightArrow, #selector(nextPhase)),
+                (UIKeyCommand.inputUpArrow, #selector(chatTop)),
+                (UIKeyCommand.inputDownArrow, #selector(chatBottom)),
+            ]
+            let mine = pairs.map { input, action -> UIKeyCommand in
+                let c = UIKeyCommand(input: input, modifierFlags: .alternate, action: action)
+                c.wantsPriorityOverSystemBehavior = true
+                c.attributes = .hidden
+                return c
+            }
+            return mine + (super.keyCommands ?? [])
+        }
+
+        @objc private func prevPhase() { onShortcut?(.previousPhase) }
+        @objc private func nextPhase() { onShortcut?(.nextPhase) }
+        @objc private func chatTop() { onShortcut?(.chatTop) }
+        @objc private func chatBottom() { onShortcut?(.chatBottom) }
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
