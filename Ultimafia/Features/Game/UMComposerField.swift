@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
+import GameController
 
 /// Chat input backed by UITextView so Return never ends editing: the delegate catches "\n",
 /// calls `onReturn` (send) and returns false, so the view never resigns first responder and
@@ -45,7 +46,32 @@ struct UMComposerField: UIViewRepresentable {
             label.widthAnchor.constraint(lessThanOrEqualTo: tv.widthAnchor),
         ])
         context.coordinator.placeholderLabel = label
+        context.coordinator.defaultLeading = tv.inputAssistantItem.leadingBarButtonGroups
+        context.coordinator.defaultTrailing = tv.inputAssistantItem.trailingBarButtonGroups
+        context.coordinator.applyTraits(tv)
+        context.coordinator.observeKeyboards(tv)
         return tv
+    }
+
+    /// iPad + hardware keyboard: hide the floating shortcuts bar (undo/redo/paste, keyboard
+    /// options, predictions). Empty bar button groups remove the shortcut buttons; turning off
+    /// autocorrect/spellcheck/inline prediction removes the suggestion strip, so the bar has
+    /// nothing to show. iPhone and iPad with the on-screen keyboard keep their defaults.
+    /// The floating dictation mic has no public opt-out (dictation can't be disabled per field).
+    static func applyHardwareKeyboardTraits(_ tv: UITextView, leading: [UIBarButtonItemGroup], trailing: [UIBarButtonItemGroup]) {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
+        let hardware = GCKeyboard.coalesced != nil
+        let item = tv.inputAssistantItem
+        item.leadingBarButtonGroups = hardware ? [] : leading
+        item.trailingBarButtonGroups = hardware ? [] : trailing
+        let auto: UITextAutocorrectionType = hardware ? .no : .default
+        let spell: UITextSpellCheckingType = hardware ? .no : .default
+        let inline: UITextInlinePredictionType = hardware ? .no : .default
+        var changed = false
+        if tv.autocorrectionType != auto { tv.autocorrectionType = auto; changed = true }
+        if tv.spellCheckingType != spell { tv.spellCheckingType = spell; changed = true }
+        if tv.inlinePredictionType != inline { tv.inlinePredictionType = inline; changed = true }
+        if changed, tv.isFirstResponder { tv.reloadInputViews() }
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
@@ -83,7 +109,32 @@ struct UMComposerField: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: UMComposerField
         weak var placeholderLabel: UILabel?
+        private var keyboardObservers: [NSObjectProtocol] = []
+        var defaultLeading: [UIBarButtonItemGroup] = []
+        var defaultTrailing: [UIBarButtonItemGroup] = []
+
+        func applyTraits(_ tv: UITextView) {
+            UMComposerField.applyHardwareKeyboardTraits(tv, leading: defaultLeading, trailing: defaultTrailing)
+        }
         init(_ parent: UMComposerField) { self.parent = parent }
+
+        deinit { keyboardObservers.forEach(NotificationCenter.default.removeObserver) }
+
+        /// Re-apply traits when a hardware keyboard is attached/detached.
+        func observeKeyboards(_ tv: UITextView) {
+            guard UIDevice.current.userInterfaceIdiom == .pad, keyboardObservers.isEmpty else { return }
+            for name in [Notification.Name.GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
+                keyboardObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self, weak tv] _ in
+                    guard let self, let tv else { return }
+                    MainActor.assumeIsolated { self.applyTraits(tv) }
+                })
+            }
+        }
+
+        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
+            applyTraits(textView)
+            return true
+        }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             if text == "\n" {
