@@ -206,7 +206,7 @@ struct RoleIconView: View {
     @ViewBuilder
     private var roleImage: some View {
         if let url = RoleArt.roleURL(gameType: gameType, name: roleName) {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
+            AnimatedWebPView(url: url, showsPlaceholder: false, interpolation: Image.Interpolation.none)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
@@ -219,11 +219,11 @@ struct RoleIconView: View {
         let mods = modifiers
         let badgeSize = max(10, size * 0.42)
         if mods.count == 1, let url = RoleArt.modifierURL(gameType: gameType, name: mods[0]) {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
+            AnimatedWebPView(url: url, showsPlaceholder: false, interpolation: Image.Interpolation.none)
                 .frame(width: badgeSize, height: badgeSize)
                 .clipShape(RoundedRectangle(cornerRadius: 2))
         } else if mods.count > 1, let url = RoleArt.badgeURL(modifierCount: mods.count) {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
+            AnimatedWebPView(url: url, showsPlaceholder: false, interpolation: Image.Interpolation.none)
                 .frame(width: badgeSize, height: badgeSize)
         }
     }
@@ -436,7 +436,7 @@ struct SetupPreviewStrip: View {
     @ViewBuilder
     private func poolIcon(_ url: URL?, fallback: String) -> some View {
         if let url {
-            AnimatedWebPView(url: url, showsPlaceholder: false)
+            AnimatedWebPView(url: url, showsPlaceholder: false, interpolation: Image.Interpolation.none)
                 .frame(width: iconSize, height: iconSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
@@ -607,6 +607,65 @@ struct BanishedPoolSheet: View {
     }
 }
 
+struct RoleGuessPickerSheet: View {
+    var session: GameSession
+    var playerName: String
+    var onSelect: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    Text("Choose a role for \(playerName)")
+                        .font(.caption)
+                        .foregroundStyle(UMTheme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(session.guessableRoles) { role in
+                        Button {
+                            onSelect(role.raw)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                RoleIconView(role: role.raw, gameType: session.setupGameType, size: 42)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(role.name)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    if !role.modifiers.isEmpty {
+                                        Text(role.modifiers.joined(separator: " / "))
+                                            .font(.caption)
+                                            .foregroundStyle(UMTheme.muted)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(UMTheme.muted)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(UMTheme.elevated, in: RoundedRectangle(cornerRadius: 12))
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+            .background(UMTheme.bg.ignoresSafeArea())
+            .navigationTitle("Mark role as")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(UMTheme.card)
+        .preferredColorScheme(.dark)
+        .task { await RoleCatalog.shared.load() }
+        .accessibilityHint("Choose a role for \(playerName)")
+    }
+}
+
 struct RoleDetailsSheet: View {
     var gameType: String
     var otherRoles: [String]
@@ -680,7 +739,7 @@ struct RoleDetailsSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 8) {
                                         if let url = RoleArt.modifierURL(gameType: gameType, name: mod.name) {
-                                            AnimatedWebPView(url: url, showsPlaceholder: false)
+                                            AnimatedWebPView(url: url, showsPlaceholder: false, interpolation: Image.Interpolation.none)
                                                 .frame(width: 18, height: 18)
                                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                                         }

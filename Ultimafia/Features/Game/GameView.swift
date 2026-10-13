@@ -28,7 +28,10 @@ struct GameView: View {
                     draft: $draft,
                     selectedPanel: $selectedPanel,
                     chatFocused: $chatFocused,
-                    onLeave: { app.leaveActiveGame() },
+                    onLeave: {
+                        if session.leaveNeedsConfirm { app.showLeaveConfirm = true }
+                        else { app.leaveActiveGame() }
+                    },
                     onDetach: { app.detachFromGame() }
                 )
             } else {
@@ -55,7 +58,7 @@ private struct GameScreen: View {
             let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
             let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
             VStack(spacing: 0) {
-                GameHeader(session: session, wide: wideHeader)
+                GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave)
                 if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
@@ -129,6 +132,13 @@ private struct GameScreen: View {
         .onDisappear { if !app.isOnCollapsibleGameScreen { app.hideAppTabs = false } }
     }
 
+    private func returnToLobby() {
+        // Only spectators/reviews close their session. Seated players keep the existing
+        // connection and its chat/phase memory, exactly like the main Lobby tab action.
+        if session.isReview || session.spectate { onDetach() }
+        else { app.goToLobby() }
+    }
+
     /// Option+Left/Right: phases; Option+Up/Down: chat top/latest. Hidden buttons so the
     /// shortcuts show in the iPad Cmd-hold overlay; the composer claims the same keys while typing.
     private var gameShortcuts: some View {
@@ -190,6 +200,7 @@ private struct GameHeader: View {
     /// iPad: setup name, roles strip, paged phases and timer in one row.
     var wide = false
     var onClose: (() -> Void)? = nil
+    var onLeave: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -198,7 +209,9 @@ private struct GameHeader: View {
                     Image(systemName: "chevron.left").font(.body.weight(.semibold))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Back to games")
+                .accessibilityLabel(session.isReview ? "Back to games" : (session.spectate ? "Stop spectating" : "Return to lobby"))
+            }
+            if session.isReview {
                 Text("REVIEW")
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 6).padding(.vertical, 2)
@@ -236,6 +249,18 @@ private struct GameHeader: View {
                 Spacer(minLength: 8)
             }
             PhaseTimerBadge(session: session)
+            if !session.isReview, !session.spectate, let onClose, let onLeave {
+                Menu {
+                    Button("Return to Lobby", action: onClose)
+                    Button("Leave Game", role: .destructive, action: onLeave)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Game options")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1473,16 +1498,16 @@ private struct GameTownPane: View {
         .scrollContentBackground(.hidden)
         .modifier(CompactTownList(on: compact))
         .pointerScrolling()
-        .confirmationDialog("Mark role as", isPresented: pickingBinding, titleVisibility: .visible) {
-            ForEach(session.guessableRoles) { role in
-                Button(role.modifiers.isEmpty ? role.name : "\(role.name) (\(role.modifiers.joined(separator: "/")))") {
-                    if let id = pickingPlayerId {
-                        session.pickRoleGuess(playerId: id, role: role.raw)
-                    }
+        .sheet(isPresented: pickingBinding) {
+            if let id = pickingPlayerId {
+                RoleGuessPickerSheet(
+                    session: session,
+                    playerName: session.player(for: id)?.name ?? "Player"
+                ) { role in
+                    session.pickRoleGuess(playerId: id, role: role)
                     pickingPlayerId = nil
                 }
             }
-            Button("Cancel", role: .cancel) { pickingPlayerId = nil }
         }
     }
 

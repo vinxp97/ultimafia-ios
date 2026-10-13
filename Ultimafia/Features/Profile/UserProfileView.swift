@@ -32,8 +32,7 @@ struct UserProfileView: View {
         .background(pageBackground)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.visible, for: .navigationBar)
         .task { await load() }
         .environment(\.openURL, OpenURLAction { url in
             let scheme = (url.scheme ?? "").lowercased()
@@ -147,12 +146,15 @@ struct UserProfileView: View {
     }
 
     private var bannerImage: some View {
-        Group {
-            if bool("banner"), let url = bannerURL {
-                AnimatedWebPView(url: url)
-                    .scaledToFill()
-            } else {
-                UMTheme.elevated
+        GeometryReader { proxy in
+            Group {
+                if bool("banner"), let url = bannerURL {
+                    AnimatedWebPView(url: url)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else {
+                    UMTheme.elevated
+                }
             }
         }
         .frame(maxWidth: .infinity)
