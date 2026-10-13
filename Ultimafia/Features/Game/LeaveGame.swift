@@ -1,31 +1,5 @@
 import SwiftUI
 
-/// Small round back-arrow shown left of the Play/You bar while in a game.
-struct LeaveGameButton: View {
-    var action: () -> Void
-
-    var body: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Button(action: action) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(UMTheme.mafia)
-                        .frame(width: 50, height: 50)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Leave game")
-                Spacer()
-            }
-            .padding(.leading, 20)
-            .padding(.bottom, 6)
-        }
-        .ignoresSafeArea(.keyboard)
-    }
-}
-
 /// Web LeaveGameDialog equivalent. Leave locks while participation is required.
 struct LeaveConfirmOverlay: View {
     var warning: String?

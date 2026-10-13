@@ -12,6 +12,9 @@ final class AppModel {
     var isRestoring = true
     var isBusy = false
     var errorMessage: String?
+    /// A refused action, shown once as an alert in the signed-in shell. `errorMessage` stays for
+    /// inline surfaces (the sign-in screen); this one is for "you can't do that right now".
+    var alertMessage: String?
     /// The lobby list shows every lobby; the web API treats "All" as no lobby filter.
     let lobby = "All"
     var openGames: [GameSummary] = []
@@ -26,96 +29,65 @@ final class AppModel {
     var isViewingGame = false
     @ObservationIgnored private var finishedCursor: Double?
     @ObservationIgnored private var loadingFinished = false
+    /// The Play section's stack: lobby, profiles, families, finished-game reviews.
     var path: [Route] = []
+    /// The Game section's own stack: the live game and anything pushed from it.
+    var gamePath: [Route] = []
     var game: GameSession?
-    var hideAppTabs = false
     /// Bumped whenever the user returns to the Lobby; LobbyView scrolls to the top on change.
     var lobbyScrollToTop = 0
-    /// Full-screen flows (setup search) that hide the app bar regardless of the game collapse state.
-    var suppressAppBar = false
     /// The signed-in user's own custom emotes/stickers (`:name:` -> media path), loaded once per session.
     var myCustomEmotes: [String: String] = [:]
     var myCustomStickers: [String: String] = [:]
-    /// Set when returning to the seated game from the lobby (vs. a fresh join/review).
-    var resumingFromLobby = false
     var showLeaveConfirm = false
     var onlineUsers: [OnlineUser] = []
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
     /// Email to prefill on the sign-in screen (saved account whose session expired).
     var loginPrefillEmail: String?
 
+    /// Which section is showing (`UMAppSection`, a standalone value type).
+    var section: UMAppSection = .play
+
     enum Route: Hashable {
-        case game(String, spectate: Bool)
         case profile(id: String, name: String)
         case family(id: String, name: String)
-        case setupSearch
         case review(String)
+        /// The host flow, pushed from the lobby: hosting is part of the lobby, not a section.
+        case host
     }
 
-    /// True while the in-game screen is on top of the Play stack.
-    var isOnGameScreen: Bool {
-        if case .game = path.last { return true }
-        return false
-    }
+    /// True while the Game section is showing.
+    var isOnGameScreen: Bool { section == .game }
 
-    /// Game or review screen on top: the screens where the app bar can be collapsed with Hide.
-    var isOnReview: Bool {
-        if case .review = path.last { return true }
-        return false
-    }
+    /// The app bar is hidden in exactly one situation: a live game is on screen. Nothing else
+    /// hides it — not the Host flow, not the keyboard — and this single derived property owns
+    /// the decision, so the bar cannot disagree with the rest of the app about where you are.
+    var showsAppTabs: Bool { !(section == .game && game != nil) }
 
-    var isOnCollapsibleGameScreen: Bool {
-        switch path.last {
-        case .game, .review: return true
-        default: return false
-        }
-    }
-
-    /// True while a user profile is on top of the Play stack.
-    var isOnProfile: Bool {
-        switch path.last {
-        case .profile, .family: return true
-        default: return false
-        }
-    }
-
-    /// Replace the Play stack. Swapping a pushed screen for a different destination in a single
-    /// path write makes NavigationStack pop and push at once, which leaves a blank page; so pop
-    /// to the lobby first and push the new route on the next run loop.
-    func setPlayPath(_ newPath: [Route]) {
-        guard !path.isEmpty, path.first != newPath.first else { path = newPath; return }
-        path.removeAll()
-        guard !newPath.isEmpty else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, self.path.isEmpty else { return }
-            self.path = newPath
-        }
-    }
-
-    /// Lobby button: pop the Play stack to the lobby root.
+    /// Lobby: show the Play section at its root. A seated player keeps their live game — this is
+    /// navigation, not leaving.
     func goToLobby() {
-        hideAppTabs = false
+        section = .play
         path.removeAll()
         lobbyScrollToTop += 1
     }
 
-    /// Leaving the Play tab from a profile drops the profile pages so they don't linger.
-    func dropProfiles() {
-        while let last = path.last {
-            switch last {
-            case .profile, .family: path.removeLast()
-            default: return
-            }
+    /// Tab selection. Selecting the visible section again pops it to its root, the way the system
+    /// tab bar behaves; switching sections leaves every stack as it was.
+    func select(_ target: UMAppSection) {
+        if section == target { popToRoot(target) } else { section = target }
+    }
+
+    func popToRoot(_ target: UMAppSection) {
+        switch target {
+        case .play: goToLobby()
+        case .game: gamePath.removeAll()
+        case .you: youPath.removeAll()
         }
     }
 
     var mentionBadge: Int {
         (seatedGameId != nil && game != nil && !isViewingGame) ? mentionCount : 0
-    }
-
-    /// Create button: open setup search (no-op if already there).
-    func openCreate() {
-        if path.last != .setupSearch { setPlayPath([.setupSearch]) }
     }
 
     var isSignedIn: Bool { user?.id != nil }
@@ -215,15 +187,17 @@ final class AppModel {
         stopPresence()
         game?.disconnectWithoutLeaving()
         game = nil
-        reviewSession?.stop()
+        // A review is a spectator session on someone else's game: tearing it down must not send
+        // a leave (/game/leave carries no id, so it would leave whatever game the session is on).
+        reviewSession?.disconnectWithoutLeaving()
         reviewSession = nil
         APIClient.shared.csrf = nil
         user = nil
         path = []
-        hideAppTabs = false
-        suppressAppBar = false
+        gamePath = []
+        youPath = []
+        section = .play
         isViewingGame = false
-        resumingFromLobby = false
         showLeaveConfirm = false
         mentionCount = 0
         myCustomEmotes = [:]
@@ -427,7 +401,7 @@ final class AppModel {
 
     func openGame(_ summary: GameSummary, spectate: Bool = false) {
         guard !hostIsBlocked(summary) else {
-            errorMessage = "You blocked this game's host."
+            alertMessage = "You blocked this game's host."
             return
         }
         resumeGame(summary.id, spectate: spectate)
@@ -435,7 +409,6 @@ final class AppModel {
 
     func resumeSeatedGame() {
         guard let id = seatedGameId else { return }
-        resumingFromLobby = true
         resumeGame(id)
     }
 
@@ -445,18 +418,26 @@ final class AppModel {
     }
 
     func resumeGame(_ id: String, spectate: Bool = false) {
+        // Being seated is server state, and every entry point (join, spectate, host, resume)
+        // funnels through here, so this is the one place that can refuse to start a second game
+        // over a live one. Leaving is an explicit, confirmed action and is never a side effect.
+        if let seated = seatedGameId, seated != id {
+            alertMessage = spectate
+                ? "You're already in a game. Leave it before spectating another."
+                : "You're already in a game. Leave it before joining or hosting another."
+            return
+        }
         if let session = game, session.gameId == id, session.spectate == spectate {
-            setPlayPath([.game(id, spectate: spectate)])
+            gamePath.removeAll()
+            section = .game
             if !session.connected, !session.finished {
                 Task { await session.start() }
             }
             return
         }
-        if let prev = game, prev.gameId != id {
-            prev.stop()
-        } else {
-            game?.disconnectWithoutLeaving()
-        }
+        // Never `stop()` here: that sends "leave" for the session we're replacing, which would
+        // leave a ranked game on the player's behalf. Only the explicit Leave action does that.
+        game?.disconnectWithoutLeaving()
         let session = GameSession(gameId: id, spectate: spectate)
         session.onMention = { [weak self] in
             guard let self, !self.isViewingGame else { return }
@@ -464,7 +445,8 @@ final class AppModel {
         }
         mentionCount = 0
         game = session
-        setPlayPath([.game(id, spectate: spectate)])
+        gamePath.removeAll()
+        section = .game
         Task { await session.start() }
     }
 
@@ -475,10 +457,10 @@ final class AppModel {
     }
 
     func detachFromGame() {
-        hideAppTabs = false
         game?.disconnectWithoutLeaving()
         game = nil
-        path.removeAll()
+        gamePath.removeAll()
+        section = .play
         Task {
             if let info = try? await APIClient.shared.userInfo() {
                 user = info
@@ -487,11 +469,19 @@ final class AppModel {
         }
     }
 
+    /// Leaving is an action on the game screen, so its toolbar owns it. Games where
+    /// participation is still required confirm first; the overlay belongs to the shell.
+    func requestLeave() {
+        // No connected session yet (seated per /user/info): leaving still has to work.
+        guard let session = game else { return leaveActiveGame() }
+        if session.leaveNeedsConfirm { showLeaveConfirm = true } else { leaveActiveGame() }
+    }
+
     func leaveActiveGame() {
-        hideAppTabs = false
         game?.leave()
         game = nil
-        path.removeAll()
+        gamePath.removeAll()
+        section = .play
         if var info = user {
             info.inGame = nil
             user = info
@@ -524,26 +514,30 @@ final class AppModel {
         presenceTask = nil
     }
 
-    func openFamily(id: String, name: String) {
-        if activeTab == "you" {
-            youPath.append(.family(id: id, name: name))
-        } else {
-            path.append(.family(id: id, name: name))
-        }
+    /// The You section's own stack (profiles pushed from the You page).
+    var youPath: [Route] = []
+
+    /// Pushes onto the stack of the section that's showing, so a profile opened from the You page
+    /// stays in the You section and back pops it there.
+    func openProfile(id: String, name: String) {
+        push(.profile(id: id, name: name))
     }
 
-    /// You tab's own stack (profiles pushed from the You page). Popped when leaving/re-selecting You.
-    var youPath: [Route] = []
-    /// Set by MainTabs: which bottom tab is showing ("play" / "you").
-    var activeTab = "play"
+    func openFamily(id: String, name: String) {
+        push(.family(id: id, name: name))
+    }
 
-    /// Pushes onto the stack of the tab that's showing, so a profile opened from the You tab
-    /// stays in the You tab (and Back pops it there).
-    func openProfile(id: String, name: String) {
-        if activeTab == "you" {
-            youPath.append(.profile(id: id, name: name))
-        } else {
-            path.append(.profile(id: id, name: name))
+    /// Hosting is a screen inside the lobby, matching the website, so it pushes onto the Play
+    /// stack and the bar stays exactly where it is.
+    func openHost() {
+        push(.host)
+    }
+
+    private func push(_ route: Route) {
+        switch section {
+        case .play: path.append(route)
+        case .game: gamePath.append(route)
+        case .you: youPath.append(route)
         }
     }
 
