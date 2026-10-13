@@ -262,6 +262,10 @@ private struct GameChatPane: View {
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @State private var stickToBottom = true
+    /// Finger on the chat or a fling still decelerating. Only user scrolling may unpin/repin
+    /// the chat; layout changes (new rows, send, keyboard, rotation) must not.
+    @State private var userScrolling = false
+    @State private var lastPinAtBottom = true
     @State private var unreadCount = 0
     @State private var atTop = false
     @State private var visibleLineIds: Set<String> = []
@@ -373,19 +377,34 @@ private struct GameChatPane: View {
                     ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height.rounded(), containerH: geo.containerSize.height.rounded())
                 } action: { old, pin in
                     if atTop != pin.atTop { atTop = pin.atTop }
-                    // Keyboard open/close or new content resizes things; stay pinned and follow.
-                    if stickToBottom, !session.isReview, abs(pin.containerH - old.containerH) > 1 {
-                        // Defer the scroll so it doesn't re-trigger geometry updates within this frame.
-                        DispatchQueue.main.async {
-                            if stickToBottom { jumpToLatest(proxy: proxy) }
+                    lastPinAtBottom = pin.atBottom
+                    // Root cause of the "stuck after sending" bug: this used to treat any frame that
+                    // wasn't at the bottom as the user scrolling up. After a send/new row the lazy
+                    // rows finish measuring a frame after scrollTo, so the view briefly sat short of
+                    // the bottom and got unpinned for good. Now only user scrolling changes the pin.
+                    if userScrolling {
+                        if stickToBottom != pin.atBottom {
+                            stickToBottom = pin.atBottom
+                            recomputeUnread()
                         }
                         return
                     }
-                    if stickToBottom, pin.contentH > old.contentH + 1 {
-                        return
+                    // Layout change (new rows, keyboard, composer, rotation/columns): stay pinned.
+                    if stickToBottom, !session.isReview,
+                       !pin.atBottom || abs(pin.containerH - old.containerH) > 1 {
+                        // Defer the scroll so it doesn't re-trigger geometry updates within this frame.
+                        DispatchQueue.main.async {
+                            if stickToBottom, !userScrolling { jumpToLatest(proxy: proxy) }
+                        }
                     }
-                    if stickToBottom != pin.atBottom {
-                        stickToBottom = pin.atBottom
+                }
+                .onScrollPhaseChange { old, phase in
+                    let isUser: (ScrollPhase) -> Bool = { $0 == .interacting || $0 == .decelerating || $0 == .tracking }
+                    let user = isUser(phase)
+                    if user != userScrolling { userScrolling = user }
+                    // Scroll settled after the user moved it: pinned iff they ended at the bottom.
+                    if phase == .idle, isUser(old), !session.isReview, stickToBottom != lastPinAtBottom {
+                        stickToBottom = lastPinAtBottom
                         recomputeUnread()
                     }
                 }
