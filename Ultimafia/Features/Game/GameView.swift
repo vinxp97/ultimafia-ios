@@ -644,6 +644,11 @@ private struct ChatComposer: View {
     /// Own custom emotes and stickers only. API data first, in-game self player maps as fallback.
     private var mediaSuggestions: [MediaSuggestion] {
         guard showEmoteAutocomplete, chatFocused.wrappedValue, let t = mediaToken else { return [] }
+        return mediaMatches(t)
+    }
+
+    /// Ordered matches for a `:`/`;` token (same order as the suggestion chips).
+    private func mediaMatches(_ t: (query: String, sticker: Bool, range: Range<String.Index>)) -> [MediaSuggestion] {
         let me = app.user?.id
         let emotes = app.myCustomEmotes.isEmpty ? (selfPlayer?.customEmotes ?? [:]) : app.myCustomEmotes
         let rank = EmoteOrderStore.shared.rank(for: me)
@@ -911,7 +916,7 @@ private struct ChatComposer: View {
                     textColor: cooling ? .white : .label,
                     maxLength: UMConfig.maxChatLength,
                     onReturn: send,
-                    onTab: { cooling ? false : completeName() }
+                    onTab: { cooling ? false : (completeMedia() || completeName()) }
                 )
                 .padding(10)
                 .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))
@@ -982,6 +987,24 @@ private struct ChatComposer: View {
             get: { draft },
             set: { draft = String($0.prefix(UMConfig.maxChatLength)) }
         )
+    }
+
+    /// Tab on a `:emo` / `;stick` token: complete to the exact match if there is one, else the
+    /// first match in chip order. Like names, no cycling; an already-complete exact token is kept.
+    private func completeMedia() -> Bool {
+        guard let t = mediaToken, !t.query.isEmpty else { return false }
+        let matches = mediaMatches(t)
+        guard !matches.isEmpty else { return false }
+        let exact = matches.first { Self.bareCode($0.code) == t.query }
+        let item = exact ?? matches[0]
+        let bare = Self.bareCode(item.code)
+        let token = item.isSticker ? ";\(bare);" : ":\(bare):"
+        if String(draft[t.range]).lowercased() == token { return true }
+        var next = draft
+        next.replaceSubrange(t.range, with: token)
+        draft = String(next.prefix(UMConfig.maxChatLength))
+        session.noteTyping()
+        return true
     }
 
     @discardableResult
