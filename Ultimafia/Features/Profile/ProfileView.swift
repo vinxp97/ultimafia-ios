@@ -10,6 +10,7 @@ struct ProfileView: View {
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.hideTerminology") private var hideTerminology = false
     @AppStorage("um.playerListSize") private var playerListSize = "compact"
+    @AppStorage("um.voteListDisplay") private var voteListDisplay = "avatars"
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
     @AppStorage("um.sfxVolume") private var sfxVolume = 1.0
     @AppStorage("um.deathSoundVolume") private var deathSoundVolume = 1.0
@@ -317,12 +318,27 @@ extension ProfileView {
     /// iPad landscape three-column Village column only.
     @ViewBuilder fileprivate var playerListSizePicker: some View {
         if UIDevice.current.userInterfaceIdiom == .pad {
-            Picker("Player List Size", selection: $playerListSize) {
-                Text("Compact").tag("compact")
-                Text("Expanded").tag("expanded")
+            settingPicker("Player List Size", caption: "Size of the player list on iPad landscape.",
+                          selection: $playerListSize, options: [("Compact", "compact"), ("Expanded", "expanded")])
+        }
+        settingPicker("Vote List Display", caption: "Show voters and their votes as avatars or names.",
+                      selection: $voteListDisplay, options: [("Avatars", "avatars"), ("Names", "names")])
+    }
+
+    fileprivate func settingPicker(_ title: String, caption: String, selection: Binding<String>,
+                                   options: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+            Picker(title, selection: selection) {
+                ForEach(options, id: \.1) { Text($0.0).tag($0.1) }
             }
             .pickerStyle(.segmented)
-            .listRowBackground(UMTheme.card)
+            .labelsHidden()
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(UMTheme.muted)
         }
+        .padding(.vertical, 4)
+        .listRowBackground(UMTheme.card)
     }
 }
