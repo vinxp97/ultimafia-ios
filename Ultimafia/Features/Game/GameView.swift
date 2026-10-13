@@ -1028,9 +1028,10 @@ private struct ChatComposer: View {
         let item = exact ?? matches[0]
         let bare = Self.bareCode(item.code)
         let token = item.isSticker ? ";\(bare);" : ":\(bare):"
-        if String(draft[t.range]).lowercased() == token { return true }
+        let spaced = t.range.upperBound < draft.endIndex && draft[t.range.upperBound].isWhitespace
+        if String(draft[t.range]).lowercased() == token, spaced { return true }
         var next = draft
-        next.replaceSubrange(t.range, with: token)
+        next.replaceSubrange(t.range, with: spaced ? token : token + " ")
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
         return true
