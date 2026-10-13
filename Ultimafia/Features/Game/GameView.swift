@@ -404,7 +404,9 @@ private struct GameChatPane: View {
                         buffer.scheduled = false
                         guard buffer.pending != visibleLineIds else { return }
                         visibleLineIds = buffer.pending
-                        session.chatAnchorId = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
+                        let first = chatLines.first(where: { buffer.pending.contains($0.id) })?.id
+                        session.chatAnchorId = first
+                        if let first { session.phaseScrollAnchors[session.viewingPhaseId] = first }
                         recomputeUnread()
                     }
                 }
@@ -522,21 +524,40 @@ private struct GameChatPane: View {
                         recomputeUnread()
                     }
                 }
-                .onChange(of: session.viewingPhaseId) { _, _ in
+                .onChange(of: session.viewingPhaseId) { oldPhase, newPhase in
+                    session.phasePinned[oldPhase] = stickToBottom
                     markAllSeen()
                     unreadCount = 0
-                    // Review: every phase switch (next/prev/pick) opens at the top of that phase
-                    // (newspaper if any, else first message). Live games keep following the bottom.
-                    if session.isReview || session.reviewScrollTopPending {
-                        session.reviewScrollTopPending = false
-                        stickToBottom = false
-                        jumpToTop(proxy: proxy)
-                        // Again after the new phase's rows lay out.
-                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
+                    let forceTop = session.reviewScrollTopPending
+                    session.reviewScrollTopPending = false
+                    // Live phase of a running game: keep following the bottom unless the user had
+                    // scrolled up there, then return to where they were.
+                    if !session.isReview, !forceTop, newPhase == session.currentPhaseId {
+                        if session.phasePinned[newPhase] == false,
+                           let anchor = session.phaseScrollAnchors[newPhase],
+                           chatLines.contains(where: { $0.id == anchor }) {
+                            stickToBottom = false
+                            proxy.scrollTo(anchor, anchor: .top)
+                            DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
+                            recomputeUnread()
+                        } else {
+                            stickToBottom = true
+                            jumpToLatest(proxy: proxy)
+                        }
                         return
                     }
-                    stickToBottom = true
-                    jumpToLatest(proxy: proxy)
+                    // Any other phase (and every review phase): its own remembered spot, or its top
+                    // (newspaper if any, else first message) the first time it's opened.
+                    stickToBottom = false
+                    if !forceTop, let anchor = session.phaseScrollAnchors[newPhase],
+                       chatLines.contains(where: { $0.id == anchor }) {
+                        proxy.scrollTo(anchor, anchor: .top)
+                        // Again after the new phase's rows lay out.
+                        DispatchQueue.main.async { proxy.scrollTo(anchor, anchor: .top) }
+                    } else {
+                        jumpToTop(proxy: proxy)
+                        DispatchQueue.main.async { jumpToTop(proxy: proxy) }
+                    }
                 }
                 .onChange(of: chatFocused.wrappedValue) { _, focused in
                     guard focused, stickToBottom else { return }

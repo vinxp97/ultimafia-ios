@@ -175,6 +175,11 @@ final class GameSession {
     /// Chat scroll state kept across leaving the game screen (lobby round-trip).
     @ObservationIgnored var chatSeenLineIds: Set<String> = []
     @ObservationIgnored var chatAnchorId: String?
+    /// Per-phase chat position: first visible line id in each phase that has been viewed.
+    /// A phase with no entry opens at its top (the live phase keeps following the bottom).
+    @ObservationIgnored var phaseScrollAnchors: [Int: String] = [:]
+    /// Pinned-to-latest state per phase when it was left (only matters for the live phase).
+    @ObservationIgnored var phasePinned: [Int: Bool] = [:]
     /// Keyboard shortcut requests for the chat pane (Option+Up / Option+Down).
     var chatJumpTopTick = 0
     var chatJumpBottomTick = 0
