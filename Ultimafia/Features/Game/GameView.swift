@@ -1747,7 +1747,13 @@ private struct MeetingBlock: View {
                 }
             }
             if meeting.inputType == "text", session.isReview {
-                reviewLines
+                if meeting.votesInvisible {
+                    Text("Vote targets are hidden.")
+                        .font(.caption)
+                        .foregroundStyle(UMTheme.muted)
+                } else {
+                    reviewLines
+                }
             } else if meeting.inputType == "text" {
                 if clickable {
                     HStack(spacing: 8) {
@@ -1791,8 +1797,10 @@ private struct MeetingBlock: View {
     @ViewBuilder
     private var reviewLines: some View {
         let ordered: [String] = {
-            var ids = meeting.members.map(\.id).filter { !meeting.selections(of: $0).isEmpty }
-            for (voter, _) in meeting.ballot where !ids.contains(voter) { ids.append(voter) }
+            var ids = meeting.members.map(\.id).filter {
+                !meeting.hiddenVoterIds.contains($0) && !meeting.selections(of: $0).isEmpty
+            }
+            for (voter, _) in meeting.ballot where !meeting.hiddenVoterIds.contains(voter) && !ids.contains(voter) { ids.append(voter) }
             return ids
         }()
         if ordered.isEmpty {
@@ -1802,15 +1810,23 @@ private struct MeetingBlock: View {
         } else {
             let verb = Self.reviewVerb(meeting.actionName)
             ForEach(ordered, id: \.self) { voter in
-                let picks = meeting.selections(of: voter).map { session.voteLabel($0, meeting: meeting) }
+                let selectionIds = meeting.selections(of: voter)
+                let picks = selectionIds.map { session.voteLabel($0, meeting: meeting) }
                 let who = Text(session.displayVoter(voter, meeting: meeting)).fontWeight(.semibold)
                 let what = Text(picks.joined(separator: ", ")).fontWeight(.semibold).foregroundStyle(UMTheme.roleMention)
                 let how = Text(" \(verb) ").foregroundStyle(UMTheme.muted)
-                Text("\(who)\(how)\(what)")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
+                let receivedCount = selectionIds.reduce(0) { $0 + meeting.count(for: $1) }
+                HStack(spacing: 8) {
+                    Text("\(who)\(how)\(what)")
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(receivedCount) received")
+                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(UMTheme.muted)
+                        .fixedSize()
+                }
+                .padding(10)
+                .background(UMTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
             }
         }
     }
@@ -1870,7 +1886,7 @@ private struct MeetingBlock: View {
         let canTap = clickable && !locked
         let isPlayer = session.players.contains { $0.id == target }
         let label = session.voteLabel(target, meeting: meeting)
-        let pickIds: [String] = (isPlayer && !meeting.votesInvisible) ? meeting.selections(of: target) : []
+        let pickIds: [String] = (isPlayer && !meeting.votesInvisible && !meeting.hiddenVoterIds.contains(target)) ? meeting.selections(of: target) : []
         let theirPick = pickIds.map { session.voteLabel($0, meeting: meeting) }.joined(separator: ", ")
         let avatars = voteListDisplay != "names"
         let leader = count > 0 && count == leaderCount
