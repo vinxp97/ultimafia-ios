@@ -1,10 +1,29 @@
+import Foundation
+
+/// Pure sizing rules for the chat composer; kept outside UIKit so the clamp behavior is testable.
+enum UMComposerSizing {
+    static func maximumHeight(lineHeight: CGFloat, maxLines: Int) -> CGFloat {
+        ceil(lineHeight * CGFloat(max(1, maxLines)))
+    }
+
+    static func height(contentHeight: CGFloat, lineHeight: CGFloat, maxLines: Int) -> CGFloat {
+        let minimum = ceil(lineHeight)
+        let maximum = maximumHeight(lineHeight: lineHeight, maxLines: maxLines)
+        return min(max(ceil(contentHeight), minimum), maximum)
+    }
+
+    static func shouldScroll(contentHeight: CGFloat, lineHeight: CGFloat, maxLines: Int) -> Bool {
+        contentHeight > maximumHeight(lineHeight: lineHeight, maxLines: maxLines) + 0.5
+    }
+}
+
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
 
 /// Chat input backed by UITextView so Return never ends editing: the delegate catches "\n",
 /// calls `onReturn` (send) and returns false, so the view never resigns first responder and
-/// the keyboard stays up. Grows to ~4 lines, then scrolls. Tab (hardware) calls `onTab`.
+/// the keyboard stays up. Grows to eight lines, then scrolls. Tab (hardware) calls `onTab`.
 struct UMComposerField: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
@@ -18,7 +37,7 @@ struct UMComposerField: UIViewRepresentable {
     var onShortcut: (UMGameShortcut) -> Void = { _ in }
 
     static let font = UIFont.preferredFont(forTextStyle: .body)
-    static let maxLines: CGFloat = 4
+    static let maxLines = 8
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -74,13 +93,39 @@ struct UMComposerField: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: UITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? tv.bounds.width
         guard width > 0 else { return nil }
-        let fitting = tv.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        let line = (tv.font ?? Self.font).lineHeight
-        let maxH = ceil(line * Self.maxLines)
-        let h = min(max(fitting, ceil(line)), maxH)
-        let scroll = fitting > maxH
-        if tv.isScrollEnabled != scroll { DispatchQueue.main.async { tv.isScrollEnabled = scroll } }
-        return CGSize(width: width, height: h)
+
+        let font = tv.font ?? Self.font
+        let inset = tv.textContainerInset
+        let text = tv.text ?? ""
+        let textWidth = max(1, width - inset.left - inset.right)
+        let contentHeight: CGFloat
+        if text.isEmpty {
+            // An empty draft is always exactly one line; never inherit UITextView's old bounds.
+            contentHeight = font.lineHeight + inset.top + inset.bottom
+        } else {
+            let measured = (text as NSString).boundingRect(
+                with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: font],
+                context: nil
+            )
+            contentHeight = ceil(measured.height) + inset.top + inset.bottom
+        }
+
+        let height = UMComposerSizing.height(
+            contentHeight: contentHeight,
+            lineHeight: font.lineHeight,
+            maxLines: Self.maxLines
+        )
+        let scroll = UMComposerSizing.shouldScroll(
+            contentHeight: contentHeight,
+            lineHeight: font.lineHeight,
+            maxLines: Self.maxLines
+        )
+        if tv.isScrollEnabled != scroll {
+            DispatchQueue.main.async { tv.isScrollEnabled = scroll }
+        }
+        return CGSize(width: width, height: height)
     }
 
     /// Text view that claims Option+arrows before UIKit's word/paragraph navigation. No

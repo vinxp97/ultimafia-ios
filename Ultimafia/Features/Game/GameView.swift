@@ -342,6 +342,7 @@ private struct GameChatPane: View {
     @State private var userScrolling = false
     @State private var lastPinAtBottom = true
     @State private var unreadCount = 0
+    @State private var composerOverlayHeight: CGFloat = 0
     @State private var atTop = false
     @State private var visibleLineIds: Set<String> = []
     @State private var visibleBuffer = VisibleIdBuffer()
@@ -426,6 +427,7 @@ private struct GameChatPane: View {
                     }
                 }
                 .pointerScrolling()
+                .contentMargins(.bottom, composerOverlayHeight, for: .scrollContent)
                 // Bottom anchoring only while following the latest. On a past/review phase it kept
                 // re-pinning to the bottom as lazy rows measured, undoing the restored position.
                 .defaultScrollAnchor(stickToBottom ? .bottom : .top)
@@ -498,7 +500,7 @@ private struct GameChatPane: View {
                         recomputeUnread()
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .overlay(alignment: .bottom) {
                     VStack(spacing: 0) {
                         if !stickToBottom, !session.isReview {
                             Button {
@@ -515,19 +517,10 @@ private struct GameChatPane: View {
                                     .background(UMTheme.blood, in: Capsule())
                             }
                             .buttonStyle(.plain)
-                            .padding(.bottom, 8)
+                            .padding(.bottom, composerOverlayHeight + 8)
                             .accessibilityLabel(unreadCount > 0 ? "\(unreadCount) unseen messages, scroll to latest" : "Scroll to latest message")
                         }
-                        VStack(spacing: 0) {
-                            if session.showComposer {
-                                ChatComposer(
-                                    session: session,
-                                    draft: $draft,
-                                    chatFocused: chatFocused
-                                )
-                            }
-                        }
-                        .background(UMTheme.elevated)
+
                     }
                 }
                 .onChange(of: session.displayedMessages.count) { old, new in
@@ -627,6 +620,18 @@ private struct GameChatPane: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            // Only the pills draw a glass background; transcript content continues behind them.
+            if session.showComposer {
+                ChatComposer(session: session, draft: $draft, chatFocused: chatFocused)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if abs(composerOverlayHeight - height) > 0.25 { composerOverlayHeight = height }
+                    }
+            }
+        }
+        .onChange(of: session.showComposer) { _, show in
+            if !show { composerOverlayHeight = 0 }
+        }
     }
 
     private func pinnedToLatest(_ geo: ScrollGeometry) -> Bool {
@@ -672,6 +677,10 @@ private struct ChatComposer: View {
     @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
     @Environment(AppModel.self) private var app
     @State private var keyboardExpanded = false
+
+    private var composerIdleHeight: CGFloat {
+        ceil(UMComposerField.font.lineHeight) + 20
+    }
 
     private struct MediaSuggestion: Identifiable {
         var id: String { (isSticker ? "s" : "e") + code }
@@ -958,86 +967,95 @@ private struct ChatComposer: View {
         }
         TimelineView(.periodic(from: .now, by: 0.2)) { context in
             let cooling = (session.speakCooldownUntil ?? .distantPast) > context.date
-            HStack(alignment: .center, spacing: 8) {
-                Button {
-                    session.cycleSpeechOption()
-                } label: {
-                    Text(session.speechLabel)
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(minWidth: 52)
-                        .background(UMTheme.card, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .disabled(cooling)
-                .contextMenu {
-                    ForEach(session.speechOptions) { option in
-                        Button(option.menuTitle) {
-                            session.selectSpeechOption(option.id)
+            HStack(alignment: .bottom, spacing: 8) {
+                    Button {
+                        session.cycleSpeechOption()
+                    } label: {
+                        Text(session.speechLabel)
+                            .font(.caption.weight(.bold))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 52, height: composerIdleHeight)
+                    .background {
+                        Color.clear.glassEffect(
+                            .regular.tint(cooling ? .red : nil).interactive(!cooling),
+                            in: Capsule()
+                        )
+                    }
+                    .foregroundStyle(.white)
+                    .disabled(cooling)
+                    .contextMenu {
+                        ForEach(session.speechOptions) { option in
+                            Button(option.menuTitle) {
+                                session.selectSpeechOption(option.id)
+                            }
+                        }
+                        if session.setupWhispers {
+                            Divider()
+                            Toggle("Leak Whispers", isOn: Binding(
+                                get: { session.whisperForceLeak },
+                                set: { session.whisperForceLeak = $0 }
+                            ))
                         }
                     }
-                    if session.setupWhispers {
-                        Divider()
-                        Toggle("Leak Whispers", isOn: Binding(
-                            get: { session.whisperForceLeak },
-                            set: { session.whisperForceLeak = $0 }
-                        ))
+
+                    // Return sends (commands too) without ever dismissing the keyboard.
+                    UMComposerField(
+                        text: cappedDraft,
+                        isFocused: chatFocused,
+                        placeholder: placeholder(cooling: cooling),
+                        enabled: !cooling,
+                        textColor: cooling ? .white : .label,
+                        maxLength: UMConfig.maxChatLength,
+                        onReturn: send,
+                        onTab: {
+                            guard !cooling, let last = draft.last, !last.isWhitespace else { return true }
+                            return completeMedia() || completeName()
+                        },
+                        onShortcut: { session.performShortcut($0) }
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background {
+                        Color.clear.glassEffect(
+                            .regular.tint(cooling ? .red : nil).interactive(!cooling),
+                            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        )
                     }
-                }
+                    .onChange(of: draft) { oldValue, newValue in
+                        if cooling { return }
+                        handleTyping(oldValue, newValue)
+                    }
 
-                // Return sends (commands too) without ever dismissing the keyboard.
-                UMComposerField(
-                    text: cappedDraft,
-                    isFocused: chatFocused,
-                    placeholder: placeholder(cooling: cooling),
-                    enabled: !cooling,
-                    textColor: cooling ? .white : .label,
-                    maxLength: UMConfig.maxChatLength,
-                    onReturn: send,
-                    onTab: {
-                        // Text ending in whitespace (e.g. right after a completion's trailing space): no-op.
-                        guard !cooling, let last = draft.last, !last.isWhitespace else { return true }
-                        return completeMedia() || completeName()
-                    },
-                    onShortcut: { session.performShortcut($0) }
-                )
-                .padding(10)
-                .background(fieldBackground(cooling: cooling), in: RoundedRectangle(cornerRadius: 10))
-                .onChange(of: draft) { oldValue, newValue in
-                    if cooling { return }
-                    handleTyping(oldValue, newValue)
+                    // Keyboard toggle (Return is the send key).
+                    Button {
+                        chatFocused.wrappedValue.toggle()
+                    } label: {
+                        // Icon follows keyboardWillShow/WillHide (fires before the slide begins) and swaps
+                        // with no transition of its own, so it rides the same keyboard animation as the bar.
+                        Image(systemName: keyboardShown ? "chevron.down" : "chevron.up")
+                            .contentTransition(.identity)
+                            .transaction { $0.animation = nil }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(UMTheme.muted)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(keyboardShown ? "Hide keyboard" : "Show keyboard")
+                    #if canImport(UIKit)
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                        keyboardShown = true
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                        keyboardShown = false
+                    }
+                    #endif
                 }
-
-                // Keyboard toggle (Return is the send key).
-                Button {
-                    chatFocused.wrappedValue.toggle()
-                } label: {
-                    // Icon follows keyboardWillShow/WillHide (fires before the slide begins) and swaps
-                    // with no transition of its own, so it rides the same keyboard animation as the bar.
-                    Image(systemName: keyboardShown ? "chevron.down" : "chevron.up")
-                        .contentTransition(.identity)
-                        .transaction { $0.animation = nil }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(UMTheme.muted)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(keyboardShown ? "Hide keyboard" : "Show keyboard")
-                #if canImport(UIKit)
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                    keyboardShown = true
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                    keyboardShown = false
-                }
-                #endif
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(UMTheme.elevated)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             .onChange(of: cooling) { _, nowCooling in
                 if nowCooling {
                     if !draft.isEmpty {
@@ -1063,9 +1081,6 @@ private struct ChatComposer: View {
         return session.speechPlaceholder
     }
 
-    private func fieldBackground(cooling: Bool) -> Color {
-        cooling ? Color.red.opacity(0.72) : UMTheme.card
-    }
 
     private var cappedDraft: Binding<String> {
         Binding(
