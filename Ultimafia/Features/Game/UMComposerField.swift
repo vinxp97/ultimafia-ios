@@ -98,19 +98,18 @@ struct UMComposerField: UIViewRepresentable {
         let inset = tv.textContainerInset
         let text = tv.text ?? ""
         let textWidth = max(1, width - inset.left - inset.right)
-        let contentHeight: CGFloat
-        if text.isEmpty {
-            // An empty draft is always exactly one line; never inherit UITextView's old bounds.
-            contentHeight = font.lineHeight + inset.top + inset.bottom
-        } else {
-            let measured = (text as NSString).boundingRect(
-                with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: [.font: font],
-                context: nil
-            )
-            contentHeight = ceil(measured.height) + inset.top + inset.bottom
-        }
+        // Both cases measure the same way, so an empty draft is exactly as tall as a one-line draft.
+        // Sizing the empty case from the font's line height instead left the pill a pixel or two
+        // shorter, and it grew the moment the first letter was typed. "Ag" is measured only for its
+        // one-line height, which covers an ascender and a descender.
+        let sample = text.isEmpty ? "Ag" : text
+        let measured = (sample as NSString).boundingRect(
+            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font],
+            context: nil
+        )
+        let contentHeight = ceil(measured.height) + inset.top + inset.bottom
 
         let height = UMComposerSizing.height(
             contentHeight: contentHeight,

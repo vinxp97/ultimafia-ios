@@ -30,7 +30,15 @@ struct SetupSearchView: View {
                     }
                 }
                 ForEach(Array(setups.enumerated()), id: \.element.id) { index, setup in
-                    SetupSearchCard(setup: setup) { hosting = setup }
+                    SetupSearchCard(setup: setup) {
+                        // Hosting starts a game, so being seated blocks it the same way joining or
+                        // spectating does. Say so instead of opening a flow that can't finish.
+                        if app.seatedGameId != nil {
+                            app.alertMessage = "You're already in a game. Leave it before hosting another."
+                        } else {
+                            hosting = setup
+                        }
+                    }
                         .onAppear {
                             // Infinite scroll: prefetch when one of the last few rows appears.
                             if index >= setups.count - 3 { Task { await loadMore() } }
@@ -48,9 +56,6 @@ struct SetupSearchView: View {
         .navigationTitle("Host a Game")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
-        .onAppear { app.suppressAppBar = true }
-        .onDisappear { app.suppressAppBar = false }
         .task(id: filter) { await load(reset: true) }
         .task(id: query) {
             // Debounce typing; .task(id:) cancels the previous run.

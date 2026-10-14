@@ -18,6 +18,7 @@ struct ProfileView: View {
     @AppStorage(GameAudio.alertKey) private var alertVolume = 1.0
     @State private var confirmMuteAlerts = false
     @State private var confirmClearCache = false
+    @State private var confirmSignOut = false
     @State private var cacheBytes: Int64 = 0
     @State private var clearedMessage: String?
     @State private var trophies: [UMTrophy] = []
@@ -145,7 +146,13 @@ struct ProfileView: View {
                             .listRowBackground(UMTheme.card)
                     }
                     Button("Sign out", role: .destructive) {
-                        Task { await app.signOut() }
+                        // Signing out while a live game is running leaves it for you, so it asks
+                        // first, exactly like the Leave action does.
+                        if app.game?.leaveNeedsConfirm == true {
+                            confirmSignOut = true
+                        } else {
+                            Task { await app.signOut() }
+                        }
                     }
                     .listRowBackground(UMTheme.card)
                 }
@@ -175,6 +182,14 @@ struct ProfileView: View {
             .refreshable { await app.refreshUserInfo() }
             .task(id: app.user?.id) { await loadTrophies() }
             .sheet(item: $selectedTrophy) { UMTrophyDetailSheet(trophy: $0) }
+            .confirmationDialog("Sign out and leave the game?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out and leave", role: .destructive) { Task { await app.signOut() } }
+                Button("Stay", role: .cancel) {}
+            } message: {
+                Text(app.game?.participationRequired == true
+                     ? "Your participation is still required in this game. Signing out leaves it and may be penalised."
+                     : "Signing out will leave the game you're in.")
+            }
             .confirmationDialog("Clear cached media?", isPresented: $confirmClearCache, titleVisibility: .visible) {
                 Button("Clear", role: .destructive) {
                     Task {

@@ -84,6 +84,11 @@ struct HostGameView: View {
     }
 
     private func host() async {
+        // Backstop for the same rule: a second game must never start over a live one.
+        if app.seatedGameId != nil {
+            error = "You're already in a game. Leave it before hosting another."
+            return
+        }
         submitting = true
         defer { submitting = false }
         do {
