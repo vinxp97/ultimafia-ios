@@ -6,9 +6,48 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AB1A000C303D300000FF9116 /* UltimafiaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AB1A0001303D300000FF9116 /* UltimafiaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AB1A000E303D300000FF9116 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABA694BE303D294F00FF9116 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB1A0004303D300000FF9116;
+			remoteInfo = UltimafiaWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AB1A000B303D300000FF9116 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AB1A000C303D300000FF9116 /* UltimafiaWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		AB1A0001303D300000FF9116 /* UltimafiaWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UltimafiaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		ABA694C6303D294F00FF9116 /* Ultimafia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ultimafia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AB1A000F303D300000FF9116 /* Exceptions for "UltimafiaWidgets" folder in "UltimafiaWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AB1A0004303D300000FF9116 /* UltimafiaWidgets */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ABA694C8303D294F00FF9116 /* Ultimafia */ = {
@@ -16,10 +55,30 @@
 			path = Ultimafia;
 			sourceTree = "<group>";
 		};
+		AB1A0002303D300000FF9116 /* UltimafiaWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AB1A000F303D300000FF9116 /* Exceptions for "UltimafiaWidgets" folder in "UltimafiaWidgets" target */,
+			);
+			path = UltimafiaWidgets;
+			sourceTree = "<group>";
+		};
+		AB1A0003303D300000FF9116 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		ABA694C3303D294F00FF9116 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB1A0006303D300000FF9116 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +92,8 @@
 			isa = PBXGroup;
 			children = (
 				ABA694C8303D294F00FF9116 /* Ultimafia */,
+				AB1A0003303D300000FF9116 /* Shared */,
+				AB1A0002303D300000FF9116 /* UltimafiaWidgets */,
 				ABA694C7303D294F00FF9116 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				ABA694C6303D294F00FF9116 /* Ultimafia.app */,
+				AB1A0001303D300000FF9116 /* UltimafiaWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,13 +117,16 @@
 				ABA694C2303D294F00FF9116 /* Sources */,
 				ABA694C3303D294F00FF9116 /* Frameworks */,
 				ABA694C4303D294F00FF9116 /* Resources */,
+				AB1A000B303D300000FF9116 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AB1A000D303D300000FF9116 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				ABA694C8303D294F00FF9116 /* Ultimafia */,
+				AB1A0003303D300000FF9116 /* Shared */,
 			);
 			name = Ultimafia;
 			packageProductDependencies = (
@@ -69,6 +134,29 @@
 			productName = Ultimafia;
 			productReference = ABA694C6303D294F00FF9116 /* Ultimafia.app */;
 			productType = "com.apple.product-type.application";
+		};
+		AB1A0004303D300000FF9116 /* UltimafiaWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB1A0008303D300000FF9116 /* Build configuration list for PBXNativeTarget "UltimafiaWidgets" */;
+			buildPhases = (
+				AB1A0005303D300000FF9116 /* Sources */,
+				AB1A0006303D300000FF9116 /* Frameworks */,
+				AB1A0007303D300000FF9116 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AB1A0002303D300000FF9116 /* UltimafiaWidgets */,
+				AB1A0003303D300000FF9116 /* Shared */,
+			);
+			name = UltimafiaWidgets;
+			packageProductDependencies = (
+			);
+			productName = UltimafiaWidgets;
+			productReference = AB1A0001303D300000FF9116 /* UltimafiaWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +169,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					ABA694C5303D294F00FF9116 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					AB1A0004303D300000FF9116 = {
 						CreatedOnToolsVersion = 26.6;
 					};
 				};
@@ -100,12 +191,20 @@
 			projectRoot = "";
 			targets = (
 				ABA694C5303D294F00FF9116 /* Ultimafia */,
+				AB1A0004303D300000FF9116 /* UltimafiaWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		ABA694C4303D294F00FF9116 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB1A0007303D300000FF9116 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +221,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB1A0005303D300000FF9116 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AB1A000D303D300000FF9116 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB1A0004303D300000FF9116 /* UltimafiaWidgets */;
+			targetProxy = AB1A000E303D300000FF9116 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		ABA694CF303D295000FF9116 /* Debug */ = {
@@ -262,6 +376,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Ultimafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -311,6 +426,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Ultimafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -343,6 +459,60 @@
 			};
 			name = Release;
 		};
+		AB1A0009303D300000FF9116 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB1A000A303D300000FF9116 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -360,6 +530,15 @@
 			buildConfigurations = (
 				ABA694D2303D295000FF9116 /* Debug */,
 				ABA694D3303D295000FF9116 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AB1A0008303D300000FF9116 /* Build configuration list for PBXNativeTarget "UltimafiaWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB1A0009303D300000FF9116 /* Debug */,
+				AB1A000A303D300000FF9116 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
