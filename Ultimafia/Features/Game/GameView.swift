@@ -58,7 +58,8 @@ private struct GameScreen: View {
             let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
             let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
             VStack(spacing: 0) {
-                GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave)
+                GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave,
+                           onLeavePrompt: { app.showLeaveConfirm = true })
                 if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
@@ -201,15 +202,38 @@ private struct GameHeader: View {
     var wide = false
     var onClose: (() -> Void)? = nil
     var onLeave: (() -> Void)? = nil
+    /// Long press on the back arrow: Leave confirmation (5 s lock while participation is required).
+    var onLeavePrompt: (() -> Void)? = nil
+
+    private var seated: Bool { !session.isReview && !session.spectate && session.leaveNeedsConfirm }
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             if let onClose {
-                Button(action: onClose) {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                if seated, let onLeavePrompt {
+                    // Tap: soft-leave (lobby, session stays). Long press: Leave confirmation.
+                    Image(systemName: "arrow.left")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onClose)
+                        .onLongPressGesture(minimumDuration: 0.5) {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            onLeavePrompt()
+                        }
+                        .accessibilityElement()
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Return to lobby")
+                        .accessibilityHint("Long press to leave the game")
+                        .accessibilityAction(.default, onClose)
+                        .accessibilityAction(named: "Leave game", onLeavePrompt)
+                } else {
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(session.isReview ? "Back to games" : (session.spectate ? "Stop spectating" : "Return to lobby"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(session.isReview ? "Back to games" : (session.spectate ? "Stop spectating" : "Return to lobby"))
             }
             if session.isReview {
                 Text("REVIEW")
