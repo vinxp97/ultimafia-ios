@@ -1,0 +1,10 @@
+version: 1
+bundleID: com.ue2020.ultimafia.dev
+iconPath: Ultimafia/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+skipLSP: true
+resources:
+  - Ultimafia/PrivacyInfo.xcprivacy
+  - Ultimafia/UMTerminology.json
+  - Ultimafia/Sounds
+  - Ultimafia/Fonts
+  - Ultimafia/RoleIcons
