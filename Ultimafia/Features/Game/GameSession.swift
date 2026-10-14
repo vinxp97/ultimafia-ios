@@ -865,8 +865,10 @@ final class GameSession {
             typingSuppressed = false
             slashHint = nil
         }
-        let meetingId = selectedSpeechMeetingId
+        let selected = speechChannels.first(where: { $0.id == selectedSpeechMeetingId && $0.canTalk })?.id
+        let meetingId = selected
             ?? speechChannels.first(where: { $0.canTalk })?.id
+            ?? selectedSpeechMeetingId
             ?? speechChannels.first?.id
             ?? lastTalkMeetingId
         guard let meetingId else { return false }
@@ -891,8 +893,10 @@ final class GameSession {
         guard !typingSuppressed, !isDraftOnly else { return }
         guard isViewingLive, !spectate, canTalk else { return }
         guard currentSpeechOption.abilityName == nil else { return }
-        let meetingId = selectedSpeechMeetingId
+        let selected = speechChannels.first(where: { $0.id == selectedSpeechMeetingId && $0.canTalk })?.id
+        let meetingId = selected
             ?? speechChannels.first(where: { $0.canTalk })?.id
+            ?? selectedSpeechMeetingId
             ?? speechChannels.first?.id
         guard let meetingId else { return }
         if typingIn != meetingId {
@@ -1766,7 +1770,13 @@ final class GameSession {
         snapshotLiveMeetings()
         maybeNotifyKicks(nextVotes)
         speechChannels = nextSpeech.filter { $0.name != "Spectator Meeting" || spectate }
-        if selectedSpeechMeetingId == nil || !speechChannels.contains(where: { $0.id == selectedSpeechMeetingId }) {
+        // Re-pick when the selection is gone OR can't talk while another channel can. Spectators get
+        // the village (amMember false, canTalk false) and the Spectator Meeting as separate `meeting`
+        // events; the village arrived first and stayed selected, so speak went to a meeting the
+        // server silently ignores (Meeting.speak: not a member) and their own lines never echoed.
+        let selectedCanTalk = speechChannels.first(where: { $0.id == selectedSpeechMeetingId })?.canTalk
+        if selectedSpeechMeetingId == nil || selectedCanTalk == nil
+            || (selectedCanTalk == false && speechChannels.contains(where: { $0.canTalk })) {
             selectedSpeechMeetingId = speechChannels.first(where: { $0.canTalk })?.id ?? speechChannels.first?.id
         }
         if let id = selectedSpeechMeetingId, let ch = speechChannels.first(where: { $0.id == id }) {
