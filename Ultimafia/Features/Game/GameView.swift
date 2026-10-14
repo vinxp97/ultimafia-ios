@@ -28,10 +28,9 @@ struct GameView: View {
                     draft: $draft,
                     selectedPanel: $selectedPanel,
                     chatFocused: $chatFocused,
-                    onLeave: {
-                        if session.leaveNeedsConfirm { app.showLeaveConfirm = true }
-                        else { app.leaveActiveGame() }
-                    },
+                    // One owner for the rule: requestLeave confirms when participation is still
+                    // required and leaves outright otherwise.
+                    onLeave: { app.requestLeave() },
                     onDetach: { app.detachFromGame() }
                 )
             } else {
@@ -45,7 +44,6 @@ struct GameView: View {
 
 private struct GameScreen: View {
     @Environment(AppModel.self) private var app
-    @State private var didAppearOnce = false
     var session: GameSession
     @Binding var draft: String
     @Binding var selectedPanel: Int
@@ -58,8 +56,11 @@ private struct GameScreen: View {
             let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
             let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
             VStack(spacing: 0) {
+                // returnToLobby keeps a seated player's connection (the Lobby tab action does the
+                // same) and closes spectators and reviews, so the header always has a way out.
                 GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave,
-                           onLeavePrompt: { app.showLeaveConfirm = true })
+                           onLeavePrompt: { app.showLeaveConfirm = true },
+                           showsGuides: threeColumns)
                 if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
@@ -77,18 +78,35 @@ private struct GameScreen: View {
                                 .frame(width: geo.size.width * 0.25)
                         }
                     } else {
-                        switch selectedPanel {
-                        case 1:
+                        // Every panel stays in the hierarchy, so leaving the chat and coming back keeps
+                        // its scroll view and where it was. A `switch` here tore the chat pane down,
+                        // and rebuilding it started at the top: that is only corrected when you were
+                        // following, which is why reading in the middle put you back at the top. Only
+                        // the selected panel is drawn and hit-testable, and the chat stops recording
+                        // what is on screen while it is hidden.
+                        ZStack {
                             GameTownPane(session: session)
-                        case 2:
+                                .opacity(selectedPanel == 1 ? 1 : 0)
+                                .allowsHitTesting(selectedPanel == 1)
+                                .accessibilityHidden(selectedPanel != 1)
                             GameActPane(session: session)
-                        default:
+                                .opacity(selectedPanel == 2 ? 1 : 0)
+                                .allowsHitTesting(selectedPanel == 2)
+                                .accessibilityHidden(selectedPanel != 2)
                             GameChatPane(
                                 session: session,
                                 draft: $draft,
                                 chatFocused: chatFocused,
-                                showsPhaseBar: !wideHeader
+                                showsPhaseBar: !wideHeader,
+                                isOnScreen: selectedPanel == 0
                             )
+                            .opacity(selectedPanel == 0 ? 1 : 0)
+                            .allowsHitTesting(selectedPanel == 0)
+                            .accessibilityHidden(selectedPanel != 0)
+                        }
+                        .onChange(of: selectedPanel) { _, panel in
+                            // Leaving the chat puts the keyboard away, the way the old teardown did.
+                            if panel != 0 { chatFocused.wrappedValue = false }
                         }
                     }
                 }
@@ -113,24 +131,15 @@ private struct GameScreen: View {
         .task { await RoleCatalog.shared.load() }
         // Warm the on-disk custom asset cache: own maps once, then every player's maps/avatars.
         .task(id: session.players.count) { await prefetchCustomAssets() }
-        // Entering a game or review collapses the bottom bar, like tapping Hide; restore it on the way out.
+        // Whether the bar is showing is the AppModel's single decision (`showsAppTabs`), not
+        // something this screen toggles; all the screen owns is whether the game is being watched.
         .onAppear {
-            // Collapse the bar on a fresh join/review, or when coming back from the lobby with a ping badge.
-            // Switching back from the You tab leaves it as it was.
-            if !didAppearOnce {
-                didAppearOnce = true
-                let fromLobby = app.resumingFromLobby
-                app.resumingFromLobby = false
-                if !fromLobby || app.mentionBadge > 0 { app.hideAppTabs = true }
-            }
             if !session.isReview {
                 app.isViewingGame = true
                 app.mentionCount = 0
             }
         }
         .onDisappear { if !session.isReview { app.isViewingGame = false } }
-        // Left the game screen for the lobby (not just another tab): bring the bar back.
-        .onDisappear { if !app.isOnCollapsibleGameScreen { app.hideAppTabs = false } }
     }
 
     private func returnToLobby() {
@@ -197,6 +206,7 @@ enum UMGameLayout {
 }
 
 private struct GameHeader: View {
+    @Environment(AppModel.self) private var app
     var session: GameSession
     /// iPad: setup name, roles strip, paged phases and timer in one row.
     var wide = false
@@ -206,6 +216,10 @@ private struct GameHeader: View {
     var onLeavePrompt: (() -> Void)? = nil
 
     private var seated: Bool { !session.isReview && !session.spectate && session.leaveNeedsConfirm }
+    /// The panel row carries the guides where it is drawn; the three-column iPad layout has no row,
+    /// so the header has to carry them instead.
+    var showsGuides = false
+    @AppStorage("um.showSetupGuides") private var showSetupGuides = true
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -218,7 +232,7 @@ private struct GameHeader: View {
                         .contentShape(Rectangle())
                         .onTapGesture(perform: onClose)
                         .onLongPressGesture(minimumDuration: 0.5) {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            UMHaptics.quoteTapped()
                             onLeavePrompt()
                         }
                         .accessibilityElement()
@@ -242,6 +256,8 @@ private struct GameHeader: View {
                     .background(UMTheme.blood.opacity(0.25), in: Capsule())
                     .foregroundStyle(UMTheme.blood)
             } else {
+                // The chevron above is the way back to the lobby while the bar is hidden; the game
+                // keeps running and stays reachable from the Game tab.
                 Circle()
                     .fill(session.connected ? UMTheme.village : UMTheme.mafia)
                     .frame(width: 8, height: 8)
@@ -273,18 +289,10 @@ private struct GameHeader: View {
                 Spacer(minLength: 8)
             }
             PhaseTimerBadge(session: session)
-            if !session.isReview, !session.spectate, let onClose, let onLeave {
-                Menu {
-                    Button("Return to Lobby", action: onClose)
-                    Button("Leave Game", role: .destructive, action: onLeave)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Game options")
+            if showsGuides, showSetupGuides, session.setupId != nil {
+                SetupGuidesButton(session: session, fillsWidth: false)
             }
+            // Leaving: long press the back arrow (tap returns to the lobby and keeps the session).
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -297,56 +305,24 @@ private struct GamePanelPicker: View {
     var session: GameSession
     @Binding var selectedPanel: Int
     var showsPanelTabs = true
-    @Environment(AppModel.self) private var app
-    @State private var showGuides = false
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
 
     var body: some View {
-        HStack(spacing: 4) {
-            if showsPanelTabs {
+        // Only drawn when there are panels to switch. The three-column iPad layout shows the panels
+        // themselves, and this row used to render anyway holding just the guides button — which,
+        // sizing to its content, left a lone grey capsule at the bottom that reads as a leftover tab
+        // bar. On that layout the header carries the guides instead.
+        if showsPanelTabs {
+            HStack(spacing: 4) {
                 tabBtn("Village", 1, "person.3")
                 tabBtn("Chat", 0, "text.bubble")
                 tabBtn("Act", 2, "hand.raised")
+                if showSetupGuides, session.setupId != nil { SetupGuidesButton(session: session) }
             }
-            if showSetupGuides, session.setupId != nil { guidesBtn }
-            hideBtn
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(UMTheme.card)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .background(UMTheme.card)
-        .sheet(isPresented: $showGuides) {
-            if let id = session.setupId {
-                GuidesView(setupId: id, setupName: session.setupName, gameType: session.setupGameType,
-                           otherRoles: session.guessableRoles.map(\.raw))
-            }
-        }
-    }
-
-    private var guidesBtn: some View {
-        Button { showGuides = true } label: {
-            Label("Guides", systemImage: "book")
-                .font(.caption.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(UMTheme.muted)
-        .accessibilityLabel("Setup guides")
-    }
-
-    private var hideBtn: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.28)) { app.hideAppTabs.toggle() }
-        } label: {
-            Label(app.hideAppTabs ? "Show" : "Hide", systemImage: app.hideAppTabs ? "chevron.up" : "chevron.down")
-                .font(.caption.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(app.hideAppTabs ? UMTheme.elevated : .clear, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(app.hideAppTabs ? .white : UMTheme.muted)
-        .accessibilityLabel(app.hideAppTabs ? "Show app bar" : "Hide app bar")
     }
 
     private func tabBtn(_ title: String, _ tag: Int, _ icon: String) -> some View {
@@ -364,6 +340,38 @@ private struct GamePanelPicker: View {
     }
 }
 
+/// The setup guides. The panel row gives it an equal share of the width; the header, where it goes
+/// on the three-column iPad layout, wants a plain icon.
+private struct SetupGuidesButton: View {
+    var session: GameSession
+    var fillsWidth = true
+    @State private var showGuides = false
+
+    var body: some View {
+        Button { showGuides = true } label: {
+            if fillsWidth {
+                Label("Guides", systemImage: "book")
+                    .font(.caption.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            } else {
+                Image(systemName: "book")
+                    .font(.title3)
+                    .frame(width: 32, height: 32)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(UMTheme.muted)
+        .accessibilityLabel("Setup guides")
+        .sheet(isPresented: $showGuides) {
+            if let id = session.setupId {
+                GuidesView(setupId: id, setupName: session.setupName, gameType: session.setupGameType,
+                           otherRoles: session.guessableRoles.map(\.raw))
+            }
+        }
+    }
+}
+
 /// Non-observed buffer so scroll-visibility callbacks coalesce into one state update per frame.
 private final class VisibleIdBuffer {
     var pending: Set<String> = []
@@ -375,6 +383,9 @@ private struct GameChatPane: View {
     @Binding var draft: String
     var chatFocused: Binding<Bool>
     var showsPhaseBar = true
+    /// False while another panel is showing. The pane stays alive so its position survives the
+    /// switch, but it stops recording what the reader can see while it is off screen.
+    var isOnScreen = true
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
@@ -406,6 +417,7 @@ private struct GameChatPane: View {
     }
 
     private func noteVisibility(_ id: String, visible: Bool, phase: Int) {
+        guard isOnScreen else { return }
         guard phase == trackedPhase, phase == session.viewingPhaseId else { return }
         let buffer = visibleBuffer
         if visible { buffer.pending.insert(id) } else { buffer.pending.remove(id) }
@@ -471,7 +483,10 @@ private struct GameChatPane: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
-                    .padding(.bottom, 28)
+                    // The last line sits close under the floating composer: the composer's own height
+                    // is already reserved by the scroll content margin, so this is only the room
+                    // between the two.
+                    .padding(.bottom, 12)
                 }
                 .pointerScrolling()
                 .contentMargins(.bottom, composerOverlayHeight, for: .scrollContent)
@@ -596,12 +611,18 @@ private struct GameChatPane: View {
         }
         .overlay(alignment: .bottom) {
             // Outside the transcript scroll hierarchy, but floating above its content rather
-            // than reserving a separate opaque strip. Only the pills draw a glass background.
+            // than reserving a separate opaque strip. Only the composer's own controls draw a glass
+            // background, so nothing else gains an opaque strip.
             if session.showComposer {
                 ChatComposer(session: session, draft: $draft, chatFocused: chatFocused)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         if abs(composerOverlayHeight - height) > 0.25 {
                             composerOverlayHeight = height
+                            // The reserved inset moves with the composer, so the bottom of the
+                            // transcript has to move with it in the same pass. Otherwise the last row
+                            // is drawn under the pill until the next per-frame sample, which is the
+                            // same one-frame slip as a newly arrived row.
+                            DispatchQueue.main.async { transcriptScroll.applyPendingNow() }
                         }
                     }
             }
@@ -640,6 +661,10 @@ private struct GameChatPane: View {
     private func jumpToLatestIfPinned() {
         guard !session.isReview, session.isViewingLive, let last = session.displayedMessages.last else { return }
         let mine = last.senderId == session.selfId
+        // A quote is yours, but it is written while reading back through the chat: following it
+        // would throw away the very position the quote was picked from. It still lands at the
+        // bottom; you keep your place.
+        if mine, last.isQuote, !transcriptScroll.isFollowingLatest { return }
         if transcriptScroll.isFollowingLatest || mine {
             markAllSeen()
             unreadCount = 0
@@ -653,6 +678,10 @@ private struct GameChatPane: View {
         restoringScroll = false
         restoreGeneration = UUID()
         transcriptScroll.requestLatest()
+        // The row that just arrived is laid out after this update pass, so apply the scroll as soon
+        // as that has happened rather than leaving it to the next display-link tick, which is late
+        // enough for the row to be drawn behind the composer for one frame.
+        DispatchQueue.main.async { transcriptScroll.applyPendingNow() }
     }
 
     private func jumpToTop() {
@@ -1037,6 +1066,11 @@ private struct ChatComposer: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(UMTheme.muted)
                             .frame(width: 32, height: 32)
+                            .background {
+                                // A glass bubble like the Say pill, so the row's controls read as one
+                                // set rather than two pills and a bare icon.
+                                Color.clear.glassEffect(.regular.interactive(true), in: Capsule())
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -1182,6 +1216,10 @@ private struct ChatRow: View {
         .padding(.top, grouped ? 0 : (layout == .standard && isPlayerChat(line) ? 8 : 0))
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
+                // The haptic is the acknowledgement for the gesture, so it fires on the same answer
+                // as the quote itself: a double tap that would do nothing stays silent.
+                guard session.canQuote(line) else { return }
+                UMHaptics.quoteTapped()
                 session.quote(line)
             }
         )

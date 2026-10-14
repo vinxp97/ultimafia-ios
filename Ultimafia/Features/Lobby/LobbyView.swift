@@ -48,16 +48,14 @@ struct LobbyView: View {
             }
             .navigationDestination(for: AppModel.Route.self) { route in
                 switch route {
-                case .game:
-                    GameView()
                 case .profile(let id, let name):
                     UserProfileView(userId: id, userName: name)
                 case .family(let id, let name):
                     FamilyView(familyId: id, familyName: name)
-                case .setupSearch:
-                    SetupSearchView()
                 case .review:
                     GameView(review: true)
+                case .host:
+                    SetupSearchView()
                 }
             }
         }
@@ -65,22 +63,38 @@ struct LobbyView: View {
 
     private var playHeader: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(SeasonalLogo.current())
-                .resizable()
-                .scaledToFit()
-                .frame(maxHeight: 44, alignment: .leading)
-                .accessibilityHidden(true)
-            Text("Mobile")
-                .font(.title3.weight(.heavy))
-                .tracking(1.5)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            // The branding stays one combined element, and the host button is a control of its own
+            // beside it, so it stays reachable instead of being swallowed by the combined label.
+            HStack(alignment: .center, spacing: 10) {
+                Image(SeasonalLogo.current())
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 44, alignment: .leading)
+                    .accessibilityHidden(true)
+                Text("Mobile")
+                    .font(.title3.weight(.heavy))
+                    .tracking(1.5)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Ultimafia Mobile")
+            .accessibilityHint("Pull down to refresh")
             Spacer(minLength: 0)
+            // Hosting belongs to the lobby rather than a section of its own, the way the website has
+            // it, so the way in lives in the lobby header and the bar never moves for it.
+            Button { app.openHost() } label: {
+                Label("Host", systemImage: "plus.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(UMTheme.card, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .accessibilityLabel("Host a game")
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Ultimafia Mobile")
-        .accessibilityHint("Pull down to refresh")
     }
 
     private var onlineStrip: some View {
@@ -145,7 +159,7 @@ struct LobbyView: View {
                 Button("Return to Game") { app.resumeSeatedGame() }
                     .buttonStyle(.borderedProminent)
                     .tint(UMTheme.blood)
-                Button("Leave Game", role: .destructive) { app.leaveActiveGame() }
+                Button("Leave Game", role: .destructive) { app.requestLeave() }
                     .buttonStyle(.bordered)
             }
         }
@@ -233,7 +247,7 @@ struct GameRow: View {
                     Button("Return") { app.resumeSeatedGame() }
                         .buttonStyle(.borderedProminent)
                         .tint(UMTheme.blood)
-                    Button("Leave Game", role: .destructive) { app.leaveActiveGame() }
+                    Button("Leave Game", role: .destructive) { app.requestLeave() }
                         .buttonStyle(.bordered)
                 } else if game.isOpen {
                     Button("Join") { app.openGame(game) }

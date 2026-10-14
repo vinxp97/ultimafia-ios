@@ -61,143 +61,23 @@ struct ContentView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
-    @State private var tab = "play"
-    @State private var keyboardShown = false
-    @Namespace private var barNS
-
-    private enum BarItem: String { case leave, back, youBack, lobby, game, create, you }
-
-    /// Stable buttons: seated -> Leave, Lobby, Game, You; otherwise Host, Lobby, You.
-    /// Reviewing (Play tab): Back takes Leave's spot; seated keeps Game, else Host.
-    private var items: [BarItem] {
-        if tab == "you", !app.youPath.isEmpty {
-            return app.seatedGameId != nil ? [.youBack, .lobby, .game, .you] : [.youBack, .create, .lobby, .you]
-        }
-        if tab == "play", app.isOnReview {
-            return app.seatedGameId != nil ? [.back, .lobby, .game, .you] : [.back, .create, .lobby, .you]
-        }
-        return app.seatedGameId != nil ? [.leave, .lobby, .game, .you] : [.create, .lobby, .you]
-    }
-
-    private var selected: BarItem {
-        if tab == "you" { return .you }
-        return app.isOnGameScreen ? .game : .lobby
-    }
-
-    private func tap(_ item: BarItem) {
-        switch item {
-        case .leave:
-            if let session = app.game {
-                if session.leaveNeedsConfirm { app.showLeaveConfirm = true } else { app.leaveActiveGame() }
-            }
-        case .youBack:
-            if !app.youPath.isEmpty { app.youPath.removeLast() }
-        case .back:
-            // Same as the old review top-bar arrow: close the review (no leave endpoint).
-            app.closeReview()
-        case .lobby:
-            tab = "play"
-            if !app.path.isEmpty { app.goToLobby() } else { app.lobbyScrollToTop += 1 }
-        case .game:
-            let fromYou = tab == "you"
-            tab = "play"
-            // Back from You onto a game screen that's still on the stack: just switch, no collapse.
-            if fromYou, app.isOnGameScreen { return }
-            if !app.isOnGameScreen { app.resumeSeatedGame() }
-        case .create:
-            tab = "play"
-            app.openCreate()
-        case .you:
-            if tab == "play", app.isOnProfile { app.dropProfiles() }
-            // Re-selecting You returns it to its root.
-            app.youPath = []
-            tab = "you"
-        }
-    }
-
-    private func info(_ item: BarItem) -> (String, String) {
-        switch item {
-        case .leave: ("Leave", "arrow.left")
-        case .back, .youBack: ("Back", "arrow.left")
-        case .lobby: ("Lobby", "list.bullet.rectangle")
-        case .game: ("Game", "gamecontroller")
-        case .create: ("Host", "plus.circle")
-        case .you: ("You", "person")
-        }
-    }
-
-    /// `hideAppTabs` = app bar collapsed; it only applies on the game screen (Play tab).
-    private var showBar: Bool {
-        if keyboardShown { return false }
-        if tab == "you" { return true }
-        if app.suppressAppBar { return false }
-        return !app.hideAppTabs || !app.isOnCollapsibleGameScreen
-    }
-
-    private var bar: some View {
-        HStack(spacing: 0) {
-            ForEach(items, id: \.self) { item in
-                let (title, icon) = info(item)
-                let on = item == selected
-                Button { tap(item) } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: icon).font(.system(size: 20))
-                            .overlay(alignment: .topTrailing) {
-                                if item == .game, app.mentionBadge > 0 {
-                                    Text("\(app.mentionBadge)")
-                                        .font(.caption2.bold()).foregroundStyle(.white)
-                                        .padding(.horizontal, 5).padding(.vertical, 1)
-                                        .background(Capsule().fill(.red))
-                                        .offset(x: 12, y: -6)
-                                }
-                            }
-                        Text(title).font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundStyle(on ? Color.accentColor : Color.primary.opacity(0.85))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                    .background {
-                        // Selected pill inside the glass capsule, like the system iOS 26 tab bar.
-                        if on {
-                            Capsule().fill(Color.white.opacity(0.12))
-                                .matchedGeometryEffect(id: "umSelectedTab", in: barNS)
-                        }
-                    }
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(4)
-        .animation(.snappy(duration: 0.25), value: selected)
-        .animation(.snappy(duration: 0.25), value: items)
-        // iOS 26 Liquid Glass (deployment target is 26.5, so no material fallback is needed).
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
-    }
 
     var body: some View {
         ZStack {
-            // A real stack (not a safe-area inset) so screens end above the bar and their own
-            // bottom rows (e.g. the in-game picker) are never covered by it.
-            VStack(spacing: 0) {
-                TabView(selection: $tab) {
-                    LobbyView()
-                        .tag("play")
-                        .toolbar(.hidden, for: .tabBar)
-                    ProfileView()
-                        .tag("you")
-                        .toolbar(.hidden, for: .tabBar)
-                }
-                if showBar {
-                    bar.transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .animation(.snappy(duration: 0.28), value: showBar)
-            .background(UMTheme.bg.ignoresSafeArea())
+            // Sections, always present in this order. UIKit owns the bar, so selection, Liquid
+            // Glass and safe areas behave the way the system does; nothing here hides or reorders
+            // an item, and only a live game takes the bar away. Hosting is a screen inside the
+            // lobby rather than a section of its own, matching the website.
+            NativeAppTabs(
+                selected: app.section,
+                mentionBadge: app.mentionBadge,
+                showsBar: app.showsAppTabs,
+                play: AnyView(LobbyView().environment(app)),
+                game: AnyView(GameSectionView().environment(app)),
+                you: AnyView(ProfileView().environment(app)),
+                onSelect: { app.select($0) }
+            )
+            .ignoresSafeArea()
             // Signed-in shell settled: warm Z's profile (credits link) at low priority.
             .task {
                 try? await Task.sleep(for: .seconds(8))
@@ -206,16 +86,11 @@ struct MainTabs: View {
                     await UMProfileCache.prefetchAll(accountIds: ids)
                 }.value
             }
-            .onChange(of: tab, initial: true) { old, new in
-                app.activeTab = new
-                // Leaving You pops its stack, so coming back shows the You root.
-                if old == "you", new != "you" { app.youPath = [] }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
 
             if let session = app.game {
-                ReadyCheckOverlay(session: session, onLeave: { app.leaveActiveGame() })
+                // The ready-check overlay's Leave is a leave like any other: it goes through the
+                // same confirmation rule instead of ending a live game outright.
+                ReadyCheckOverlay(session: session, onLeave: { app.requestLeave() })
                 RoleRevealOverlay(session: session)
                 if app.showLeaveConfirm {
                     LeaveConfirmOverlay(
@@ -233,6 +108,19 @@ struct MainTabs: View {
                 }
             }
         }
+        .alert("Ultimafia", isPresented: alertPresented) {
+            Button("OK", role: .cancel) { app.alertMessage = nil }
+        } message: {
+            Text(app.alertMessage ?? "")
+        }
+    }
+
+    /// A refused action is reported once, wherever the user is in the shell.
+    private var alertPresented: Binding<Bool> {
+        Binding(
+            get: { app.alertMessage != nil },
+            set: { if !$0 { app.alertMessage = nil } }
+        )
     }
 }
 
