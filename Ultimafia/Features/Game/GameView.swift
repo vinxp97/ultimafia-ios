@@ -59,7 +59,8 @@ private struct GameScreen: View {
                 // returnToLobby keeps a seated player's connection (the Lobby tab action does the
                 // same) and closes spectators and reviews, so the header always has a way out.
                 GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave,
-                           onLeavePrompt: { app.showLeaveConfirm = true },
+                           // requestLeave: pregame leaves at once (no lock, no overlay); a started game shows LeaveConfirmOverlay.
+                           onLeavePrompt: { app.requestLeave() },
                            showsGuides: threeColumns)
                 if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
