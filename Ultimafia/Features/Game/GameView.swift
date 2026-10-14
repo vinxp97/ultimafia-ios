@@ -215,7 +215,11 @@ private struct GameHeader: View {
     /// Long press on the back arrow: Leave confirmation (5 s lock while participation is required).
     var onLeavePrompt: (() -> Void)? = nil
 
-    private var seated: Bool { !session.isReview && !session.spectate && session.leaveNeedsConfirm }
+    /// Seated in a live (or pregame) game: the back arrow also offers hold-to-leave.
+    private var seated: Bool {
+        !session.isReview && !session.spectate && !session.finished
+            && session.players.contains { $0.id == session.selfId }
+    }
     /// The panel row carries the guides where it is drawn; the three-column iPad layout has no row,
     /// so the header has to carry them instead.
     var showsGuides = false
@@ -225,22 +229,7 @@ private struct GameHeader: View {
         HStack(alignment: .center, spacing: 8) {
             if let onClose {
                 if seated, let onLeavePrompt {
-                    // Tap: soft-leave (lobby, session stays). Long press: Leave confirmation.
-                    Image(systemName: "arrow.left")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onClose)
-                        .onLongPressGesture(minimumDuration: 0.5) {
-                            UMHaptics.quoteTapped()
-                            onLeavePrompt()
-                        }
-                        .accessibilityElement()
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Return to lobby")
-                        .accessibilityHint("Long press to leave the game")
-                        .accessibilityAction(.default, onClose)
-                        .accessibilityAction(named: "Leave game", onLeavePrompt)
+                    HoldToLeaveBackButton(onTap: onClose, onHold: onLeavePrompt)
                 } else {
                     Button(action: onClose) {
                         Image(systemName: "chevron.left").font(.body.weight(.semibold))
@@ -298,6 +287,50 @@ private struct GameHeader: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(UMTheme.card)
+    }
+}
+
+/// Game header back arrow, Haptic Touch style: a quick tap returns to the lobby (session stays);
+/// press and hold ~0.4 s shrinks the arrow while held, then a firm haptic and the Leave confirmation.
+/// A Button (reliable tap + press state) with a simultaneous long press; the tap is swallowed once the
+/// hold has fired so releasing doesn't also go to the lobby. 44 pt hit target.
+private struct HoldToLeaveBackButton: View {
+    var onTap: () -> Void
+    var onHold: () -> Void
+    @State private var holdFired = false
+
+    var body: some View {
+        Button {
+            if holdFired { holdFired = false; return }
+            onTap()
+        } label: {
+            Image(systemName: "arrow.left")
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(HoldScaleButtonStyle())
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4)
+                .onEnded { _ in
+                    holdFired = true
+                    UMHaptics.holdTriggered()
+                    onHold()
+                }
+        )
+        .padding(.horizontal, -6)
+        .accessibilityLabel("Return to lobby")
+        .accessibilityHint("Press and hold to leave the game")
+        .accessibilityAction(named: "Leave game", onHold)
+    }
+}
+
+private struct HoldScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.8 : 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.easeOut(duration: 0.4), value: configuration.isPressed)
     }
 }
 
