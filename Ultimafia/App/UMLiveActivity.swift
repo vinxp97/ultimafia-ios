@@ -15,6 +15,28 @@ enum UMLiveActivity {
     private static var lastState: UMGameActivityAttributes.ContentState?
 
     static func state(for session: GameSession, now: Date = Date()) -> UMGameActivityAttributes.ContentState {
+        func r(_ d: Date?) -> Date? { d.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded()) } }
+        if session.currentPhaseId == -1 {
+            let joined = session.players.count
+            let total = session.setupRoles.reduce(0) { $0 + $1.count }
+            let count = total > 0 ? "\(joined)/\(total) players" : (joined > 0 ? "\(joined) players" : "Pregame")
+            if session.readyCheckActive {
+                let end = session.readyEndTime
+                // The ready check's full length isn't sent; keep the start from when it was first seen.
+                let start = (lastState?.isReadyCheck == true ? lastState?.clockStart : nil) ?? r(now)
+                return .init(phaseName: "Ready check", isNight: false,
+                             clockStart: start, clockEnd: end > now ? r(end) : nil, atKicks: false, stage: "ready")
+            }
+            var start: Date?
+            var end: Date?
+            if let left = session.clockRemainingMs(at: now), left > 0 {
+                end = now.addingTimeInterval(left / 1000)
+                let total = session.clocks[session.activeClockName]?.delayMs ?? left
+                start = end!.addingTimeInterval(-max(total, left) / 1000)
+            }
+            return .init(phaseName: count, isNight: false, clockStart: r(start), clockEnd: r(end),
+                         atKicks: false, stage: "pregame")
+        }
         let kind = session.clockKind
         let atKicks = kind == .vegKick || kind == .vegKickCountdown
         var start: Date?
@@ -36,9 +58,12 @@ enum UMLiveActivity {
         } else {
             phase = base
         }
-        // Round to whole seconds so small clock jitter doesn't trigger updates.
-        func r(_ d: Date?) -> Date? { d.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded()) } }
         return .init(phaseName: phase, isNight: isNight, clockStart: r(start), clockEnd: r(end), atKicks: atKicks)
+    }
+
+    /// Pregame (phase -1) counts too, so the activity can show the lobby wait and the ready check.
+    private static func isLive(_ session: GameSession) -> Bool {
+        !session.isReview && !session.finished && session.currentPhaseId >= -1
     }
 
     static func start(session: GameSession) {
@@ -46,7 +71,7 @@ enum UMLiveActivity {
             log.info("live activities disabled")
             return
         }
-        guard session.isGameInProgress, !session.isReview else { return }
+        guard isLive(session) else { return }
         endAll()
         let attrs = UMGameActivityAttributes(gameId: session.gameId,
                                              setupName: session.setupName ?? session.gameType ?? "Ultimafia")
@@ -64,7 +89,7 @@ enum UMLiveActivity {
         updateTask = Task { @MainActor [weak session] in
             while !Task.isCancelled, let session {
                 try? await Task.sleep(for: .seconds(2))
-                if session.finished || !session.isGameInProgress {
+                if !isLive(session) {
                     endAll()
                     return
                 }
