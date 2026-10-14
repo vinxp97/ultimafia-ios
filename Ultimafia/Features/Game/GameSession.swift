@@ -84,6 +84,7 @@ struct VoteMeeting: Identifiable, Hashable {
     var canUnvote: Bool = true
     var targets: [String]
     var votes: [String: [String]]
+    var hiddenVoterIds: Set<String> = []
     var inputType: String
     var amMember: Bool = true
     var displayVoteCounter: Bool = false
@@ -113,7 +114,7 @@ struct VoteMeeting: Identifiable, Hashable {
     }
 
     func count(for target: String) -> Int {
-        votes.values.reduce(0) { $0 + $1.filter { $0 == target }.count }
+        VoteTally(votes: votes, hiddenVoterIds: hiddenVoterIds).count(for: target)
     }
 
     var ballot: [(voter: String, targets: [String])] {
@@ -1714,6 +1715,7 @@ final class GameSession {
             }
             let targets = sortedVoteTargets((obj["targets"] as? [Any] ?? []).compactMap { $0 as? String })
             let votes = parseBallot(obj["votes"])
+            let hiddenVoters = parseHiddenVoterIds(obj["votes"])
             let memberList = parseMembers(obj["members"])
             var amMember = obj["amMember"] as? Bool ?? true
             var can = obj["canVote"] as? Bool
@@ -1732,6 +1734,7 @@ final class GameSession {
                 canUnvote: canUnvote,
                 targets: targets,
                 votes: votes,
+                hiddenVoterIds: hiddenVoters,
                 inputType: obj["inputType"] as? String ?? "player",
                 amMember: amMember,
                 displayVoteCounter: boolValue(obj["displayVoteCounter"]),
@@ -1813,6 +1816,7 @@ final class GameSession {
             guard let id = obj["id"] as? String, boolValue(obj["voting"]) else { continue }
             let targets = sortedVoteTargets((obj["targets"] as? [Any] ?? []).compactMap { $0 as? String })
             let votes = parseBallot(obj["votes"])
+            let hiddenVoters = parseHiddenVoterIds(obj["votes"])
             let memberList = parseMembers(obj["members"])
             var amMember = obj["amMember"] as? Bool ?? true
             var can = obj["canVote"] as? Bool
@@ -1829,6 +1833,7 @@ final class GameSession {
                 canUnvote: obj["canUnvote"] as? Bool ?? !boolValue(obj["noUnvote"]),
                 targets: targets,
                 votes: votes,
+                hiddenVoterIds: hiddenVoters,
                 inputType: obj["inputType"] as? String ?? "player",
                 amMember: amMember,
                 displayVoteCounter: boolValue(obj["displayVoteCounter"]),
@@ -1876,6 +1881,11 @@ final class GameSession {
         return out
     }
 
+    private func parseHiddenVoterIds(_ raw: Any?) -> Set<String> {
+        guard let dict = raw as? [String: Any] else { return [] }
+        return Set(dict.compactMap { key, value in value is NSNull ? key : nil })
+    }
+
     private func parseMembers(_ raw: Any?) -> [VoteMember] {
         if let arr = raw as? [Any] {
             return arr.compactMap { item in
@@ -1914,6 +1924,7 @@ final class GameSession {
         let target = obj["target"] as? String
         if let meetingId, let voter, let idx = meetings.firstIndex(where: { $0.id == meetingId }) {
             if unvote {
+                meetings[idx].hiddenVoterIds.remove(voter)
                 if meetings[idx].multi, let target {
                     meetings[idx].votes[voter]?.removeAll { $0 == target }
                     if meetings[idx].votes[voter]?.isEmpty == true {
@@ -1923,6 +1934,7 @@ final class GameSession {
                     meetings[idx].votes[voter] = nil
                 }
             } else if let target {
+                meetings[idx].hiddenVoterIds.remove(voter)
                 if meetings[idx].multi {
                     var cur = meetings[idx].votes[voter] ?? []
                     if !cur.contains(target) { cur.append(target) }
@@ -1931,7 +1943,7 @@ final class GameSession {
                     meetings[idx].votes[voter] = [target]
                 }
             } else if voter != selfId {
-                // VoteBlind hideTarget: null selection. Don't leak; first vote shows ???.
+                meetings[idx].hiddenVoterIds.insert(voter)
                 if meetings[idx].votes[voter] == nil {
                     meetings[idx].votes[voter] = ["*unknown"]
                 }
