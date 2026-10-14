@@ -17,7 +17,8 @@ enum UMLiveActivity {
     static func state(for session: GameSession, now: Date = Date()) -> UMGameActivityAttributes.ContentState {
         func r(_ d: Date?) -> Date? { d.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded()) } }
         if session.currentPhaseId == -1 {
-            let joined = session.players.count
+            // Present players only: the "players" payload also carries seats that left (p.left), like the web PlayerList filter.
+            let joined = session.players.filter { !$0.left }.count
             let total = session.setupRoles.reduce(0) { $0 + $1.count }
             let count = total > 0 ? "\(joined)/\(total)" : "\(joined)"
             if session.readyCheckActive {
