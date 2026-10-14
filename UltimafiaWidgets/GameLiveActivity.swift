@@ -85,9 +85,10 @@ struct GameActivityLockScreenView: View {
     var body: some View {
         HStack(spacing: 14) {
             if state.isPregame {
-                Image(systemName: "house.fill")
-                    .font(.title)
-                    .foregroundStyle(.white)
+                // Ultimafia hat (copied from the app's AppLogo; widgets can't read the app's assets).
+                Image("HatLogo")
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: 52, height: 52)
             } else {
                 ClockRing(state: state, lineWidth: 5)
