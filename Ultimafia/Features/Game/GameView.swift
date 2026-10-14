@@ -59,6 +59,7 @@ private struct GameScreen: View {
                 // returnToLobby keeps a seated player's connection (the Lobby tab action does the
                 // same) and closes spectators and reviews, so the header always has a way out.
                 GameHeader(session: session, wide: wideHeader, onClose: returnToLobby, onLeave: onLeave,
+                           onLeavePrompt: { app.showLeaveConfirm = true },
                            showsGuides: threeColumns)
                 if !wideHeader { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
@@ -211,9 +212,10 @@ private struct GameHeader: View {
     var wide = false
     var onClose: (() -> Void)? = nil
     var onLeave: (() -> Void)? = nil
-    /// The red leave text stays folded away until the (!) asks for it, and folds back when the
-    /// leave overlay closes.
-    @State private var leaveRevealed = false
+    /// Long press on the back arrow: Leave confirmation (5 s lock while participation is required).
+    var onLeavePrompt: (() -> Void)? = nil
+
+    private var seated: Bool { !session.isReview && !session.spectate && session.leaveNeedsConfirm }
     /// The panel row carries the guides where it is drawn; the three-column iPad layout has no row,
     /// so the header has to carry them instead.
     var showsGuides = false
@@ -222,11 +224,30 @@ private struct GameHeader: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             if let onClose {
-                Button(action: onClose) {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                if seated, let onLeavePrompt {
+                    // Tap: soft-leave (lobby, session stays). Long press: Leave confirmation.
+                    Image(systemName: "arrow.left")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onClose)
+                        .onLongPressGesture(minimumDuration: 0.5) {
+                            UMHaptics.quoteTapped()
+                            onLeavePrompt()
+                        }
+                        .accessibilityElement()
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Return to lobby")
+                        .accessibilityHint("Long press to leave the game")
+                        .accessibilityAction(.default, onClose)
+                        .accessibilityAction(named: "Leave game", onLeavePrompt)
+                } else {
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(session.isReview ? "Back to games" : (session.spectate ? "Stop spectating" : "Return to lobby"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(session.isReview ? "Back to games" : (session.spectate ? "Stop spectating" : "Return to lobby"))
             }
             if session.isReview {
                 Text("REVIEW")
@@ -271,35 +292,12 @@ private struct GameHeader: View {
             if showsGuides, showSetupGuides, session.setupId != nil {
                 SetupGuidesButton(session: session, fillsWidth: false)
             }
-            // Leaving lives in the game's own toolbar, not in the panel row at the bottom: that row
-            // is for panels, and a standing red button beside Village/Chat/Act/Guides took their
-            // width and invited mis-taps. It also stays folded away until asked for. Returning to
-            // the lobby is the chevron on the left.
-            if !session.isReview, !session.spectate, let onLeave {
-                Button { leaveRevealed.toggle() } label: {
-                    Image(systemName: "exclamationmark.circle")
-                        .font(.title3)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Game options")
-                if leaveRevealed {
-                    Button(role: .destructive, action: onLeave) {
-                        Text("Leave Game").font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(UMTheme.blood)
-                    .accessibilityLabel("Leave game")
-                }
-            }
+            // Leaving: long press the back arrow (tap returns to the lobby and keeps the session).
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(UMTheme.card)
-        .onChange(of: app.showLeaveConfirm) { _, showing in
-            if !showing { leaveRevealed = false }
-        }
     }
 }
 

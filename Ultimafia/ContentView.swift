@@ -45,10 +45,14 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
-                if app.game != nil { GameBackgroundHold.start() }
+                if let game = app.game {
+                    GameBackgroundHold.start()
+                    UMLiveActivity.start(session: game)
+                }
                 app.stopPresence()
             } else if phase == .active {
                 GameBackgroundHold.end()
+                UMLiveActivity.endAll()
                 app.startPresence()
             }
         }
