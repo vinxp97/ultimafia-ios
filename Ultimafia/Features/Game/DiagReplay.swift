@@ -29,6 +29,34 @@ struct DiagReplayView: View {
             ["id": "m\(phase)-\(n)", "senderId": "p\(n % 12)", "content": "message \(n) in phase \(phase) about the cop and mafia vig claims",
              "time": Date().timeIntervalSince1970 * 1000, "meetingId": "village"]
         }
+        if ProcessInfo.processInfo.arguments.contains("-UMDiagHistory") {
+            // Joining a running game: the screen is up (empty) first, then the whole backlog arrives
+            // in one `history` event, then `state`.
+            try? await Task.sleep(for: .seconds(1.5))
+            var states: [String: Any] = [:]
+            for (phase, name) in [(0, "Day"), (1, "Night"), (2, "Day")] {
+                var msgs: [[String: Any]] = []
+                for n in 0..<(phase == 1 ? 20 : 150) {
+                    var m = msg(n, phase: phase)
+                    // Mixed row heights, like real chat (short lines and long paragraphs).
+                    if n % 7 == 0 { m["content"] = String(repeating: "long claim about the cop and the vig and who to lynch today ", count: 1 + n % 4) }
+                    msgs.append(m)
+                }
+                states["\(phase)"] = ["name": name, "dayCount": phase / 2 + 1,
+                                      "meetings": ["village": ["id": "village", "name": "Village", "messages": msgs]]]
+            }
+            s.debugFeed("history", states)
+            s.debugFeed("state", ["id": 2, "name": "Day", "dayCount": 2])
+            // Then the meetings, one `meeting` event each (village first, then the Spectator Meeting,
+            // which brings up the composer and changes the chat's bottom inset).
+            s.debugFeed("meeting", ["id": "village", "name": "Village", "speech": true, "voting": true, "amMember": false,
+                                    "canTalk": false, "targets": [String](), "votes": [String: Any]()])
+            s.debugFeed("meeting", ["id": "spec", "name": "Spectator Meeting", "speech": true, "voting": false,
+                                    "amMember": true, "canTalk": true])
+            s.debugFeed("loaded", nil)
+            UMDiag.log("replay", "history loaded")
+            return
+        }
         s.debugFeed("state", ["id": 0, "name": "Day", "dayCount": 1])
         for n in 0..<200 { s.debugFeed("message", msg(n, phase: 0)) }
         try? await Task.sleep(for: .seconds(3))

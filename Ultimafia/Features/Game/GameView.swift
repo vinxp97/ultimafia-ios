@@ -326,6 +326,8 @@ private struct ChatScrollPin: Equatable {
     var atTop: Bool
     var contentH: CGFloat
     var containerH: CGFloat
+    /// Scrolled past the end of the content (blank chat until the user drags).
+    var overscrolled: Bool = false
 }
 
 private struct GameChatPane: View {
@@ -464,10 +466,20 @@ private struct GameChatPane: View {
                     }
                 }
                 .onScrollGeometryChange(for: ChatScrollPin.self) { geo in
-                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height.rounded(), containerH: geo.containerSize.height.rounded())
+                    ChatScrollPin(atBottom: pinnedToLatest(geo), atTop: pinnedToTop(geo), contentH: geo.contentSize.height.rounded(), containerH: geo.containerSize.height.rounded(), overscrolled: pastEnd(geo))
                 } action: { old, pin in
                     if atTop != pin.atTop { atTop = pin.atTop }
                     lastPinAtBottom = pin.atBottom
+                    // Content shrank under the offset (lazy rows measured smaller than estimated after
+                    // a big history batch): the view sat past the end, showing an empty chat until the
+                    // user dragged. pinnedToLatest counts that as "at bottom", so nothing corrected it.
+                    if pin.overscrolled, !old.overscrolled, !userScrolling {
+                        UMDiag.log("scroll", "past end (content \(Int(pin.contentH)) container \(Int(pin.containerH))), snapping back")
+                        DispatchQueue.main.async {
+                            guard !userScrolling else { return }
+                            if stickToBottom { jumpToLatest(proxy: proxy) } else if let last = chatLines.last?.id { proxy.scrollTo(last, anchor: .bottom) }
+                        }
+                    }
                     // Root cause of the "stuck after sending" bug: this used to treat any frame that
                     // wasn't at the bottom as the user scrolling up. After a send/new row the lazy
                     // rows finish measuring a frame after scrollTo, so the view briefly sat short of
@@ -635,6 +647,11 @@ private struct GameChatPane: View {
             return true
         }
         return geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - slack
+    }
+
+    private func pastEnd(_ geo: ScrollGeometry) -> Bool {
+        let maxY = geo.contentSize.height + geo.contentInsets.bottom - geo.containerSize.height
+        return geo.contentOffset.y > max(maxY, -geo.contentInsets.top) + 24
     }
 
     private func pinnedToTop(_ geo: ScrollGeometry) -> Bool {
