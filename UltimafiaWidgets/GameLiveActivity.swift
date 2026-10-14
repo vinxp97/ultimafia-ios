@@ -21,9 +21,13 @@ struct GameLiveActivity: Widget {
                     PhaseLabel(state: s).font(.headline).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    ClockRing(state: s, lineWidth: 4)
-                        .frame(width: 40, height: 40)
-                        .padding(.trailing, 4)
+                    if s.isPregame {
+                        PregameCount(state: s).font(.headline).padding(.trailing, 4)
+                    } else {
+                        ClockRing(state: s, lineWidth: 4)
+                            .frame(width: 40, height: 40)
+                            .padding(.trailing, 4)
+                    }
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.attributes.setupName)
@@ -32,6 +36,7 @@ struct GameLiveActivity: Widget {
                         .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
+                    if !s.isPregame {
                     HStack {
                         if s.atKicks {
                             Label("At kicks", systemImage: "exclamationmark.triangle.fill")
@@ -44,10 +49,14 @@ struct GameLiveActivity: Widget {
                             .foregroundStyle(s.atKicks ? kickRed : .white)
                     }
                     .padding(.horizontal, 6)
+                    }
                 }
             } compactLeading: {
                 PhaseIcon(state: s)
             } compactTrailing: {
+                if s.isPregame {
+                    PregameCount(state: s).font(.caption.weight(.semibold))
+                } else {
                 HStack(spacing: 4) {
                     CountdownText(state: s)
                         .font(.caption2.weight(.semibold).monospacedDigit())
@@ -55,6 +64,7 @@ struct GameLiveActivity: Widget {
                         .frame(maxWidth: 40)
                     ClockRing(state: s, lineWidth: 2.5)
                         .frame(width: 16, height: 16)
+                }
                 }
             } minimal: {
                 if s.isPregame || s.isReadyCheck {
@@ -74,8 +84,15 @@ struct GameActivityLockScreenView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            ClockRing(state: state, lineWidth: 5)
-                .frame(width: 52, height: 52)
+            if state.isPregame {
+                Image(systemName: "house.fill")
+                    .font(.title)
+                    .foregroundStyle(.white)
+                    .frame(width: 52, height: 52)
+            } else {
+                ClockRing(state: state, lineWidth: 5)
+                    .frame(width: 52, height: 52)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 PhaseLabel(state: state).font(.headline)
                 Text(attributes.setupName)
@@ -89,10 +106,14 @@ struct GameActivityLockScreenView: View {
                 }
             }
             Spacer()
-            CountdownText(state: state)
-                .font(.title.weight(.semibold).monospacedDigit())
-                .foregroundStyle(state.atKicks ? kickRed : .white)
-                .frame(maxWidth: 110, alignment: .trailing)
+            if state.isPregame {
+                PregameCount(state: state).font(.title.weight(.semibold))
+            } else {
+                CountdownText(state: state)
+                    .font(.title.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(state.atKicks ? kickRed : .white)
+                    .frame(maxWidth: 110, alignment: .trailing)
+            }
         }
         .padding(16)
     }
@@ -115,12 +136,20 @@ private struct PhaseIcon: View {
     }
 }
 
+/// Pregame: players in the lobby out of required, e.g. "5/7" (phaseName carries it).
+private struct PregameCount: View {
+    let state: UMGameActivityAttributes.ContentState
+    var body: some View {
+        Text(state.phaseName).monospacedDigit().foregroundStyle(.white)
+    }
+}
+
 private struct PhaseLabel: View {
     let state: UMGameActivityAttributes.ContentState
     var body: some View {
         HStack(spacing: 6) {
             PhaseIcon(state: state)
-            Text(state.phaseName).foregroundStyle(.white)
+            Text(state.isPregame ? "Pregame" : state.phaseName).foregroundStyle(.white)
         }
     }
 }
