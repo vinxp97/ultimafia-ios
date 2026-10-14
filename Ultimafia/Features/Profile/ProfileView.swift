@@ -253,14 +253,15 @@ struct ProfileView: View {
 
 }
 
-/// Profile pushed on the You tab: same view as avatar taps, plus a visible Back control.
+/// Profile pushed on the You tab (e.g. the "App Developed by Z" link): same view as avatar taps.
+/// The system navigation bar already provides Back, so no extra Back bar here.
 struct UMYouPushedProfile: View {
     var userId: String
     var userName: String
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        UMYouBackBar { UserProfileView(userId: userId, userName: userName) }
+        UserProfileView(userId: userId, userName: userName)
     }
 }
 
