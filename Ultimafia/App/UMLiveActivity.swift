@@ -19,7 +19,7 @@ enum UMLiveActivity {
         if session.currentPhaseId == -1 {
             let joined = session.players.count
             let total = session.setupRoles.reduce(0) { $0 + $1.count }
-            let count = total > 0 ? "\(joined)/\(total) players" : (joined > 0 ? "\(joined) players" : "Pregame")
+            let count = total > 0 ? "\(joined)/\(total)" : "\(joined)"
             if session.readyCheckActive {
                 let end = session.readyEndTime
                 // The ready check's full length isn't sent; keep the start from when it was first seen.
