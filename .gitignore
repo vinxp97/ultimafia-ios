@@ -23,6 +23,9 @@ playground.xcworkspace
 /Packages/
 SourcePackages/
 
+# xtool build output
+/xtool/
+
 # CocoaPods / Carthage (none in use today)
 Pods/
 Carthage/Build/
