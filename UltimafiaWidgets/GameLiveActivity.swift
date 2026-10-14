@@ -5,6 +5,7 @@ import WidgetKit
 private let blood = Color(red: 0.78, green: 0.13, blue: 0.13)
 private let kickRed = Color(red: 0.93, green: 0.2, blue: 0.2)
 private let dayGold = Color(red: 0.98, green: 0.78, blue: 0.25)
+private let readyGreen = Color(red: 0.3, green: 0.85, blue: 0.4)
 private let nightBlue = Color(red: 0.55, green: 0.65, blue: 1.0)
 
 struct GameLiveActivity: Widget {
@@ -56,7 +57,11 @@ struct GameLiveActivity: Widget {
                         .frame(width: 16, height: 16)
                 }
             } minimal: {
-                ClockRing(state: s, lineWidth: 2.5).padding(2)
+                if s.isPregame || s.isReadyCheck {
+                    PhaseIcon(state: s)
+                } else {
+                    ClockRing(state: s, lineWidth: 2.5).padding(2)
+                }
             }
             .keylineTint(s.atKicks ? kickRed : blood)
         }
@@ -96,8 +101,17 @@ struct GameActivityLockScreenView: View {
 private struct PhaseIcon: View {
     let state: UMGameActivityAttributes.ContentState
     var body: some View {
-        Image(systemName: state.isNight ? "moon.fill" : "sun.max.fill")
-            .foregroundStyle(state.isNight ? nightBlue : dayGold)
+        if state.isReadyCheck {
+            Image(systemName: "bell.and.waves.left.and.right.fill")
+                .foregroundStyle(readyGreen)
+                .symbolEffect(.wiggle, options: .repeating)
+        } else if state.isPregame {
+            Image(systemName: "house.fill")
+                .foregroundStyle(.white)
+        } else {
+            Image(systemName: state.isNight ? "moon.fill" : "sun.max.fill")
+                .foregroundStyle(state.isNight ? nightBlue : dayGold)
+        }
     }
 }
 
@@ -130,7 +144,10 @@ private struct ClockRing: View {
     var lineWidth: CGFloat
 
     var body: some View {
-        let color = state.atKicks ? kickRed : (state.isNight ? nightBlue : dayGold)
+        let color = state.atKicks ? kickRed
+            : state.isReadyCheck ? readyGreen
+            : state.isPregame ? Color.white
+            : (state.isNight ? nightBlue : dayGold)
         ZStack {
             Circle()
                 .stroke(color.opacity(state.atKicks ? 0.9 : 0.25),

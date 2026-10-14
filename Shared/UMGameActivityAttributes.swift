@@ -14,6 +14,12 @@ nonisolated struct UMGameActivityAttributes: ActivityAttributes {
         var clockEnd: Date?
         /// At kicks (vegKick / vegKickCountdown clock running): the ring turns dotted red.
         var atKicks: Bool
+        /// "phase" (day/night), "pregame" (house icon) or "ready" (ready check: ringing bell,
+        /// clock = ready-check countdown).
+        var stage: String = "phase"
+
+        var isPregame: Bool { stage == "pregame" }
+        var isReadyCheck: Bool { stage == "ready" }
     }
 
     var gameId: String
