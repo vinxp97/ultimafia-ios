@@ -943,9 +943,14 @@ final class GameSession {
         }
     }
 
+    /// Whether a double tap would actually quote this line. The haptic fires on the same answer, so
+    /// a tap that would do nothing stays silent.
+    func canQuote(_ line: ChatLine) -> Bool {
+        !spectate && !line.isServer && !line.isQuote && line.quotable
+    }
+
     func quote(_ line: ChatLine) {
-        guard !spectate else { return }
-        guard !line.isServer, !line.isQuote, line.quotable else { return }
+        guard canQuote(line) else { return }
         if !isViewingLive {
             viewLivePhase()
         }

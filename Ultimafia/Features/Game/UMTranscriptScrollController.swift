@@ -38,6 +38,14 @@ final class UMTranscriptScrollController {
         if isFollowingLatest { isFollowingLatest = false }
     }
 
+    /// Apply the pending state right now instead of waiting for the next per-frame sample. Used when
+    /// a row arrives while following: the row is laid out during the same update pass that requests
+    /// the scroll, so the display-link tick that follows is one frame too late, and the row spends
+    /// that frame drawn behind the floating composer.
+    func applyPendingNow() {
+        if let scroll { refresh(scroll) }
+    }
+
     fileprivate func refresh(_ scroll: UIScrollView) {
         self.scroll = scroll
         let inset = scroll.adjustedContentInset
