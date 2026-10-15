@@ -1246,7 +1246,7 @@ private struct ChatRow: View {
         }
         .frame(maxWidth: .infinity, alignment: line.senderId == "vote" ? .trailing : .leading)
         .contentShape(Rectangle())
-        .opacity(line.isQuote ? 0.9 : 1)
+        .opacity(session.dimsInChat(line) ? 0.35 : (line.isQuote ? 0.9 : 1))
         .padding(.top, grouped ? 0 : (layout == .standard && isPlayerChat(line) ? 8 : 0))
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
@@ -1534,6 +1534,26 @@ private struct GameTownPane: View {
                     }
                 }
             }
+            if session.canIsolate {
+                Section {
+                    Button {
+                        if session.isolating { session.isolating = false; session.isolatedIds = [] }
+                        else { session.isolating = true }
+                    } label: {
+                        Label(session.isolating ? (session.isolatedIds.isEmpty ? "Done" : "Clear isolation") : "Isolate messages",
+                              systemImage: session.isolating ? "xmark.circle" : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: dim(15, 13, 16), weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityHint("Choose players whose messages stay prominent; others are dimmed")
+                } footer: {
+                    if session.isolating {
+                        Text(session.isolatedIds.isEmpty ? "Check players to keep their messages prominent." :
+                             "\(session.isolatedIds.count) isolated. Other players' messages are dimmed.")
+                    }
+                }
+            }
             if !session.spectatorList.isEmpty, !session.isReview {
                 Section("Spectators") {
                     ForEach(session.spectatorList) { spectator in
@@ -1600,6 +1620,20 @@ private struct GameTownPane: View {
                 RoleGuessBadge(session: session, player: player, size: dim(30, 20, 36)) {
                     pickingPlayerId = player.id
                 }
+            }
+            if session.isolating {
+                let on = session.isolatedIds.contains(player.id)
+                Button {
+                    if on { session.isolatedIds.remove(player.id) } else { session.isolatedIds.insert(player.id) }
+                } label: {
+                    Image(systemName: on ? "checkmark.square.fill" : "square")
+                        .font(.system(size: dim(22, 16, 24)))
+                        .foregroundStyle(on ? UMTheme.blood : UMTheme.muted)
+                        .frame(minWidth: 30, minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(on ? "Isolated: \(player.name)" : "Isolate \(player.name)")
             }
             UMAvatarView(player: player, size: dim(36, 22, 44))
             VStack(alignment: .leading, spacing: dim(2, 0, 2)) {
