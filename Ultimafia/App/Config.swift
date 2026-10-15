@@ -20,7 +20,9 @@ nonisolated enum UMConfig {
     }
     /// Public web API key from the ultimafia.com client.
     /// Defined in Ultimafia/App/Secrets.swift.
-    static let firebaseAPIKey = UMSecrets.firebaseAPIKey
+    /// Firebase web config follows the selected backend (each host has its own project).
+    static var firebase: UMFirebaseConfig { backend.firebase }
+    static var firebaseAPIKey: String { firebase.apiKey }
     static let allowedEmailDomains: Set<String> = [
         "gmail.com", "hotmail.com", "aol.com", "msn.com", "yandex.ru",
         "live.com", "icloud.com", "gmail.com.sg", "yahoo.com", "mail.com",
@@ -39,4 +41,20 @@ nonisolated enum UMBackend: String, CaseIterable, Identifiable {
     static let key = "um.backend.host"
     var id: String { rawValue }
     static func set(_ b: UMBackend) { UserDefaults.standard.set(b.rawValue, forKey: key) }
+
+    /// Public Firebase web client values per host (.com = beyondmaf, unchanged).
+    var firebase: UMFirebaseConfig {
+        switch self {
+        case .com: return UMFirebaseConfig(apiKey: UMSecrets.firebaseAPIKey, authDomain: "beyondmaf.firebaseapp.com", projectId: "beyondmaf")
+        case .dev: return UMFirebaseConfig(apiKey: "AIzaSyDdbZzZ8sFpYrD1zRqeaylOYM2-r6CcLuk", authDomain: "dev-ultimafia.firebaseapp.com", projectId: "dev-ultimafia")
+        case .qa: return UMFirebaseConfig(apiKey: "AIzaSyCNBl7HAS9jVGUMAe8HrOqQu2B9ZfMDcmk", authDomain: "qa-ultimafia.firebaseapp.com", projectId: "qa-ultimafia")
+        case .gg: return UMFirebaseConfig(apiKey: "AIzaSyAWHEMmiFg0DwgaIVbtyrWbth-6H75co-g", authDomain: "prod-ultimafia.firebaseapp.com", projectId: "prod-ultimafia")
+        }
+    }
+}
+
+nonisolated struct UMFirebaseConfig: Equatable {
+    let apiKey: String
+    let authDomain: String
+    let projectId: String
 }
