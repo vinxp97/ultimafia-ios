@@ -2074,7 +2074,11 @@ final class GameSession {
         dayCount = day
         ensurePhase(id: id, name: name, dayCount: day)
         currentPhaseId = id
-        if let ld = LDState(obj["extraInfo"]) { ldByPhase[id] = ld }
+        if let ld = LDState(obj["extraInfo"]) {
+            let old = ldByPhase.filter { $0.key >= 0 && $0.key < id }.max { $0.key < $1.key }?.value ?? ldByPhase[id]
+            ldByPhase[id] = ld
+            if !isQuiet, phaseChanged || old != ld { LDEvents.handle(old: old == ld ? nil : old, new: ld, selfId: selfId) }
+        }
         if followLive {
             viewingPhaseId = id
         }

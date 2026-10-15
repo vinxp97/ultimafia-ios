@@ -62,7 +62,7 @@ private struct GameScreen: View {
                            // requestLeave: pregame leaves at once (no lock, no overlay); a started game shows LeaveConfirmOverlay.
                            onLeavePrompt: { app.requestLeave() },
                            showsGuides: threeColumns)
-                if !wideHeader { SetupRoleStrip(session: session) }
+                if !wideHeader, !session.isLiarsDice { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
                     if threeColumns {
@@ -270,7 +270,7 @@ private struct GameHeader: View {
                 }
             }
             if wide {
-                SetupRoleStrip(session: session)
+                Group { if session.isLiarsDice { Color.clear } else { SetupRoleStrip(session: session) } }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(-1)
                 if !session.isLiarsDice {

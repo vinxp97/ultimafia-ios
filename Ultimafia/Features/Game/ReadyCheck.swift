@@ -410,6 +410,12 @@ enum GameAlerts {
         post(id: mentionId, body: "Someone mentioned you! Come back!")
     }
 
+    static let yourTurnId = "ultimafia.ldTurn"
+    /// Liars Dice: it became your turn to bid while the app is in the background.
+    static func notifyYourTurn() {
+        post(id: yourTurnId, body: "Your turn to bid")
+    }
+
     static func notifyKicks() {
         post(id: kicksId, body: "You are about to veg! The game is at kicks!")
     }

@@ -98,8 +98,8 @@ struct LiarsDiceBoard: View {
     var body: some View {
         if let st = state {
             VStack(alignment: .leading, spacing: 12) {
-                bidCard(st)
                 table(st)
+                bidCard(st)
                 betLog
             }
             .onChange(of: st.lastAmount, initial: true) { _, last in
@@ -113,7 +113,8 @@ struct LiarsDiceBoard: View {
     }
 
     private func table(_ st: LDState) -> some View {
-        VStack(spacing: 8) {
+        let bets = session.ldCurrentRoundBets
+        return VStack(spacing: 8) {
             ForEach(st.players) { p in
                 let turn = p.userId != nil && p.userId == st.whoseTurnUserId
                 let mine = p.playerId == session.selfId
@@ -126,6 +127,15 @@ struct LiarsDiceBoard: View {
                             if turn { Circle().fill(UMTheme.blood).frame(width: 7, height: 7) }
                             Text(p.name).font(.subheadline.weight(mine ? .bold : .semibold)).lineLimit(1)
                             if mine { Text("(you)").font(.caption).foregroundStyle(UMTheme.muted) }
+                            if let b = bets[p.name] {
+                                HStack(spacing: 2) {
+                                    Text("\(b.amount)×").font(.caption.monospacedDigit().weight(.semibold))
+                                    LDDie(face: b.face, size: 14)
+                                }
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(UMTheme.elevated, in: Capsule())
+                                .accessibilityLabel("Bet \(b.amount) of \(b.face)")
+                            }
                             Spacer(minLength: 4)
                             Text("\(p.dice.count) \(p.dice.count == 1 ? "die" : "dice")")
                                 .font(.caption.monospacedDigit().weight(.semibold))
@@ -320,5 +330,40 @@ extension GameSession {
             prev = st
         }
         return out
+    }
+}
+
+
+extension GameSession {
+    /// Each bidder's latest bid in the current round (keyed by player name, as bidInfo names them).
+    var ldCurrentRoundBets: [String: (amount: Int, face: Int)] {
+        var out: [String: (amount: Int, face: Int)] = [:]
+        var prev: LDState?
+        for (k, st) in ldByPhase.sorted(by: { $0.key < $1.key }) where k >= 0 {
+            if st.lastBidder == nil, prev?.lastBidder != nil { out = [:] }
+            if let b = st.lastBidder { out[b] = (st.lastAmount, st.lastFace) }
+            prev = st
+        }
+        return out
+    }
+}
+
+/// Live Liars Dice cues, fed one new turn state at a time (never during history/review).
+enum LDEvents {
+    /// Dice-falling sound for round start/end: set the GameSFX name once Pranay confirms the
+    /// file and when it plays. nil = no sound (intentionally not guessed).
+    static var diceFallSound: String? = nil
+
+    @MainActor
+    static func handle(old: LDState?, new: LDState, selfId: String?) {
+        let bid = new.lastBidder != nil &&
+            (old?.lastBidder != new.lastBidder || old?.lastAmount != new.lastAmount || old?.lastFace != new.lastFace)
+        if bid { GameSFX.play("ping") }
+        let roundStart = old == nil || (new.lastBidder == nil && old?.lastBidder != nil)
+        if roundStart, let s = diceFallSound { GameSFX.play(s) }
+        let myTurn = new.players.first { $0.userId != nil && $0.userId == new.whoseTurnUserId }?.playerId
+        if let me = selfId, myTurn == me, old?.whoseTurnUserId != new.whoseTurnUserId {
+            GameAlerts.notifyYourTurn()
+        }
     }
 }
