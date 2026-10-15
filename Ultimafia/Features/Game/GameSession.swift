@@ -2099,12 +2099,13 @@ final class GameSession {
             clearAllTyping()
         }
         if !isQuiet {
-            let skipBell = name.lowercased().hasPrefix("give clue")
+            // Liars Dice: every turn is a new state; desktop plays only ping (handled by LDEvents).
+            let skipBell = name.lowercased().hasPrefix("give clue") || isLiarsDice
             if playBell, !skipBell, phaseChanged {
                 GameSFX.play("bell")
             }
             playBell = true
-            if phaseChanged {
+            if phaseChanged, !isLiarsDice {
                 GameMusic.handlePhase(name)
             }
         }
