@@ -139,6 +139,9 @@ private struct DMListView: View {
                                 Text(ch.title(selfId: store.selfId))
                                     .font(.body.weight(store.unread.contains(ch.id) ? .bold : .regular))
                                     .lineLimit(1)
+                                if let s = ch.snippet {
+                                    Text(s).font(.subheadline).foregroundStyle(UMTheme.muted).lineLimit(1)
+                                }
                                 if ch.lastMessageDate > .distantPast {
                                     Text(ch.lastMessageDate, style: .relative)
                                         .font(.caption).foregroundStyle(UMTheme.muted)
@@ -420,7 +423,7 @@ struct DMNotificationSettingsSection: View {
         Section {
             Toggle("Direct message alerts", isOn: $enabled)
                 .onChange(of: enabled) { _, on in
-                    guard on else { return }
+                    guard on else { Task { await UMPush.unregister() }; return }
                     UMDMNotify.requestPermission { granted in
                         if !granted { enabled = false; denied = true }
                     }

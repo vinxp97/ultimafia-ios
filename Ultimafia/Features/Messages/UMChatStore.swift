@@ -54,6 +54,8 @@ nonisolated struct UMChatChannel: Identifiable, Hashable {
     var isPublic: Bool
     var members: [UMChatUser]
     var lastMessageDate: Date
+    /// Latest message preview for the DM list ("Name: text"), from newNotif.message / live messages.
+    var snippet: String?
 
     init(id: String, name: String?, isPublic: Bool, members: [UMChatUser], lastMessageDate: Date) {
         self.id = id
@@ -225,6 +227,7 @@ final class UMChatStore {
                 messages.append(m)
             }
             touch(m.channel, m.date)
+            setSnippet(m.channel, sender: m.sender.name, text: m.content)
             // Open channel but app in the background: the server sends `message`, not `newNotif`.
             if isDirect(m.channel), m.sender.id != selfId, !UMDMNotify.isAppActive {
                 UMDMNotify.post(channel: channel(m.channel), sender: m.sender.name, text: m.content,
@@ -244,10 +247,14 @@ final class UMChatStore {
             guard let o = data as? [String: Any], let n = o["notif"] as? [String: Any],
                   (n["isChat"] as? Bool) == true, let ch = n["channelId"] as? String else { return }
             unread.insert(ch)
+            // DM notifs carry message {channelId, senderId, senderName, content (<=200), messageId}.
+            let msg = o["message"] as? [String: Any]
+            let senderName = msg?["senderName"] as? String
+            let content = msg?["content"] as? String
+            if let content { setSnippet(ch, sender: senderName, text: content); touch(ch, Date()) }
             if isDirect(ch) || !(rooms.contains { $0.id == ch }) {
-                // newNotif has no text; a public @mention also lands here (rooms list).
-                UMDMNotify.post(channel: channel(ch), sender: nil, text: nil, selfId: selfId, inGame: inGame,
-                                channelId: ch)
+                UMDMNotify.post(channel: channel(ch), sender: senderName, text: content, selfId: selfId,
+                                inGame: inGame, channelId: ch)
             }
         case "messageDeleted":
             if let id = data as? String { messages.removeAll { $0.id == id } }
@@ -268,6 +275,13 @@ final class UMChatStore {
         if merged.members.isEmpty, let old = directs.first(where: { $0.id == ch.id }) { merged.members = old.members }
         list.append(merged)
         directs = sortDirects(list)
+    }
+
+    private func setSnippet(_ id: String, sender: String?, text: String) {
+        guard let i = directs.firstIndex(where: { $0.id == id }) else { return }
+        let selfName = directs[i].members.first { $0.id == selfId }?.name
+        let who = (sender != nil && sender == selfName) ? "You" : sender
+        directs[i].snippet = who.map { "\($0): \(text)" } ?? text
     }
 
     private func touch(_ id: String, _ date: Date) {
@@ -367,6 +381,8 @@ final class UMChatStore {
             UMChatChannel(id: "d2", name: nil, isPublic: false, members: [me, b, c], lastMessageDate: .now - 3600),
         ]
         unread = ["d1"]
+        directs[0].snippet = "Aspect: gg, rematch?"
+        directs[1].snippet = "Pranay: push is live on dev"
         currentChannelId = "main"
         let now = Date()
         messages = [

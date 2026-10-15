@@ -229,8 +229,11 @@ final class AppModel {
     func switchToAccount(_ account: SavedAccount) async {
         if let current = user?.id {
             if current == account.id { return }
+            await UMPush.unregister()
             AccountStore.shared.saveSession(for: current)
         }
+        UMPush.signedIn = false
+        UMChatStore.shared.stop()
         resetSessionState()
         await run {
             var hadSaved = false
@@ -315,6 +318,9 @@ final class AppModel {
         let email = id.flatMap { uid in AccountStore.shared.accounts.first { $0.id == uid }?.email }
         if seatedGameId != nil { game?.leave() }
         stopPresence()
+        await UMPush.unregister()
+        UMPush.signedIn = false
+        UMChatStore.shared.stop()
         await APIClient.shared.logout()
         if let id {
             AccountStore.shared.clearSession(id)

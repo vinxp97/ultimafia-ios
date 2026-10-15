@@ -98,46 +98,77 @@ extension Notification.Name {
     static let umOpenMessages = Notification.Name("umOpenMessages")
 }
 
-/// APNs client side for closed-app DM alerts. Inert until (1) Vinman enables the Push Notifications
-/// capability (aps-environment entitlement) and provides the APNs key to the server, and (2) the server
-/// exposes a device-token route (questions for Pranay). Flip `isConfigured` and set `registerPath` then.
+/// APNs for closed-app DM alerts. Server: POST/DELETE /api/user/push/apns {token, environment, bundleId}
+/// (login required; the server skips pushes while the user is playing or spectating).
+/// Registers only when signed in AND DM alerts are on with notification permission granted.
 enum UMPush {
-    static let isConfigured = false
-    /// e.g. "user/push/apns" (POST {token, environment, bundleId}). TBD by the server.
-    static let registerPath: String? = nil
-    /// e.g. "user/push/inGame" (POST {inGame}) so the server can suppress pushes mid-game. TBD.
-    static let inGamePath: String? = nil
+    static let isConfigured = true
+    static let registerPath = "user/push/apns"
     static let tokenKey = "um.apns.token"
+    static let bundleId = "VCCCLLC.Ultimafia"
+    #if DEBUG
+    static let environment = "development"
+    #else
+    static let environment = "production"
+    #endif
 
+    /// Set by the signed-in shell; uploads wait for it.
+    @MainActor static var signedIn = false
+    @MainActor private static var uploadedToken: String?
+
+    /// Call after login and after DM alerts are enabled.
     @MainActor
     static func registerIfConfigured() {
-        guard isConfigured else { return }
-        #if canImport(UIKit)
-        UIApplication.shared.registerForRemoteNotifications()
-        #endif
-    }
-
-    static func didRegister(token: Data) {
-        let hex = token.map { String(format: "%02x", $0) }.joined()
-        UserDefaults.standard.set(hex, forKey: tokenKey)
-        UMDiag.log("push", "apns token \(hex.prefix(8))…")
-        guard let path = registerPath else { return }
-        #if DEBUG
-        let env = "development"
-        #else
-        let env = "production"
-        #endif
-        Task {
-            try? await APIClient.shared.postStatus(path, json: [
-                "token": hex, "environment": env, "bundleId": Bundle.main.bundleIdentifier ?? "",
-            ])
+        guard isConfigured, signedIn, UMDMNotify.enabled else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { s in
+            guard s.authorizationStatus == .authorized || s.authorizationStatus == .provisional else { return }
+            Task { @MainActor in
+                #if canImport(UIKit)
+                UIApplication.shared.registerForRemoteNotifications()
+                #endif
+            }
         }
     }
 
-    static func reportInGame(_ inGame: Bool) {
-        guard isConfigured, let path = inGamePath else { return }
-        Task { try? await APIClient.shared.postStatus(path, json: ["inGame": inGame]) }
+    @MainActor
+    static func didRegister(token: Data) {
+        let hex = token.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(hex, forKey: tokenKey)
+        UMDiag.log("push", "apns token \(hex.prefix(8))… env \(environment)")
+        upload(hex)
     }
+
+    @MainActor
+    private static func upload(_ hex: String) {
+        guard signedIn, UMDMNotify.enabled, uploadedToken != hex else { return }
+        uploadedToken = hex
+        Task {
+            do {
+                try await APIClient.shared.postStatus(registerPath, json: body(hex))
+                UMDiag.log("push", "token registered")
+            } catch {
+                UMDiag.log("push", "token register failed: \(error.localizedDescription)")
+                await MainActor.run { uploadedToken = nil }
+            }
+        }
+    }
+
+    private static func body(_ hex: String) -> [String: Any] {
+        ["token": hex, "environment": environment, "bundleId": bundleId]
+    }
+
+    /// Logout, account switch, or DM alerts turned off: remove this device from the current account.
+    /// Must run while the old session is still valid.
+    @MainActor
+    static func unregister() async {
+        guard isConfigured, let hex = UserDefaults.standard.string(forKey: tokenKey) else { return }
+        uploadedToken = nil
+        _ = try? await APIClient.shared.request("DELETE", path: registerPath, query: [:], body: body(hex))
+        UMDiag.log("push", "token unregistered")
+    }
+
+    /// The server checks game membership itself, so nothing to report.
+    static func reportInGame(_ inGame: Bool) {}
 }
 
 #if canImport(UIKit)
@@ -146,12 +177,11 @@ final class UMAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = ReadyNotificationDelegate.shared
-        if UMDMNotify.enabled { UMPush.registerIfConfigured() }
         return true
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        UMPush.didRegister(token: deviceToken)
+        MainActor.assumeIsolated { UMPush.didRegister(token: deviceToken) }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

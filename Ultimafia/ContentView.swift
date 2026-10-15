@@ -90,6 +90,8 @@ struct MainTabs: View {
             .task {
                 UMChatStore.shared.inGame = inGame
                 UMChatStore.shared.start(selfId: app.user?.id)
+                UMPush.signedIn = true
+                UMPush.registerIfConfigured()
             }
             .onChange(of: inGame) { _, now in
                 UMChatStore.shared.inGame = now
