@@ -16,6 +16,13 @@ struct SetupSearchPage: Decodable {
 
 /// Mafia host options. Defaults mirror the web's HostMafia / DefaultValues.js.
 struct HostOptions: Equatable {
+    var gameType = "Mafia"
+    // Liars Dice (web HostLiarsDice / DefaultValues.js).
+    var wildOnes = true
+    var spotOn = true
+    var startingDice = 5        // 1...20
+    var guessDiceLength = 2.0   // minutes, 0.5...5
+    var isLiarsDice: Bool { gameType == "Liars Dice" }
     var lobby = "Main"
     var lobbyName = ""
     var isPrivate = false
@@ -38,15 +45,34 @@ struct HostOptions: Equatable {
 
     // Visibility rules (web `showIf`).
     var showPrivateAndGuests: Bool { !ranked && !competitive }
-    var showRanked: Bool { !isPrivate && !guests && !competitive && !advancedHosting }
-    var showCompetitive: Bool { !isPrivate && !guests && !ranked && !advancedHosting }
-    var showAdvanced: Bool { !ranked && !competitive }
-    var showNoVeg: Bool { !ranked && !competitive }
+    var showRanked: Bool { !isLiarsDice && !isPrivate && !guests && !competitive && !advancedHosting }
+    var showCompetitive: Bool { !isLiarsDice && !isPrivate && !guests && !ranked && !advancedHosting }
+    var showAdvanced: Bool { !isLiarsDice && !ranked && !competitive }
+    var showNoVeg: Bool { !isLiarsDice && !ranked && !competitive }
     var showDuration: Bool { !competitive }
 
     /// Hidden fields still hold values on web; only send what's visible so we never trip server checks.
     func body(setupId: String) -> [String: Any] {
         let dur = configureDuration && showDuration
+        if isLiarsDice {
+            // Same fields the web's HostLiarsDice posts.
+            return [
+                "gameType": gameType,
+                "setup": setupId,
+                "lobby": lobby,
+                "lobbyName": lobbyName.trimmingCharacters(in: .whitespacesAndNewlines),
+                "private": isPrivate,
+                "guests": guests,
+                "spectating": spectating,
+                "readyCheck": readyCheck,
+                "stateLengths": ["Guess Dice": configureDuration ? guessDiceLength : 1],
+                "wildOnes": wildOnes,
+                "spotOn": spotOn,
+                "startingDice": startingDice,
+                "anonymousGame": anonymousGame,
+                "anonymousDeckId": anonymousDeckId,
+            ]
+        }
         return [
             "gameType": "Mafia",
             "lobby": lobby,
@@ -71,8 +97,8 @@ struct HostOptions: Equatable {
 }
 
 extension APIClient {
-    func searchSetups(filter: SetupFilter, query: String, page: Int) async throws -> SetupSearchPage {
-        var q: [String: String] = ["gameType": "Mafia", "page": String(page)]
+    func searchSetups(filter: SetupFilter, query: String, page: Int, gameType: String = "Mafia") async throws -> SetupSearchPage {
+        var q: [String: String] = ["gameType": gameType, "page": String(page)]
         if let o = filter.option { q["option"] = o }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { q["query"] = trimmed }

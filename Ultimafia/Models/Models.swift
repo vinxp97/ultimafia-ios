@@ -115,7 +115,8 @@ struct SetupInfo: Decodable, Hashable, Identifiable {
 /// Game types the app supports in each surface. Add Liars Dice, Secret Dictator, Wacky Words,
 /// Ghost here as the app learns them.
 enum UMGameTypes {
-    static let reviewable: Set<String> = ["Mafia"]
+    static let reviewable: Set<String> = ["Mafia", "Liars Dice"]
+    static let hostable = ["Mafia", "Liars Dice"]
 }
 
 struct GameSummary: Decodable, Hashable, Identifiable {

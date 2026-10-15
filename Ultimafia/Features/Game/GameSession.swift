@@ -296,6 +296,15 @@ final class GameSession {
     var clocks: [String: GameClock] = [:]
     var setupId: String?
     var setupGameType = "Mafia"
+    /// Liars Dice table per state id (from each state's extraInfo; reviews use history).
+    var ldByPhase: [Int: LDState] = [:]
+    /// Dice tab bet log: "Prior rounds" disclosure, per game (in memory).
+    var ldShowPriorRounds = false
+    var isLiarsDice: Bool { (gameType ?? setupGameType) == "Liars Dice" }
+    var ldViewing: LDState? {
+        let id = isViewingLive ? currentPhaseId : viewingPhaseId
+        return ldByPhase[id] ?? (id == -2 ? ldByPhase.filter { $0.key >= 0 }.max { $0.key < $1.key }?.value : nil)
+    }
     var setupClosed = false
     var setupUseRoleGroups = false
     var setupRoles: [SetupRole] = []
@@ -590,8 +599,12 @@ final class GameSession {
     }
 
     var displayedMessages: [ChatLine] {
-        phases.first(where: { $0.id == viewingPhaseId })?.messages ?? messages
+        // Liars Dice has no phase switcher (one state per turn): show the whole game's chat.
+        if isLiarsDice { return phases.sorted { rank($0.id) < rank($1.id) }.flatMap(\.messages) }
+        return phases.first(where: { $0.id == viewingPhaseId })?.messages ?? messages
     }
+
+    private func rank(_ id: Int) -> Int { id == -2 ? Int.max : id }
 
     var viewingNewspaper: NewspaperIssue? {
         viewingNewspapers.first
@@ -1230,6 +1243,9 @@ final class GameSession {
             }
         case "state":
             applyState(data)
+        case "diceRoll", "diceRoll2":
+            // Liars Dice new round: play the file the event names, once.
+            if !isQuiet { GameSFX.play(event) }
         case "history":
             ingestHistory(data)
         case "message":
@@ -1364,6 +1380,7 @@ final class GameSession {
             if let d = state["dayCount"] as? Int { phaseDay = d }
             if let d = state["dayCount"] as? Double { phaseDay = Int(d) }
             ensurePhase(id: phaseId, name: phaseName, dayCount: phaseDay)
+            if let ld = LDState(state["extraInfo"]) { ldByPhase[phaseId] = ld }
             applyDeadMap(state["dead"])
             deadByPhase[phaseId] = Self.deadSet(state["dead"])
             applyKnownRolesMap(state["roles"])
@@ -2062,6 +2079,11 @@ final class GameSession {
         dayCount = day
         ensurePhase(id: id, name: name, dayCount: day)
         currentPhaseId = id
+        if let ld = LDState(obj["extraInfo"]) {
+            let old = ldByPhase.filter { $0.key >= 0 && $0.key < id }.max { $0.key < $1.key }?.value ?? ldByPhase[id]
+            ldByPhase[id] = ld
+            if !isQuiet, phaseChanged || old != ld { LDEvents.handle(old: old, new: ld, selfId: selfId) }
+        }
         if followLive {
             viewingPhaseId = id
         }
@@ -2079,12 +2101,13 @@ final class GameSession {
             clearAllTyping()
         }
         if !isQuiet {
-            let skipBell = name.lowercased().hasPrefix("give clue")
+            // Liars Dice: every turn is a new state; desktop plays only ping (handled by LDEvents).
+            let skipBell = name.lowercased().hasPrefix("give clue") || isLiarsDice
             if playBell, !skipBell, phaseChanged {
                 GameSFX.play("bell")
             }
             playBell = true
-            if phaseChanged {
+            if phaseChanged, !isLiarsDice {
                 GameMusic.handlePhase(name)
             }
         }

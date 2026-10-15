@@ -62,7 +62,7 @@ private struct GameScreen: View {
                            // requestLeave: pregame leaves at once (no lock, no overlay); a started game shows LeaveConfirmOverlay.
                            onLeavePrompt: { app.requestLeave() },
                            showsGuides: threeColumns)
-                if !wideHeader { SetupRoleStrip(session: session) }
+                if !wideHeader, !session.isLiarsDice { SetupRoleStrip(session: session) }
                 Divider().overlay(UMTheme.line)
                 Group {
                     if threeColumns {
@@ -72,7 +72,7 @@ private struct GameScreen: View {
                             GameTownPane(session: session, compact: true)
                                 .frame(width: geo.size.width * 0.25)
                             Divider().overlay(UMTheme.line)
-                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader)
+                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader && !session.isLiarsDice)
                                 .frame(maxWidth: .infinity)
                             Divider().overlay(UMTheme.line)
                             GameActPane(session: session)
@@ -98,7 +98,7 @@ private struct GameScreen: View {
                                 session: session,
                                 draft: $draft,
                                 chatFocused: chatFocused,
-                                showsPhaseBar: !wideHeader,
+                                showsPhaseBar: !wideHeader && !session.isLiarsDice,
                                 isOnScreen: selectedPanel == 0
                             )
                             .opacity(selectedPanel == 0 ? 1 : 0)
@@ -270,11 +270,13 @@ private struct GameHeader: View {
                 }
             }
             if wide {
-                SetupRoleStrip(session: session)
+                Group { if session.isLiarsDice { Color.clear } else { SetupRoleStrip(session: session) } }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(-1)
-                PagedPhaseBar(session: session, visible: 6)
-                    .fixedSize()
+                if !session.isLiarsDice {
+                    PagedPhaseBar(session: session, visible: 6)
+                        .fixedSize()
+                }
             } else {
                 Spacer(minLength: 8)
             }
@@ -350,7 +352,7 @@ private struct GamePanelPicker: View {
             HStack(spacing: 4) {
                 tabBtn("Village", 1, "person.3")
                 tabBtn("Chat", 0, "text.bubble")
-                tabBtn("Act", 2, "hand.raised")
+                tabBtn(session.isLiarsDice ? "Dice" : "Act", 2, session.isLiarsDice ? "die.face.5" : "hand.raised")
                 if showSetupGuides, session.setupId != nil { SetupGuidesButton(session: session) }
             }
             .padding(.horizontal, 8)
@@ -1731,7 +1733,9 @@ private struct GameActPane: View {
 
     /// Server/web order (meetings arrive in the game's meeting order).
     private var actMeetings: [VoteMeeting] {
-        session.meetingsForViewing.filter { !$0.isVoteKick }
+        session.meetingsForViewing.filter {
+            !$0.isVoteKick && !(session.isLiarsDice && LDState.importantMeetings.contains($0.name))
+        }
     }
 
     private var phaseKey: Int { session.isViewingLive ? session.currentPhaseId : session.viewingPhaseId }
@@ -1747,7 +1751,12 @@ private struct GameActPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if actMeetings.isEmpty {
+                if session.isLiarsDice {
+                    LiarsDiceBoard(session: session)
+                }
+                if actMeetings.isEmpty, session.isLiarsDice {
+                    EmptyView()
+                } else if actMeetings.isEmpty {
                     Text(emptyCopy)
                         .foregroundStyle(UMTheme.muted)
                         .padding(16)
