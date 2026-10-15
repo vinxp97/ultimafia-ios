@@ -1731,7 +1731,9 @@ private struct GameActPane: View {
 
     /// Server/web order (meetings arrive in the game's meeting order).
     private var actMeetings: [VoteMeeting] {
-        session.meetingsForViewing.filter { !$0.isVoteKick }
+        session.meetingsForViewing.filter {
+            !$0.isVoteKick && !(session.isLiarsDice && LDState.importantMeetings.contains($0.name))
+        }
     }
 
     private var phaseKey: Int { session.isViewingLive ? session.currentPhaseId : session.viewingPhaseId }
@@ -1747,7 +1749,12 @@ private struct GameActPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if actMeetings.isEmpty {
+                if session.isLiarsDice {
+                    LiarsDiceBoard(session: session)
+                }
+                if actMeetings.isEmpty, session.isLiarsDice {
+                    EmptyView()
+                } else if actMeetings.isEmpty {
                     Text(emptyCopy)
                         .foregroundStyle(UMTheme.muted)
                         .padding(16)

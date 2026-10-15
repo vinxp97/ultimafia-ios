@@ -296,6 +296,13 @@ final class GameSession {
     var clocks: [String: GameClock] = [:]
     var setupId: String?
     var setupGameType = "Mafia"
+    /// Liars Dice table per state id (from each state's extraInfo; reviews use history).
+    var ldByPhase: [Int: LDState] = [:]
+    var isLiarsDice: Bool { (gameType ?? setupGameType) == "Liars Dice" }
+    var ldViewing: LDState? {
+        let id = isViewingLive ? currentPhaseId : viewingPhaseId
+        return ldByPhase[id] ?? (id == -2 ? ldByPhase.filter { $0.key >= 0 }.max { $0.key < $1.key }?.value : nil)
+    }
     var setupClosed = false
     var setupUseRoleGroups = false
     var setupRoles: [SetupRole] = []
@@ -1364,6 +1371,7 @@ final class GameSession {
             if let d = state["dayCount"] as? Int { phaseDay = d }
             if let d = state["dayCount"] as? Double { phaseDay = Int(d) }
             ensurePhase(id: phaseId, name: phaseName, dayCount: phaseDay)
+            if let ld = LDState(state["extraInfo"]) { ldByPhase[phaseId] = ld }
             applyDeadMap(state["dead"])
             deadByPhase[phaseId] = Self.deadSet(state["dead"])
             applyKnownRolesMap(state["roles"])
@@ -2062,6 +2070,7 @@ final class GameSession {
         dayCount = day
         ensurePhase(id: id, name: name, dayCount: day)
         currentPhaseId = id
+        if let ld = LDState(obj["extraInfo"]) { ldByPhase[id] = ld }
         if followLive {
             viewingPhaseId = id
         }
