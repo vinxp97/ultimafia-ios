@@ -298,6 +298,8 @@ final class GameSession {
     var setupGameType = "Mafia"
     /// Liars Dice table per state id (from each state's extraInfo; reviews use history).
     var ldByPhase: [Int: LDState] = [:]
+    /// Dice tab bet log: "Prior rounds" disclosure, per game (in memory).
+    var ldShowPriorRounds = false
     var isLiarsDice: Bool { (gameType ?? setupGameType) == "Liars Dice" }
     var ldViewing: LDState? {
         let id = isViewingLive ? currentPhaseId : viewingPhaseId

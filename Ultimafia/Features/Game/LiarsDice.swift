@@ -258,31 +258,49 @@ struct LiarsDiceBoard: View {
 
     @ViewBuilder
     private var betLog: some View {
-        let log = session.ldBetLog
+        @Bindable var s = session
+        let rounds = session.ldRounds.reversed()   // newest round first
         VStack(alignment: .leading, spacing: 6) {
             Text("Bet log").font(.headline)
-            if log.isEmpty {
-                Text("No bids yet.").font(.caption).foregroundStyle(UMTheme.muted)
-            }
-            ForEach(log) { e in
-                switch e.kind {
-                case .round(let n):
-                    Text("Round \(n)").font(.caption.weight(.bold)).foregroundStyle(UMTheme.muted).padding(.top, 4)
-                case .bid(let who, let n, let f):
-                    HStack(spacing: 4) {
-                        Text("\(who) bid \(n)×").font(.subheadline)
-                        LDDie(face: f, size: 16)
+            if let current = rounds.first {
+                roundView(current)
+                let prior = Array(rounds.dropFirst())
+                if !prior.isEmpty {
+                    DisclosureGroup(isExpanded: $s.ldShowPriorRounds) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(prior) { roundView($0) }
+                        }
+                        .padding(.top, 4)
+                    } label: {
+                        Text("Prior rounds (\(prior.count))").font(.subheadline.weight(.semibold))
                     }
-                    .accessibilityElement(children: .combine)
-                case .alert(let text):
-                    EmoteText(text: text, color: UMTheme.muted, italic: true, system: true, emoteSize: 14,
-                              players: session.players, gameType: session.setupGameType, otherRoles: [])
+                    .tint(UMTheme.muted)
                 }
+            } else {
+                Text("No bids yet.").font(.caption).foregroundStyle(UMTheme.muted)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Reverse chronological: the challenge result (if the round ended) on top, then bids newest first.
+    private func roundView(_ r: LDRound) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Round \(r.number)").font(.caption.weight(.bold)).foregroundStyle(UMTheme.muted).padding(.top, 4)
+            ForEach(Array(r.alerts.reversed().enumerated()), id: \.offset) { _, text in
+                EmoteText(text: text, color: UMTheme.muted, italic: true, system: true, emoteSize: 14,
+                          players: session.players, gameType: session.setupGameType, otherRoles: [])
+            }
+            ForEach(Array(r.bids.reversed().enumerated()), id: \.offset) { _, b in
+                HStack(spacing: 4) {
+                    Text("\(b.who) bid \(b.amount)×").font(.subheadline)
+                    LDDie(face: b.face, size: 16)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
     }
 
     private func submit(_ st: LDState) {
@@ -303,40 +321,42 @@ struct LiarsDiceBoard: View {
 }
 
 
-struct LDLogEntry: Identifiable {
-    enum Kind { case round(Int), bid(String, Int, Int), alert(String) }
-    var id: Int
-    var kind: Kind
+struct LDRound: Identifiable {
+    struct Bid { var who: String; var amount: Int; var face: Int }
+    var number: Int
+    var bids: [Bid] = []
+    var alerts: [String] = []
+    var id: Int { number }
 }
 
 extension GameSession {
-    /// Every bid from the saved turn states (a new entry whenever the last bid changes), with the
-    /// challenge results from that turn's chat alerts; a bid reset starts the next round.
-    var ldBetLog: [LDLogEntry] {
-        var out: [LDLogEntry] = []
+    /// Rounds in play order, built from the saved turn states (a bid whenever the last bid changes)
+    /// plus that turn's challenge alerts; a bid reset starts the next round.
+    var ldRounds: [LDRound] {
+        var rounds: [LDRound] = []
         var prev: LDState?
-        var round = 1
-        var n = 0
-        func add(_ k: LDLogEntry.Kind) { out.append(LDLogEntry(id: n, kind: k)); n += 1 }
+        var number = 1
+        func cur() -> Int {
+            if rounds.last?.number != number { rounds.append(LDRound(number: number)) }
+            return rounds.count - 1
+        }
         for (k, st) in ldByPhase.sorted(by: { $0.key < $1.key }) where k >= 0 {
-            if st.lastBidder == nil, prev?.lastBidder != nil { round += 1 }
+            if st.lastBidder == nil, prev?.lastBidder != nil { number += 1 }
             if let b = st.lastBidder,
                prev?.lastBidder != b || prev?.lastAmount != st.lastAmount || prev?.lastFace != st.lastFace {
-                if !out.contains(where: { if case .round(round) = $0.kind { return true }; return false }) { add(.round(round)) }
-                add(.bid(b, st.lastAmount, st.lastFace))
+                rounds[cur()].bids.append(.init(who: b, amount: st.lastAmount, face: st.lastFace))
             }
             for line in phases.first(where: { $0.id == k })?.messages ?? [] where line.isServer {
                 let t = line.content.lowercased()
                 if t.contains("called a bluff") || t.contains("called a lie") || t.contains("spot on") || t.contains("loses a die") || t.contains("lose a die") {
-                    add(.alert(line.content))
+                    rounds[cur()].alerts.append(line.content)
                 }
             }
             prev = st
         }
-        return out
+        return rounds
     }
 }
-
 
 extension GameSession {
     /// Each bidder's latest bid in the current round (keyed by player name, as bidInfo names them).
@@ -354,12 +374,17 @@ extension GameSession {
 
 /// Live Liars Dice cues, fed one new turn state at a time (never during history/review).
 enum LDEvents {
-    /// Round sounds come from the server's bare `diceRoll` / `diceRoll2` socket events
-    /// (game start, after every Liar call and Spot On); GameSession plays the named file.
+    /// Dice-falling sound for round start/end: set the GameSFX name once Pranay confirms the
+    /// file and when it plays. nil = no sound (intentionally not guessed).
+    static var diceFallSound: String? = nil
+
     @MainActor
     static func handle(old: LDState?, new: LDState, selfId: String?) {
-        // Desktop plays ping on every state message after the first (bids, calls, new rounds).
-        if old != nil { GameSFX.play("ping") }
+        let bid = new.lastBidder != nil &&
+            (old?.lastBidder != new.lastBidder || old?.lastAmount != new.lastAmount || old?.lastFace != new.lastFace)
+        if bid { GameSFX.play("ping") }
+        let roundStart = old == nil || (new.lastBidder == nil && old?.lastBidder != nil)
+        if roundStart, let s = diceFallSound { GameSFX.play(s) }
         let myTurn = new.players.first { $0.userId != nil && $0.userId == new.whoseTurnUserId }?.playerId
         if let me = selfId, myTurn == me, old?.whoseTurnUserId != new.whoseTurnUserId {
             GameAlerts.notifyYourTurn()
