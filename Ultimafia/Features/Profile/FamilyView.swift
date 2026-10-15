@@ -94,7 +94,7 @@ struct FamilyView: View {
     private var pageBackground: some View {
         let mode = str(blob, "backgroundRepeatMode")
         if flag(blob, "background"),
-           let url = URL(string: "https://ultimafia.com/uploads/\(canonicalId)_familyBackground.webp") {
+           let url = URL(string: "\(UMConfig.site)/uploads/\(canonicalId)_familyBackground.webp") {
             AnimatedWebPView(url: url, showsPlaceholder: false)
                 .scaledToFill()
                 .clipped()
@@ -186,14 +186,14 @@ struct FamilyView: View {
     private var bannerURL: URL? {
         let ext = str(blob, "bannerExt").lowercased()
         let safe = ["webp", "gif", "png", "jpg", "jpeg"].contains(ext) ? ext : "webp"
-        return URL(string: "https://ultimafia.com/uploads/\(canonicalId)_family_banner.\(safe)")
+        return URL(string: "\(UMConfig.site)/uploads/\(canonicalId)_family_banner.\(safe)")
     }
 
     @ViewBuilder
     private var familyAvatar: some View {
         Group {
             if flag(blob, "avatar"),
-               let url = URL(string: "https://ultimafia.com/uploads/\(canonicalId)_family_avatar.webp") {
+               let url = URL(string: "\(UMConfig.site)/uploads/\(canonicalId)_family_avatar.webp") {
                 AnimatedWebPView(url: url, showsPlaceholder: false)
             } else {
                 ZStack {

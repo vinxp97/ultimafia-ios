@@ -20,7 +20,8 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         disconnect()
         let url = UMConfig.socketBase.appendingPathComponent(port)
         var request = URLRequest(url: url)
-        request.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        UMAccess.apply(&request)
+        request.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = HTTPCookieStorage.shared
         config.httpShouldSetCookies = true

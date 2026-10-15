@@ -48,7 +48,7 @@ final class UMTerminology {
         guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
-        guard let (data, response) = try? await URLSession.shared.data(from: Self.sourceURL),
+        guard let (data, response) = try? await URLSession.shared.data(for: UMAccess.request(Self.sourceURL)),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let js = String(data: data, encoding: .utf8) else { return }
         let dict = Self.parse(js)

@@ -2,6 +2,6 @@
 // Public client identifier (not a credential); committed with OpSec approval.
 import Foundation
 
-enum UMSecrets {
+nonisolated enum UMSecrets {
     static let firebaseAPIKey = "AIzaSyCL2cY3kdzpWw8YzgxbN8ffnk2hQgoZA64"
 }

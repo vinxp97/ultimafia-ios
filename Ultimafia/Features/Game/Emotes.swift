@@ -183,6 +183,6 @@ enum UMMediaURL {
             return URL(string: trimmed)
         }
         let rel = trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
-        return URL(string: "https://ultimafia.com/" + rel)
+        return URL(string: "\(UMConfig.site)/" + rel)
     }
 }

@@ -70,7 +70,7 @@ nonisolated struct UMUploadSpec: Sendable {
 
 /// Site upload URLs (/uploads/...) to purge from every app cache after a confirmed upload/removal.
 enum UMUploadURLs {
-    private static func u(_ name: String) -> URL { URL(string: "https://ultimafia.com/uploads/\(name)")! }
+    private static func u(_ name: String) -> URL { URL(string: "\(UMConfig.site)/uploads/\(name)")! }
     static func avatar(_ uid: String) -> [URL] { [u("\(uid)_avatar.webp")] }
     static func banner(_ uid: String) -> [URL] { ["webp", "gif", "png", "jpg"].map { u("\(uid)_banner.\($0)") } }
     static func forumBanner(_ uid: String) -> [URL] { [u("\(uid)_forumBanner.webp")] }

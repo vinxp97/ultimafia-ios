@@ -38,9 +38,10 @@ final class APIClient {
     func request(_ method: String, path: String, query: [String: String], body: [String: Any]?) async throws -> Data {
         let url = try makeURL(path: path, query: query)
         var req = URLRequest(url: url)
+        UMAccess.apply(&req)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        req.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         if let csrf, method != "GET" {
             req.setValue(csrf, forHTTPHeaderField: "x-csrf")
         }
@@ -77,10 +78,11 @@ final class APIClient {
         add("\r\n--\(boundary)--\r\n")
 
         var req = URLRequest(url: url)
+        UMAccess.apply(&req)
         req.httpMethod = "POST"
         req.timeoutInterval = 120
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        req.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if let csrf { req.setValue(csrf, forHTTPHeaderField: "x-csrf") }
         let delegate = UMUploadProgressDelegate(progress)

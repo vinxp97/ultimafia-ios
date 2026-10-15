@@ -152,7 +152,7 @@ final class AccountStore {
 
     /// Snapshot the current ultimafia.com cookies into this account's Keychain item.
     func saveSession(for id: String) {
-        let cookies = (HTTPCookieStorage.shared.cookies ?? []).filter { $0.domain.lowercased().contains("ultimafia") }
+        let cookies = (HTTPCookieStorage.shared.cookies ?? []).filter { UMConfig.cookieMatchesHost($0.domain) }
         guard !cookies.isEmpty else { return }
         let list: [[String: Any]] = cookies.compactMap { cookie in
             guard let props = cookie.properties else { return nil }
@@ -167,13 +167,13 @@ final class AccountStore {
             return out
         }
         guard let data = try? PropertyListSerialization.data(fromPropertyList: list, format: .binary, options: 0) else { return }
-        UMKeychain.set(data, service: Self.sessionService, account: id)
+        UMKeychain.set(data, service: Self.sessionService, account: Self.sessionKey(id))
     }
 
     /// Replace the cookie jar with this account's saved cookies. False if none are saved.
     func restoreSession(for id: String) -> Bool {
         Self.clearCookies()
-        guard let data = UMKeychain.get(service: Self.sessionService, account: id),
+        guard let data = UMKeychain.get(service: Self.sessionService, account: Self.sessionKey(id)),
               let list = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [[String: Any]] else { return false }
         var restored = 0
         for props in list {
@@ -188,7 +188,12 @@ final class AccountStore {
     }
 
     func clearSession(_ id: String) {
-        UMKeychain.delete(service: Self.sessionService, account: id)
+        UMKeychain.delete(service: Self.sessionService, account: Self.sessionKey(id))
+    }
+
+    /// Sessions are per backend host (cookies are per domain): .com keeps the bare id (existing items).
+    static func sessionKey(_ id: String) -> String {
+        UMConfig.backend == .com ? id : "\(id)@\(UMConfig.host)"
     }
 
     static func clearCookies() {

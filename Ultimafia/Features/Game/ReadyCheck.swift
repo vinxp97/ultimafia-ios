@@ -131,9 +131,9 @@ enum ReadyBell {
         let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-urgent.mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
-        guard let remote = URL(string: "https://ultimafia.com/audio/urgent.mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/urgent.mp3") else { return nil }
         do {
-            let (data, response) = try await URLSession.shared.data(from: remote)
+            let (data, response) = try await URLSession.shared.data(for: UMAccess.request(remote))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }
             try data.write(to: dest, options: .atomic)
             return dest
@@ -227,7 +227,7 @@ enum GameSFX {
     private static func playRemoteOnce(_ url: URL) async {
         activateSession()
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: UMAccess.request(url))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return }
             guard let next = await UMAudioSession.startPlayer(url.lastPathComponent, volume: GameAudio.death, make: {
                 try AVAudioPlayer(data: data)
@@ -265,9 +265,9 @@ enum GameSFX {
         let dest = supportURL(name)
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
         guard localNames.contains(name) else { return nil }
-        guard let remote = URL(string: "https://ultimafia.com/audio/\(name).mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/\(name).mp3") else { return nil }
         do {
-            let (data, response) = try await URLSession.shared.data(from: remote)
+            let (data, response) = try await URLSession.shared.data(for: UMAccess.request(remote))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }
             try data.write(to: dest, options: .atomic)
             return dest
@@ -280,8 +280,8 @@ enum GameSFX {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
         if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
-        if s.hasPrefix("/") { return URL(string: "https://ultimafia.com" + s) }
-        return URL(string: "https://ultimafia.com/" + s)
+        if s.hasPrefix("/") { return URL(string: "\(UMConfig.site)" + s) }
+        return URL(string: "\(UMConfig.site)/" + s)
     }
 }
 
@@ -355,9 +355,9 @@ enum GameMusic {
         let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-\(safe).mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
-        guard let remote = URL(string: "https://ultimafia.com/audio/\(path).mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/\(path).mp3") else { return nil }
         do {
-            let (data, response) = try await URLSession.shared.data(from: remote)
+            let (data, response) = try await URLSession.shared.data(for: UMAccess.request(remote))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }
             try data.write(to: dest, options: .atomic)
             return dest
@@ -376,7 +376,7 @@ enum ReadyNotifications {
     }
 
     static func notifyIfBackgrounded() {
-        guard !isAppActive else { return }
+        guard UMNotifyMaster.isOn, !isAppActive else { return }
         let content = UNMutableNotificationContent()
         content.title = "Ultimafia"
         content.body = "Your game is starting! Accept ready check!"
@@ -415,7 +415,7 @@ enum GameAlerts {
     }
 
     private static func post(id: String, body: String) {
-        guard !ReadyNotifications.isAppActive else { return }
+        guard UMNotifyMaster.isOn, !ReadyNotifications.isAppActive else { return }
         let content = UNMutableNotificationContent()
         content.title = "Ultimafia"
         content.body = body
@@ -432,7 +432,15 @@ final class ReadyNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        []
+        UMDMNotify.foregroundOptions(for: notification)
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        await MainActor.run { UMDMNotify.handleTap(info) }
     }
 }
 

@@ -25,7 +25,7 @@ actor UMCustomAssetCache {
 
     /// User uploads (avatars, custom emotes/stickers) on the site's own host.
     nonisolated static func isCustomUserAsset(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased(), host == "ultimafia.com" || host.hasSuffix(".ultimafia.com") else { return false }
+        guard let host = url.host?.lowercased(), ["ultimafia.com", "ultimafia.gg"].contains(where: { host == $0 || host.hasSuffix("." + $0) }) else { return false }
         return url.path.hasPrefix("/uploads/")
     }
 
@@ -54,7 +54,7 @@ actor UMCustomAssetCache {
         if let running = inflight[url] { return try await running.value }
         let session = self.session
         let task = Task<Data, Error> {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: UMAccess.request(url))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
             try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             try? data.write(to: Self.file(for: url), options: .atomic)

@@ -11,7 +11,11 @@ struct NativeAppTabs: UIViewControllerRepresentable {
     var selected: UMAppSection
     var mentionBadge: Int
     var showsBar: Bool
+    /// Messages is hidden entirely while in a game (seated or spectating).
+    var showsMessages: Bool = true
+    var messagesBadge: Int = 0
     var play: AnyView
+    var messages: AnyView = AnyView(EmptyView())
     var game: AnyView
     var you: AnyView
     var onSelect: (UMAppSection) -> Void
@@ -45,10 +49,19 @@ struct NativeAppTabs: UIViewControllerRepresentable {
             setViewControllers(sections.compactMap { pages[$0] }, animated: false)
         }
 
+        private var messagesShown = true
+
         func apply(_ config: NativeAppTabs) {
             loadViewIfNeeded()
             onSelect = config.onSelect
             pages[.play]?.rootView = config.play
+            pages[.messages]?.rootView = config.messages
+            pages[.messages]?.tabBarItem.badgeValue = config.messagesBadge > 0 ? String(config.messagesBadge) : nil
+            if messagesShown != config.showsMessages {
+                messagesShown = config.showsMessages
+                let visible = UMAppSection.allCases.filter { $0 != .messages || config.showsMessages }
+                setViewControllers(visible.compactMap { pages[$0] }, animated: false)
+            }
             pages[.game]?.rootView = config.game
             pages[.you]?.rootView = config.you
             pages[.game]?.tabBarItem.badgeValue = config.mentionBadge > 0 ? String(config.mentionBadge) : nil

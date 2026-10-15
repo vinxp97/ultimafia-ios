@@ -87,7 +87,7 @@ private struct UMBrowserWebView: UIViewRepresentable {
         web.allowsBackForwardNavigationGestures = true
         web.backgroundColor = .black
         web.isOpaque = false
-        let request = URLRequest(url: url)
+        let request = UMAccess.request(url)
         let siteHost = UMConfig.siteBase.host ?? "ultimafia.com"
         if shareSiteSession, url.host == siteHost {
             let cookies = (HTTPCookieStorage.shared.cookies ?? []).filter { siteHost.hasSuffix($0.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))) }

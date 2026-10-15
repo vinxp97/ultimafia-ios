@@ -27,6 +27,9 @@ struct UserProfileView: View {
                 }
             } else {
                 profileBody
+                if userId == UMProfileCache.devUserId, app.user?.id == UMProfileCache.devUserId {
+                    UMBackendSwitch().padding()
+                }
             }
         }
         .background(pageBackground)
@@ -89,7 +92,7 @@ struct UserProfileView: View {
     @ViewBuilder
     private var pageBackground: some View {
         let repeatMode = (settings["backgroundRepeatMode"] as? String) ?? "checker"
-        if bool("profileBackground"), let url = URL(string: "https://ultimafia.com/uploads/\(canonicalId)_profileBackground.webp") {
+        if bool("profileBackground"), let url = URL(string: "\(UMConfig.site)/uploads/\(canonicalId)_profileBackground.webp") {
             AnimatedWebPView(url: url, showsPlaceholder: false)
                 .scaledToFill()
                 .clipped()
@@ -263,7 +266,7 @@ struct UserProfileView: View {
                     .font(.caption.italic())
                     .foregroundStyle(UMTheme.muted)
                 HStack(spacing: 6) {
-                    if has, !id.isEmpty, let url = URL(string: "https://ultimafia.com/uploads/\(id)_family_avatar.webp") {
+                    if has, !id.isEmpty, let url = URL(string: "\(UMConfig.site)/uploads/\(id)_family_avatar.webp") {
                         AnimatedWebPView(url: url, showsPlaceholder: false)
                             .frame(width: 32, height: 32)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -380,7 +383,7 @@ struct UserProfileView: View {
     private var bannerURL: URL? {
         let ext = (blob["bannerExt"] as? String)?.lowercased() ?? "webp"
         let safe = ["webp", "gif", "png", "jpg", "jpeg"].contains(ext) ? ext : "webp"
-        return URL(string: "https://ultimafia.com/uploads/\(canonicalId)_banner.\(safe)")
+        return URL(string: "\(UMConfig.site)/uploads/\(canonicalId)_banner.\(safe)")
     }
 
     private var groupNames: [String] {
@@ -967,7 +970,7 @@ struct UMMarkdownView: View {
         if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" || scheme == "mailto" {
             return url
         }
-        let base = URL(string: "https://ultimafia.com/")!
+        let base = URL(string: "\(UMConfig.site)/")!
         if let abs = URL(string: url.relativeString, relativeTo: base)?.absoluteURL {
             return abs
         }
@@ -977,8 +980,8 @@ struct UMMarkdownView: View {
     private func absoluteUpload(_ raw: String) -> URL? {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
-        if s.hasPrefix("/") { return URL(string: "https://ultimafia.com" + s) }
-        return URL(string: "https://ultimafia.com/" + s)
+        if s.hasPrefix("/") { return URL(string: "\(UMConfig.site)" + s) }
+        return URL(string: "\(UMConfig.site)/" + s)
     }
 }
 
@@ -1369,7 +1372,7 @@ struct ProfileMediaEmbed: View {
 
     private func youtubeHTML(id: String, autoplay: Bool) -> String {
         // Desktop: autoplay=0|1 and mute=0. iOS often still starts muted; unmuted autoplay is not reliable.
-        var src = "https://www.youtube.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1&origin=https://ultimafia.com"
+        var src = "https://www.youtube.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1&origin=\(UMConfig.site)"
         src += "&autoplay=\(autoplay ? 1 : 0)&mute=0"
         return """
         <!DOCTYPE html><html><head>
@@ -1393,7 +1396,7 @@ private struct ProfileAudioBar: View {
         VideoPlayer(player: player)
             .onAppear {
                 UMAudioSession.activatePlayback()   // mix with the user's own music
-                player = AVPlayer(url: url)
+                player = AVPlayer(playerItem: AVPlayerItem(asset: UMAccess.asset(url)))
             }
             .onDisappear {
                 player?.pause()
@@ -1431,13 +1434,13 @@ private struct ProfileWebEmbed: UIViewRepresentable {
             guard context.coordinator.lastHTML != html else { return }
             context.coordinator.lastHTML = html
             context.coordinator.lastURL = nil
-            web.loadHTMLString(html, baseURL: URL(string: "https://ultimafia.com/"))
+            web.loadHTMLString(html, baseURL: URL(string: "\(UMConfig.site)/"))
         } else if let url {
             guard context.coordinator.lastURL != url else { return }
             context.coordinator.lastURL = url
             context.coordinator.lastHTML = nil
-            var req = URLRequest(url: url)
-            req.setValue("https://ultimafia.com/", forHTTPHeaderField: "Referer")
+            var req = UMAccess.request(url)
+            req.setValue("\(UMConfig.site)/", forHTTPHeaderField: "Referer")
             web.load(req)
         }
     }
@@ -1448,3 +1451,73 @@ private struct ProfileWebEmbed: UIViewRepresentable {
     }
 }
 #endif
+
+/// Hidden on Z's profile, shown only when Z is signed in (Debug and Release).
+struct UMBackendSwitch: View {
+    @Environment(AppModel.self) private var app
+    @State private var pending: UMBackend?
+    @State private var cfId = UMAccess.clientId ?? ""
+    @State private var cfSecret = ""
+    @State private var cfSaved = UMAccess.isSet
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Backend").font(.headline)
+            ForEach(UMBackend.allCases) { b in
+                Button { if b != UMConfig.backend { pending = b } } label: {
+                    HStack {
+                        Text(b.rawValue + (b == .com ? " (default)" : ""))
+                        Spacer()
+                        if b == UMConfig.backend { Image(systemName: "checkmark") }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+            }
+            Text("Switching disconnects, keeps a separate session per host, and reloads.")
+                .font(.caption).foregroundStyle(.secondary)
+            Divider().padding(.vertical, 4)
+            Text("Cloudflare Access (.gg only)").font(.subheadline.bold())
+            TextField("CF-Access-Client-Id", text: $cfId)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().font(.caption.monospaced())
+            SecureField("CF-Access-Client-Secret", text: $cfSecret)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().font(.caption.monospaced())
+            HStack {
+                Button("Save") { UMAccess.save(id: cfId, secret: cfSecret); cfSecret = ""; cfSaved = UMAccess.isSet }
+                    .disabled(cfId.trimmingCharacters(in: .whitespaces).isEmpty || cfSecret.isEmpty)
+                Button("Clear", role: .destructive) { UMAccess.clear(); cfId = ""; cfSecret = ""; cfSaved = false }
+                    .disabled(!cfSaved)
+                Spacer()
+                Text(cfSaved ? "Saved in Keychain" : "Not set").font(.caption).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+        .confirmationDialog("Switch backend to \(pending?.rawValue ?? "")?", isPresented: Binding(
+            get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible) {
+            Button("Switch") { if let b = pending { Task { await app.switchBackend(b) } }; pending = nil }
+            Button("Cancel", role: .cancel) { pending = nil }
+        }
+    }
+}
+
+/// Small badge while on a non-.com backend: for Z, or on the sign-in screen (tap returns to .com).
+struct UMBackendBadge: View {
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        if UMConfig.backend != .com, app.user == nil || app.user?.id == UMProfileCache.devUserId {
+            Button {
+                if app.user == nil { Task { await app.switchBackend(.com) } }
+            } label: {
+                Text(UMConfig.host + (app.user == nil ? "  \u{2715}" : ""))
+                    .font(.caption2.monospaced()).padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.orange.opacity(0.85))).foregroundStyle(.black)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+            .accessibilityLabel("Backend \(UMConfig.host)")
+        }
+    }
+}

@@ -190,8 +190,8 @@ enum UMEmotes {
     static func customURL(_ path: String) -> URL? {
         let s = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
-        if s.hasPrefix("/") { return URL(string: "https://ultimafia.com" + s) }
-        return URL(string: "https://ultimafia.com/" + s)
+        if s.hasPrefix("/") { return URL(string: "\(UMConfig.site)" + s) }
+        return URL(string: "\(UMConfig.site)/" + s)
     }
 }
 
@@ -349,7 +349,7 @@ final class UMInlineEmoteCache {
     }
 
     private func load(_ url: URL) async {
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
+        guard let (data, _) = try? await URLSession.shared.data(for: UMAccess.request(url)),
               let source = UIImage(data: data) else { return }
         let side = Self.side
         let w = max(source.size.width, 1), h = max(source.size.height, 1)

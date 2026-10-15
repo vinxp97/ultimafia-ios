@@ -23,6 +23,9 @@ nonisolated enum UMProfileCache {
     private static func metaFile(_ id: String) -> URL { directory.appendingPathComponent("\(safe(id)).fetched") }
     private static func safe(_ id: String) -> String { id.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" } }
 
+    /// Backend switch: profiles are per host.
+    static func clearAll() { try? FileManager.default.removeItem(at: directory) }
+
     static func setSavedAccounts(_ ids: [String]) { savedIds.withLock { $0 = Set(ids) } }
 
     static func isCached(_ id: String) -> Bool {
@@ -93,7 +96,7 @@ nonisolated enum UMProfileCache {
     static func assetURLs(_ p: [String: Any], fallbackId: String) -> [URL] {
         func b(_ any: Any?) -> Bool { (any as? Bool) ?? ((any as? NSNumber)?.boolValue ?? false) }
         let id = (p["id"] as? String) ?? fallbackId
-        let up = "https://ultimafia.com/uploads/"
+        let up = "\(UMConfig.site)/uploads/"
         var out: [String] = []
         if b(p["avatar"]) { out.append("\(up)\(id)_avatar.webp") }
         if b(p["banner"]) {
@@ -130,8 +133,8 @@ nonisolated enum UMProfileCache {
             let abs: String
             if s.hasPrefix("http://") || s.hasPrefix("https://") { abs = s }
             else if s.hasPrefix("//") { abs = "https:" + s }
-            else if s.hasPrefix("/") { abs = "https://ultimafia.com" + s }
-            else { abs = "https://ultimafia.com/" + s }
+            else if s.hasPrefix("/") { abs = "\(UMConfig.site)" + s }
+            else { abs = "\(UMConfig.site)/" + s }
             guard let u = URL(string: abs), !videoExts.contains(u.pathExtension.lowercased()),
                   seen.insert(u.absoluteString).inserted else { return nil }
             return u

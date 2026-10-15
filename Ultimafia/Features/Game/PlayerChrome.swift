@@ -29,7 +29,7 @@ func platformImage(_ image: UMPlatformImage) -> Image {
 
 nonisolated enum UMAvatarURL {
     static func live(userId: String) -> URL? {
-        URL(string: "https://ultimafia.com/uploads/\(userId)_avatar.webp")
+        URL(string: "\(UMConfig.site)/uploads/\(userId)_avatar.webp")
     }
 
     /// Web Avatar: a string avatar containing "decks" is shown from `/uploads<path>`.
@@ -39,7 +39,7 @@ nonisolated enum UMAvatarURL {
     }
 
     static func deck(path: String) -> URL? {
-        URL(string: "https://ultimafia.com/uploads\(path)")
+        URL(string: "\(UMConfig.site)/uploads\(path)")
     }
 }
 
@@ -198,7 +198,7 @@ final class UMImageCache: @unchecked Sendable {
             customKeys.withLock { _ = $0.insert(url) }
             return try await UMCustomAssetCache.shared.data(for: url)
         }
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await session.data(for: UMAccess.request(url))
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
         return data
     }
