@@ -1213,6 +1213,7 @@ private struct ChatComposer: View {
 }
 
 private struct ChatRow: View {
+    @AppStorage("um.chatIndentUserMessages") private var indentUser = false
     let line: ChatLine
     var previous: ChatLine?
     var session: GameSession
@@ -1246,6 +1247,7 @@ private struct ChatRow: View {
         }
         .frame(maxWidth: .infinity, alignment: line.senderId == "vote" ? .trailing : .leading)
         .contentShape(Rectangle())
+        .padding(.leading, indentUser && isPlayerChat(line) && line.newspaper == nil ? 10 : 0)
         .opacity(session.dimsInChat(line) ? 0.35 : (line.isQuote ? 0.9 : 1))
         .padding(.top, grouped ? 0 : (layout == .standard && isPlayerChat(line) ? 8 : 0))
         .simultaneousGesture(
