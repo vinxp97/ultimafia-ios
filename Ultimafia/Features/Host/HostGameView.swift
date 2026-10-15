@@ -28,6 +28,11 @@ struct HostGameView: View {
                     Picker("Lobby", selection: $o.lobby) {
                         ForEach(HostOptions.lobbies, id: \.self) { Text($0).tag($0) }
                     }
+                    if o.isLiarsDice {
+                        Toggle("Wild Ones", isOn: $o.wildOnes)
+                        Toggle("Spot On", isOn: $o.spotOn)
+                        Stepper("Starting Dice: \(o.startingDice)", value: $o.startingDice, in: 1...20)
+                    }
                     if o.showPrivateAndGuests {
                         Toggle("Private", isOn: $o.isPrivate)
                         Toggle("Allow Guests", isOn: $o.guests)
@@ -47,7 +52,12 @@ struct HostGameView: View {
                     if o.showCompetitive { Toggle("Competitive", isOn: $o.competitive) }
                     if o.showAdvanced { Toggle("Advanced Hosting", isOn: $o.advancedHosting) }
                     if o.showNoVeg { Toggle("No Vegging", isOn: $o.noVeg) }
-                    if o.showDuration {
+                    if o.isLiarsDice {
+                        Toggle("Configure Duration", isOn: $o.configureDuration)
+                        if o.configureDuration {
+                            Stepper("Guess Dice Length: \(o.guessDiceLength.formatted()) min", value: $o.guessDiceLength, in: 0.5...5, step: 0.5)
+                        }
+                    } else if o.showDuration {
                         Toggle("Configure Duration", isOn: $o.configureDuration)
                         if o.configureDuration {
                             Stepper("Day Length: \(o.dayLength) min", value: $o.dayLength, in: 1...30)
@@ -79,6 +89,9 @@ struct HostGameView: View {
                 }
             }
             .onChange(of: o.competitive) { _, on in if on { o.lobby = "Competitive" } }
+            .onAppear {
+                if setup.gameType == "Liars Dice", !o.isLiarsDice { o.gameType = "Liars Dice"; o.lobby = "Games" }
+            }
         }
         .preferredColorScheme(.dark)
     }

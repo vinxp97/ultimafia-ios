@@ -3,6 +3,7 @@ import SwiftUI
 struct SetupSearchView: View {
     @Environment(AppModel.self) private var app
     @State private var filter: SetupFilter = .popular
+    @State private var gameType = "Mafia"
     @State private var query = ""
     @State private var setups: [SetupInfo] = []
     @State private var page = 1
@@ -22,6 +23,10 @@ struct SetupSearchView: View {
     @ViewBuilder private var umBody: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                Picker("Game", selection: $gameType) {
+                    ForEach(UMGameTypes.hostable, id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.segmented)
                 filterChips
                 searchField
                 if let error, !loading {
@@ -57,6 +62,7 @@ struct SetupSearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .task(id: filter) { await load(reset: true) }
+        .onChange(of: gameType) { _, _ in Task { await load(reset: true) } }
         .task(id: query) {
             // Debounce typing; .task(id:) cancels the previous run.
             try? await Task.sleep(for: .milliseconds(350))
@@ -118,7 +124,7 @@ struct SetupSearchView: View {
         if reset { loading = true }
         defer { if reset, gen == generation { loading = false } }
         do {
-            let result = try await APIClient.shared.searchSetups(filter: filter, query: query, page: next)
+            let result = try await APIClient.shared.searchSetups(filter: filter, query: query, page: next, gameType: gameType)
             guard !Task.isCancelled, gen == generation else { return }
             if reset { setups = result.setups } else {
                 let known = Set(setups.map(\.id))
