@@ -198,7 +198,7 @@ final class UMImageCache: @unchecked Sendable {
             customKeys.withLock { _ = $0.insert(url) }
             return try await UMCustomAssetCache.shared.data(for: url)
         }
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await session.data(for: UMAccess.request(url))
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
         return data
     }

@@ -7,7 +7,7 @@ import Security
 /// for device-only data (install ID): those use ThisDeviceOnly and never sync.
 /// Reads/deletes match kSecAttrSynchronizableAny so legacy device-only items are still found.
 /// No keychain-access-groups entitlement is needed: items live in the app's default group.
-enum UMKeychain {
+nonisolated enum UMKeychain {
     static func set(_ data: Data, service: String, account: String, synced: Bool = true) {
         delete(service: service, account: account)
         let query: [String: Any] = [

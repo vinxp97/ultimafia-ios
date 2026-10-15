@@ -58,7 +58,7 @@ final class UMNameFonts {
         guard let urls = try? await fetchFontFaceURLs() else { return }
         for (key, family) in Self.webFamilies where registered[key] == nil {
             guard let url = urls[family],
-                  let (data, resp) = try? await URLSession.shared.data(from: url),
+                  let (data, resp) = try? await URLSession.shared.data(for: UMAccess.request(url)),
                   (resp as? HTTPURLResponse)?.statusCode == 200 else { continue }
             if register(data, key: key) {
                 try? data.write(to: cacheDir.appendingPathComponent(family + ".ttf"), options: .atomic)
@@ -86,13 +86,13 @@ final class UMNameFonts {
     /// Reads the site's stylesheets and returns CSS family -> absolute font URL.
     private func fetchFontFaceURLs() async throws -> [String: URL] {
         let base = UMConfig.siteBase
-        let (htmlData, _) = try await URLSession.shared.data(from: base)
+        let (htmlData, _) = try await URLSession.shared.data(for: UMAccess.request(base))
         let html = String(decoding: htmlData, as: UTF8.self)
         let hrefs = matches(#"href="([^"]+\.css)""#, in: html)
         var out: [String: URL] = [:]
         for href in hrefs {
             guard let cssURL = URL(string: href, relativeTo: base),
-                  let (cssData, _) = try? await URLSession.shared.data(from: cssURL) else { continue }
+                  let (cssData, _) = try? await URLSession.shared.data(for: UMAccess.request(cssURL)) else { continue }
             let css = String(decoding: cssData, as: UTF8.self)
             for block in matches(#"@font-face\s*\{([^}]*)\}"#, in: css) {
                 guard let fam = matches(#"font-family:\s*["']?([^;"']+)"#, in: block).first,

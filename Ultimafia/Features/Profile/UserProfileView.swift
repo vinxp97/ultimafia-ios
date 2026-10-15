@@ -1396,7 +1396,7 @@ private struct ProfileAudioBar: View {
         VideoPlayer(player: player)
             .onAppear {
                 UMAudioSession.activatePlayback()   // mix with the user's own music
-                player = AVPlayer(url: url)
+                player = AVPlayer(playerItem: AVPlayerItem(asset: UMAccess.asset(url)))
             }
             .onDisappear {
                 player?.pause()
@@ -1439,7 +1439,7 @@ private struct ProfileWebEmbed: UIViewRepresentable {
             guard context.coordinator.lastURL != url else { return }
             context.coordinator.lastURL = url
             context.coordinator.lastHTML = nil
-            var req = URLRequest(url: url)
+            var req = UMAccess.request(url)
             req.setValue("\(UMConfig.site)/", forHTTPHeaderField: "Referer")
             web.load(req)
         }
@@ -1456,6 +1456,9 @@ private struct ProfileWebEmbed: UIViewRepresentable {
 struct UMBackendSwitch: View {
     @Environment(AppModel.self) private var app
     @State private var pending: UMBackend?
+    @State private var cfId = UMAccess.clientId ?? ""
+    @State private var cfSecret = ""
+    @State private var cfSaved = UMAccess.isSet
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1474,6 +1477,21 @@ struct UMBackendSwitch: View {
             }
             Text("Switching disconnects, keeps a separate session per host, and reloads.")
                 .font(.caption).foregroundStyle(.secondary)
+            Divider().padding(.vertical, 4)
+            Text("Cloudflare Access (.gg only)").font(.subheadline.bold())
+            TextField("CF-Access-Client-Id", text: $cfId)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().font(.caption.monospaced())
+            SecureField("CF-Access-Client-Secret", text: $cfSecret)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().font(.caption.monospaced())
+            HStack {
+                Button("Save") { UMAccess.save(id: cfId, secret: cfSecret); cfSecret = ""; cfSaved = UMAccess.isSet }
+                    .disabled(cfId.trimmingCharacters(in: .whitespaces).isEmpty || cfSecret.isEmpty)
+                Button("Clear", role: .destructive) { UMAccess.clear(); cfId = ""; cfSecret = ""; cfSaved = false }
+                    .disabled(!cfSaved)
+                Spacer()
+                Text(cfSaved ? "Saved in Keychain" : "Not set").font(.caption).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.bordered)
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))

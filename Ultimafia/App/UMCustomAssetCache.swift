@@ -54,7 +54,7 @@ actor UMCustomAssetCache {
         if let running = inflight[url] { return try await running.value }
         let session = self.session
         let task = Task<Data, Error> {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: UMAccess.request(url))
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { throw URLError(.badServerResponse) }
             try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             try? data.write(to: Self.file(for: url), options: .atomic)

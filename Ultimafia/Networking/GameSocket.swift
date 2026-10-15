@@ -20,6 +20,7 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         disconnect()
         let url = UMConfig.socketBase.appendingPathComponent(port)
         var request = URLRequest(url: url)
+        UMAccess.apply(&request)
         request.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = HTTPCookieStorage.shared
