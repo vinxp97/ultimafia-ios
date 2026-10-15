@@ -597,8 +597,12 @@ final class GameSession {
     }
 
     var displayedMessages: [ChatLine] {
-        phases.first(where: { $0.id == viewingPhaseId })?.messages ?? messages
+        // Liars Dice has no phase switcher (one state per turn): show the whole game's chat.
+        if isLiarsDice { return phases.sorted { rank($0.id) < rank($1.id) }.flatMap(\.messages) }
+        return phases.first(where: { $0.id == viewingPhaseId })?.messages ?? messages
     }
+
+    private func rank(_ id: Int) -> Int { id == -2 ? Int.max : id }
 
     var viewingNewspaper: NewspaperIssue? {
         viewingNewspapers.first

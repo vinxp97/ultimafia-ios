@@ -72,7 +72,7 @@ private struct GameScreen: View {
                             GameTownPane(session: session, compact: true)
                                 .frame(width: geo.size.width * 0.25)
                             Divider().overlay(UMTheme.line)
-                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader)
+                            GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader && !session.isLiarsDice)
                                 .frame(maxWidth: .infinity)
                             Divider().overlay(UMTheme.line)
                             GameActPane(session: session)
@@ -98,7 +98,7 @@ private struct GameScreen: View {
                                 session: session,
                                 draft: $draft,
                                 chatFocused: chatFocused,
-                                showsPhaseBar: !wideHeader,
+                                showsPhaseBar: !wideHeader && !session.isLiarsDice,
                                 isOnScreen: selectedPanel == 0
                             )
                             .opacity(selectedPanel == 0 ? 1 : 0)
@@ -273,8 +273,10 @@ private struct GameHeader: View {
                 SetupRoleStrip(session: session)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(-1)
-                PagedPhaseBar(session: session, visible: 6)
-                    .fixedSize()
+                if !session.isLiarsDice {
+                    PagedPhaseBar(session: session, visible: 6)
+                        .fixedSize()
+                }
             } else {
                 Spacer(minLength: 8)
             }
@@ -350,7 +352,7 @@ private struct GamePanelPicker: View {
             HStack(spacing: 4) {
                 tabBtn("Village", 1, "person.3")
                 tabBtn("Chat", 0, "text.bubble")
-                tabBtn("Act", 2, "hand.raised")
+                tabBtn(session.isLiarsDice ? "Dice" : "Act", 2, session.isLiarsDice ? "die.face.5" : "hand.raised")
                 if showSetupGuides, session.setupId != nil { SetupGuidesButton(session: session) }
             }
             .padding(.horizontal, 8)

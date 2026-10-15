@@ -98,8 +98,9 @@ struct LiarsDiceBoard: View {
     var body: some View {
         if let st = state {
             VStack(alignment: .leading, spacing: 12) {
-                table(st)
                 bidCard(st)
+                table(st)
+                betLog
             }
             .onChange(of: st.lastAmount, initial: true) { _, last in
                 amount = last + 1; bidError = ""
@@ -125,6 +126,10 @@ struct LiarsDiceBoard: View {
                             if turn { Circle().fill(UMTheme.blood).frame(width: 7, height: 7) }
                             Text(p.name).font(.subheadline.weight(mine ? .bold : .semibold)).lineLimit(1)
                             if mine { Text("(you)").font(.caption).foregroundStyle(UMTheme.muted) }
+                            Spacer(minLength: 4)
+                            Text("\(p.dice.count) \(p.dice.count == 1 ? "die" : "dice")")
+                                .font(.caption.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(UMTheme.muted)
                         }
                         HStack(spacing: 4) {
                             ForEach(Array(p.dice.enumerated()), id: \.offset) { _, v in
@@ -134,7 +139,7 @@ struct LiarsDiceBoard: View {
                         }
                         if !p.previous.isEmpty {
                             HStack(spacing: 3) {
-                                Text("Last round:").font(.caption2).foregroundStyle(st.flyingDutchman ? Color(red: 0.23, green: 0.35, blue: 0.25) : UMTheme.muted)
+                                Text("Prior round:").font(.caption2).foregroundStyle(st.flyingDutchman ? Color(red: 0.23, green: 0.35, blue: 0.25) : UMTheme.muted)
                                 ForEach(Array(p.previous.enumerated()), id: \.offset) { _, v in
                                     LDDie(face: v, size: 14, dim: true)
                                 }
@@ -154,7 +159,7 @@ struct LiarsDiceBoard: View {
     @ViewBuilder
     private func bidCard(_ st: LDState) -> some View {
         let hasPrior = st.lastBidder != nil
-        if hasPrior || isMyTurn || !(st.currentBidder ?? "").isEmpty {
+        if hasPrior || isMyTurn || live {
             VStack(alignment: .leading, spacing: 10) {
                 if let who = st.lastBidder {
                     HStack(alignment: .center, spacing: 6) {
@@ -162,27 +167,25 @@ struct LiarsDiceBoard: View {
                         LDDie(face: st.lastFace, size: 20)
                     }
                     .accessibilityElement(children: .combine)
-                    if isMyTurn {
-                        HStack(spacing: 8) {
-                            if let m = meeting("CallLie") {
-                                Button("CALL BLUFF") { session.vote(meetingId: m.id, selection: "Yes!") }
-                                    .buttonStyle(.borderedProminent).tint(UMTheme.blood)
-                            }
-                            if let m = meeting("SpotOn") {
-                                Button("SPOT ON") { session.vote(meetingId: m.id, selection: "Yes!") }
-                                    .buttonStyle(.borderedProminent).tint(.orange)
-                            }
-                        }
-                        .font(.subheadline.weight(.bold))
+                }
+                if live {
+                    HStack(spacing: 8) {
+                        let lie = meeting("CallLie"), spot = meeting("SpotOn")
+                        Button("CALL BLUFF") { if let m = lie { session.vote(meetingId: m.id, selection: "Yes!") } }
+                            .buttonStyle(.borderedProminent).tint(UMTheme.blood).disabled(lie == nil)
+                        Button("SPOT ON") { if let m = spot { session.vote(meetingId: m.id, selection: "Yes!") } }
+                            .buttonStyle(.borderedProminent).tint(.orange).disabled(spot == nil)
                     }
-                } else if let cur = st.currentBidder, !isMyTurn, live {
+                    .font(.subheadline.weight(.bold))
+                }
+                if let cur = st.currentBidder, !isMyTurn, live {
                     Text("Waiting for \(cur) to bid…").font(.subheadline).foregroundStyle(UMTheme.muted)
                 }
                 if st.annoyedJustTriggered {
                     Text("For the rest of the round, bids can only increase amount by 1.")
                         .font(.caption).foregroundStyle(.orange)
                 }
-                if isMyTurn { betForm(st) }
+                if isMyTurn || live { betForm(st).disabled(!isMyTurn).opacity(isMyTurn ? 1 : 0.5) }
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,11 +206,12 @@ struct LiarsDiceBoard: View {
             Text("Up the bet!").font(.headline)
             HStack {
                 Text("There are at least").font(.subheadline)
-                TextField("", value: $amount, format: .number)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 64)
-                Stepper("", value: $amount, in: 1...99_999).labelsHidden()
+                Picker("Amount", selection: $amount) {
+                    ForEach(amountRange(st), id: \.self) { Text("\($0)").tag($0) }
+                }
+                .pickerStyle(.menu)
+                .tint(.white)
+                Text("×").font(.subheadline)
             }
             HStack(spacing: 6) {
                 ForEach(1...6, id: \.self) { f in
@@ -225,11 +229,46 @@ struct LiarsDiceBoard: View {
             Button {
                 submit(st)
             } label: {
-                Text("BET").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 6)
+                Text("SUBMIT").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent).tint(UMTheme.blood)
             .disabled(face == nil || amount < 1)
         }
+    }
+
+    private func amountRange(_ st: LDState) -> [Int] {
+        let lo = max(1, st.lastAmount)
+        let hi = max(lo + 5, st.allDice, amount)
+        return Array(lo...hi)
+    }
+
+    @ViewBuilder
+    private var betLog: some View {
+        let log = session.ldBetLog
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Bet log").font(.headline)
+            if log.isEmpty {
+                Text("No bids yet.").font(.caption).foregroundStyle(UMTheme.muted)
+            }
+            ForEach(log) { e in
+                switch e.kind {
+                case .round(let n):
+                    Text("Round \(n)").font(.caption.weight(.bold)).foregroundStyle(UMTheme.muted).padding(.top, 4)
+                case .bid(let who, let n, let f):
+                    HStack(spacing: 4) {
+                        Text("\(who) bid \(n)×").font(.subheadline)
+                        LDDie(face: f, size: 16)
+                    }
+                    .accessibilityElement(children: .combine)
+                case .alert(let text):
+                    EmoteText(text: text, color: UMTheme.muted, italic: true, system: true, emoteSize: 14,
+                              players: session.players, gameType: session.setupGameType, otherRoles: [])
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func submit(_ st: LDState) {
@@ -246,5 +285,40 @@ struct LiarsDiceBoard: View {
             try? await Task.sleep(for: .milliseconds(200))
             session.vote(meetingId: faceId, selection: "dice\(face)")
         }
+    }
+}
+
+
+struct LDLogEntry: Identifiable {
+    enum Kind { case round(Int), bid(String, Int, Int), alert(String) }
+    var id: Int
+    var kind: Kind
+}
+
+extension GameSession {
+    /// Every bid from the saved turn states (a new entry whenever the last bid changes), with the
+    /// challenge results from that turn's chat alerts; a bid reset starts the next round.
+    var ldBetLog: [LDLogEntry] {
+        var out: [LDLogEntry] = []
+        var prev: LDState?
+        var round = 1
+        var n = 0
+        func add(_ k: LDLogEntry.Kind) { out.append(LDLogEntry(id: n, kind: k)); n += 1 }
+        for (k, st) in ldByPhase.sorted(by: { $0.key < $1.key }) where k >= 0 {
+            if st.lastBidder == nil, prev?.lastBidder != nil { round += 1 }
+            if let b = st.lastBidder,
+               prev?.lastBidder != b || prev?.lastAmount != st.lastAmount || prev?.lastFace != st.lastFace {
+                if !out.contains(where: { if case .round(round) = $0.kind { return true }; return false }) { add(.round(round)) }
+                add(.bid(b, st.lastAmount, st.lastFace))
+            }
+            for line in phases.first(where: { $0.id == k })?.messages ?? [] where line.isServer {
+                let t = line.content.lowercased()
+                if t.contains("called a bluff") || t.contains("called a lie") || t.contains("spot on") || t.contains("loses a die") || t.contains("lose a die") {
+                    add(.alert(line.content))
+                }
+            }
+            prev = st
+        }
+        return out
     }
 }
