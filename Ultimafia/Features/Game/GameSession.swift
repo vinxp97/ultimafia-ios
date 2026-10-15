@@ -220,7 +220,20 @@ final class GameSession {
     var dayCount: Int?
     var selfId: String?
     var hostId: String?
-    var finished = false
+    var finished = false {
+        didSet { if finished { isolating = false; isolatedIds = [] } }
+    }
+    /// Village "Isolate messages": checked players stay prominent, everyone else's chat dims.
+    /// In memory per session; cleared when the game ends (and dropped with the session on leave).
+    var isolating = false
+    var isolatedIds: Set<String> = []
+    /// Active game only (started, not finished, not a review).
+    var canIsolate: Bool { !isReview && !finished && currentPhaseId >= 0 }
+    func dimsInChat(_ line: ChatLine) -> Bool {
+        guard !isolatedIds.isEmpty, line.newspaper == nil, !line.isServer,
+              line.senderId != "vote", line.senderId != "server" else { return false }
+        return !isolatedIds.contains(line.senderId)
+    }
     /// Anonymous decks in this game (options.anonymousDeck ids); their profiles are cached on disk.
     var anonymousDeckIds: [String] = []
     var rankedGame = false

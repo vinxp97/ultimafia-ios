@@ -1213,10 +1213,14 @@ private struct ChatComposer: View {
 }
 
 private struct ChatRow: View {
+    @AppStorage("um.chatIndentUserMessages") private var indentUser = false
     let line: ChatLine
     var previous: ChatLine?
     var session: GameSession
     var layout: ChatLayout = .standard
+
+    /// "Indent Player Messages": inset only the message text (never the avatar/name header).
+    private var textInset: CGFloat { indentUser ? 10 : 0 }
 
     private var grouped: Bool {
         guard layout == .standard else { return false }
@@ -1246,7 +1250,7 @@ private struct ChatRow: View {
         }
         .frame(maxWidth: .infinity, alignment: line.senderId == "vote" ? .trailing : .leading)
         .contentShape(Rectangle())
-        .opacity(line.isQuote ? 0.9 : 1)
+        .opacity(session.dimsInChat(line) ? 0.35 : (line.isQuote ? 0.9 : 1))
         .padding(.top, grouped ? 0 : (layout == .standard && isPlayerChat(line) ? 8 : 0))
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
@@ -1259,19 +1263,18 @@ private struct ChatRow: View {
         )
     }
 
+    /// Vote text right-aligned with its timestamp at the far right of the same row.
     private var voteRow: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text(minuteSecond(line.time))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(UMTheme.muted)
-                .frame(width: 36, alignment: .leading)
-                .fixedSize()
-                .padding(.top, 2)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Spacer(minLength: 0)
             Text(line.content)
                 .font(.caption.italic())
                 .foregroundStyle(UMTheme.muted)
                 .multilineTextAlignment(.trailing)
+            Text(minuteSecond(line.time))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(UMTheme.muted)
+                .fixedSize()
         }
     }
 
@@ -1339,6 +1342,7 @@ private struct ChatRow: View {
                 }
             }
             messageBody(player: player)
+                .padding(.leading, textInset)
         }
     }
 
@@ -1477,6 +1481,7 @@ private struct ChatRow: View {
             gameType: session.setupGameType,
             otherRoles: session.guessableRoles.map(\.raw)
         )
+        .padding(.leading, textInset)
         if line.isQuote {
             Image(systemName: "quote.closing")
                 .font(.caption2)
@@ -1531,6 +1536,26 @@ private struct GameTownPane: View {
                 Section("Graveyard") {
                     ForEach(session.graveyardPlayers) { player in
                         townRow(player, dead: true)
+                    }
+                }
+            }
+            if session.canIsolate {
+                Section {
+                    Button {
+                        if session.isolating { session.isolating = false; session.isolatedIds = [] }
+                        else { session.isolating = true }
+                    } label: {
+                        Label(session.isolating ? (session.isolatedIds.isEmpty ? "Done" : "Clear isolation") : "Isolate messages",
+                              systemImage: session.isolating ? "xmark.circle" : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: dim(15, 13, 16), weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityHint("Choose players whose messages stay prominent; others are dimmed")
+                } footer: {
+                    if session.isolating {
+                        Text(session.isolatedIds.isEmpty ? "Check players to keep their messages prominent." :
+                             "\(session.isolatedIds.count) isolated. Other players' messages are dimmed.")
                     }
                 }
             }
@@ -1600,6 +1625,20 @@ private struct GameTownPane: View {
                 RoleGuessBadge(session: session, player: player, size: dim(30, 20, 36)) {
                     pickingPlayerId = player.id
                 }
+            }
+            if session.isolating {
+                let on = session.isolatedIds.contains(player.id)
+                Button {
+                    if on { session.isolatedIds.remove(player.id) } else { session.isolatedIds.insert(player.id) }
+                } label: {
+                    Image(systemName: on ? "checkmark.square.fill" : "square")
+                        .font(.system(size: dim(22, 16, 24)))
+                        .foregroundStyle(on ? UMTheme.blood : UMTheme.muted)
+                        .frame(minWidth: 30, minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(on ? "Isolated: \(player.name)" : "Isolate \(player.name)")
             }
             UMAvatarView(player: player, size: dim(36, 22, 44))
             VStack(alignment: .leading, spacing: dim(2, 0, 2)) {

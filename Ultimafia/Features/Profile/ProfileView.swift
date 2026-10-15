@@ -8,6 +8,7 @@ struct ProfileView: View {
     @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
+    @AppStorage("um.chatIndentUserMessages") private var indentUserMessages = false
     @AppStorage("um.hideTerminology") private var hideTerminology = false
     @AppStorage("um.playerListSize") private var playerListSize = "compact"
     @AppStorage("um.voteListDisplay") private var voteListDisplay = "avatars"
@@ -62,6 +63,8 @@ struct ProfileView: View {
                     Toggle("Show Autofill Emoji", isOn: $showEmoteAutocomplete)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Voting Log", isOn: $showVotingLog)
+                        .listRowBackground(UMTheme.card)
+                    Toggle("Indent Player Messages", isOn: $indentUserMessages)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)
