@@ -432,7 +432,15 @@ final class ReadyNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        []
+        UMDMNotify.foregroundOptions(for: notification)
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        await MainActor.run { UMDMNotify.handleTap(info) }
     }
 }
 
