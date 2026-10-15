@@ -131,7 +131,7 @@ enum ReadyBell {
         let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-urgent.mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
-        guard let remote = URL(string: "https://ultimafia.com/audio/urgent.mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/urgent.mp3") else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: remote)
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }
@@ -265,7 +265,7 @@ enum GameSFX {
         let dest = supportURL(name)
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
         guard localNames.contains(name) else { return nil }
-        guard let remote = URL(string: "https://ultimafia.com/audio/\(name).mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/\(name).mp3") else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: remote)
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }
@@ -280,8 +280,8 @@ enum GameSFX {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
         if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
-        if s.hasPrefix("/") { return URL(string: "https://ultimafia.com" + s) }
-        return URL(string: "https://ultimafia.com/" + s)
+        if s.hasPrefix("/") { return URL(string: "\(UMConfig.site)" + s) }
+        return URL(string: "\(UMConfig.site)/" + s)
     }
 }
 
@@ -355,7 +355,7 @@ enum GameMusic {
         let dest = UMCacheLocation.sounds
             .appendingPathComponent("um-\(safe).mp3")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
-        guard let remote = URL(string: "https://ultimafia.com/audio/\(path).mp3") else { return nil }
+        guard let remote = URL(string: "\(UMConfig.site)/audio/\(path).mp3") else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: remote)
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 { return nil }

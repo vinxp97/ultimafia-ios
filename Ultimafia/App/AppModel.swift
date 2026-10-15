@@ -313,6 +313,25 @@ final class AppModel {
 
     /// Signs out only the active account: its session and stored password are removed, but its
     /// row stays in the switcher (tapping it asks for the password). Other accounts are untouched.
+    /// Z-only backend switch: keep this host's session, tear everything down, point every URL at the
+    /// new host, restore that host's saved session for the same account if any, then reconnect.
+    func switchBackend(_ b: UMBackend) async {
+        guard b != UMConfig.backend else { return }
+        let id = user?.id
+        if let id { AccountStore.shared.saveSession(for: id) }
+        await UMPush.unregister()           // DELETE from the old host while its session is valid
+        UMPush.signedIn = false
+        UMChatStore.shared.stop()
+        if seatedGameId != nil { game?.disconnectWithoutLeaving() }
+        resetSessionState()
+        AccountStore.clearCookies()
+        UMBackend.set(b)
+        UMProfileCache.clearAll()
+        UMDiag.log("backend", "switched to \(b.rawValue)")
+        if let id { _ = AccountStore.shared.restoreSession(for: id) }
+        await bootstrap()                   // signed in -> MainTabs re-registers push on the new host
+    }
+
     func signOut() async {
         let id = user?.id
         let email = id.flatMap { uid in AccountStore.shared.accounts.first { $0.id == uid }?.email }

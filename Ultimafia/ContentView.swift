@@ -35,6 +35,7 @@ struct ContentView: View {
             }
             #endif
         }
+        .overlay(alignment: .top) { UMBackendBadge() }
         .preferredColorScheme(.dark)
         .task {
             ReadyNotifications.requestPermission()

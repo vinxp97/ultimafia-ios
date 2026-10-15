@@ -25,7 +25,7 @@ actor UMCustomAssetCache {
 
     /// User uploads (avatars, custom emotes/stickers) on the site's own host.
     nonisolated static func isCustomUserAsset(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased(), host == "ultimafia.com" || host.hasSuffix(".ultimafia.com") else { return false }
+        guard let host = url.host?.lowercased(), ["ultimafia.com", "ultimafia.gg"].contains(where: { host == $0 || host.hasSuffix("." + $0) }) else { return false }
         return url.path.hasPrefix("/uploads/")
     }
 

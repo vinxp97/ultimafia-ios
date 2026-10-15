@@ -40,7 +40,7 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        req.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         if let csrf, method != "GET" {
             req.setValue(csrf, forHTTPHeaderField: "x-csrf")
         }
@@ -80,7 +80,7 @@ final class APIClient {
         req.httpMethod = "POST"
         req.timeoutInterval = 120
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("https://ultimafia.com", forHTTPHeaderField: "Origin")
+        req.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if let csrf { req.setValue(csrf, forHTTPHeaderField: "x-csrf") }
         let delegate = UMUploadProgressDelegate(progress)

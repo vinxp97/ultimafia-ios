@@ -29,7 +29,7 @@ func platformImage(_ image: UMPlatformImage) -> Image {
 
 nonisolated enum UMAvatarURL {
     static func live(userId: String) -> URL? {
-        URL(string: "https://ultimafia.com/uploads/\(userId)_avatar.webp")
+        URL(string: "\(UMConfig.site)/uploads/\(userId)_avatar.webp")
     }
 
     /// Web Avatar: a string avatar containing "decks" is shown from `/uploads<path>`.
@@ -39,7 +39,7 @@ nonisolated enum UMAvatarURL {
     }
 
     static func deck(path: String) -> URL? {
-        URL(string: "https://ultimafia.com/uploads\(path)")
+        URL(string: "\(UMConfig.site)/uploads\(path)")
     }
 }
 

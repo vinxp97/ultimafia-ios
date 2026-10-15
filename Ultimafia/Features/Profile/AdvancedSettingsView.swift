@@ -387,7 +387,7 @@ private struct UploadRow<Control: View>: View {
                 }
             }
             if let info { Text(info).font(.footnote).foregroundStyle(UMTheme.muted) }
-            Button("Or use the website") { browser = UMBrowserItem(url: URL(string: "https://ultimafia.com\(sitePath)")!) }
+            Button("Or use the website") { browser = UMBrowserItem(url: URL(string: "\(UMConfig.site)\(sitePath)")!) }
                 .font(.caption)
                 .buttonStyle(.borderless)
                 .foregroundStyle(UMTheme.muted)
@@ -447,7 +447,7 @@ private struct SiteSettingsTab: View {
     var body: some View {
         let user = app.user
         Section {
-            let url = "https://ultimafia.com/auth/login?ref=\(user?.id ?? "")"
+            let url = "\(UMConfig.site)/auth/login?ref=\(user?.id ?? "")"
             VStack(alignment: .leading, spacing: 6) {
                 Text("Referral URL").font(.subheadline.weight(.semibold))
                 Text(url).font(.footnote.monospaced()).foregroundStyle(UMTheme.roleMention).textSelection(.enabled)

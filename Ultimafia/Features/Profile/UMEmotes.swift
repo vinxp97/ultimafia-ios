@@ -190,8 +190,8 @@ enum UMEmotes {
     static func customURL(_ path: String) -> URL? {
         let s = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
-        if s.hasPrefix("/") { return URL(string: "https://ultimafia.com" + s) }
-        return URL(string: "https://ultimafia.com/" + s)
+        if s.hasPrefix("/") { return URL(string: "\(UMConfig.site)" + s) }
+        return URL(string: "\(UMConfig.site)/" + s)
     }
 }
 
