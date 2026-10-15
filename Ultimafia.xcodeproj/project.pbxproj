@@ -368,7 +368,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "Ultimafia/Ultimafia-iOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -419,7 +419,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "Ultimafia/Ultimafia-iOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -465,7 +465,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
@@ -492,7 +492,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
