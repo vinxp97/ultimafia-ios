@@ -129,7 +129,7 @@ private struct GameScreen: View {
         }
         .onAppear { UMDiag.log("view", "game screen appear \(session.gameId)") }
         .onDisappear { UMDiag.log("view", "game screen disappear \(session.gameId)") }
-        .task { await RoleCatalog.shared.load() }
+        .task { await RoleCatalog.shared.load(); UMSpeechLM.prepareIfNeeded() }
         // Warm the on-disk custom asset cache: own maps once, then every player's maps/avatars.
         .task(id: session.players.count) { await prefetchCustomAssets() }
         // Whether the bar is showing is the AppModel's single decision (`showsAppTabs`), not
@@ -1026,6 +1026,7 @@ private struct ChatComposer: View {
             }
             .background(UMTheme.elevated)
         }
+        UMDictationBanner()
         TimelineView(.periodic(from: .now, by: 0.2)) { context in
             let cooling = (session.speakCooldownUntil ?? .distantPast) > context.date
             HStack(alignment: .bottom, spacing: 8) {
@@ -1090,6 +1091,9 @@ private struct ChatComposer: View {
                         handleTyping(oldValue, newValue)
                     }
 
+                    UMMicButton(text: cappedDraft, maxLength: UMConfig.maxChatLength, vocab: { dictationVocab })
+                        .disabled(cooling)
+
                     // Keyboard toggle (Return is the send key).
                     Button {
                         chatFocused.wrappedValue.toggle()
@@ -1137,6 +1141,12 @@ private struct ChatComposer: View {
         }
         }
         .bindKeyboardExpanded($keyboardExpanded)
+    }
+
+    /// Current game's players, then its setup roles, for dictation.
+    private var dictationVocab: DictationVocab {
+        DictationVocab(players: session.players.map(\.name),
+                       roles: session.setupRoles.map(\.name) + session.setupRolesets.flatMap { $0.map(\.name) })
     }
 
     private func placeholder(cooling: Bool) -> String {

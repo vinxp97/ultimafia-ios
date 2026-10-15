@@ -399,6 +399,7 @@ private struct ChatComposerBar: View {
                 .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 18))
                 .onChange(of: draft) { _, v in if v.count > UMConfig.maxChatLength { draft = String(v.prefix(UMConfig.maxChatLength)) } }
                 .onSubmit(onSend)
+            UMMicButton(text: $draft, maxLength: UMConfig.maxChatLength, vocab: { DictationVocab() }, glass: false)
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
@@ -406,6 +407,7 @@ private struct ChatComposerBar: View {
             .accessibilityLabel("Send")
         }
         .disabled(disabled)
+        .safeAreaInset(edge: .top, spacing: 4) { UMDictationBanner().clipShape(Capsule()) }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(UMTheme.bg)
     }

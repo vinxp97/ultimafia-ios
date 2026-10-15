@@ -376,6 +376,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "UltiMafia uses the microphone when you tap the mic button to dictate a chat message.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "UltiMafia turns your speech into chat text on this device so you can dictate messages, including player and role names.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -427,6 +429,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "UltiMafia uses the microphone when you tap the mic button to dictate a chat message.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "UltiMafia turns your speech into chat text on this device so you can dictate messages, including player and role names.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

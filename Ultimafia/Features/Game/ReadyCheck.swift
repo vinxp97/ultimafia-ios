@@ -33,8 +33,40 @@ nonisolated enum UMAudioSession {
     }
 
     /// Queue only. Activates once; interruptions / media-server resets make the next call re-activate.
+    /// Dictation: switch to playAndRecord (ducking other apps) on the audio queue.
+    static func beginRecording() async -> Bool {
+        await withCheckedContinuation { cont in
+            queue.async {
+                #if os(iOS)
+                let session = AVAudioSession.sharedInstance()
+                do {
+                    try session.setCategory(.playAndRecord, mode: .default,
+                                            options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
+                    try session.setActive(true)
+                    active = false
+                    cont.resume(returning: true)
+                } catch {
+                    UMDiag.log("audio", "record session failed: \(error.localizedDescription)")
+                    cont.resume(returning: false)
+                }
+                #else
+                cont.resume(returning: true)
+                #endif
+            }
+        }
+    }
+
+    /// Back to `.playback` + `.mixWithOthers` after dictation (unducks other apps).
+    static func endRecording() {
+        queue.async {
+            active = false
+            ensureActive()
+        }
+    }
+
     private static func ensureActive() {
         #if os(iOS)
+        if UMDictationAudio.active { return }
         let session = AVAudioSession.sharedInstance()
         if !observing {
             observing = true
@@ -191,6 +223,7 @@ enum GameSFX {
     }
 
     static func play(_ name: String) {
+        if UMDictationAudio.active { return }
         let alert = GameAudio.alertSounds.contains(name)
         if let url = bundledURL(name) {
             Task { @MainActor in await playFile(url, alert: alert) }
@@ -203,6 +236,7 @@ enum GameSFX {
     }
 
     static func playRemoteQueue(_ raws: [String]) {
+        if UMDictationAudio.active { return }
         let urls = raws.compactMap(makeRemoteURL)
         guard !urls.isEmpty else { return }
         Task { @MainActor in
@@ -330,7 +364,8 @@ enum GameMusic {
     }
 
     private static func volume(for path: String?) -> Float {
-        (path ?? "").hasPrefix("music/Pregame") ? GameAudio.pregameMusic : GameAudio.music
+        if UMDictationAudio.active { return 0 }
+        return (path ?? "").hasPrefix("music/Pregame") ? GameAudio.pregameMusic : GameAudio.music
     }
 
     @MainActor
@@ -425,7 +460,7 @@ enum GameAlerts {
         let content = UNMutableNotificationContent()
         content.title = "Ultimafia"
         content.body = body
-        content.sound = .default
+        content.sound = UMDictationAudio.active ? nil : .default
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }

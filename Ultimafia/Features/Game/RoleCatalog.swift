@@ -63,6 +63,11 @@ final class RoleCatalog {
         }
     }
 
+    /// Every role name across game types, for the dictation language model.
+    func allRoleNames() -> [String] {
+        Array(Set(rolesByGame.values.flatMap { $0.keys })).sorted()
+    }
+
     func alignment(of name: String, gameType: String) -> String? {
         rolesByGame[gameType]?[name]?["alignment"] as? String
     }
