@@ -84,7 +84,7 @@ struct LobbyView: View {
             Spacer(minLength: 0)
             // Hosting belongs to the lobby rather than a section of its own, the way the website has
             // it, so the way in lives in the lobby header and the bar never moves for it.
-            if !app.isSeatedInLiveGame {
+            if !app.hasCurrentGame {
             Button { app.openHost() } label: {
                 Label("Host", systemImage: "plus.circle")
                     .font(.subheadline.weight(.semibold))

@@ -97,12 +97,12 @@ final class AppModel {
         user?.inGameId ?? game?.gameId
     }
 
-    /// Seated as a player in a pregame lobby or an unfinished game (spectating doesn't count).
-    /// Falls back to the server's inGameId when no session is attached yet.
-    var isSeatedInLiveGame: Bool {
-        if let g = game, g.gameId == seatedGameId || user?.inGameId == nil {
-            return !g.finished && g.players.contains { $0.id == g.selfId && !$0.left }
-        }
+    /// Any current game session: pregame or started, seated or spectating, until it's actually left
+    /// (game = nil) or finished. Reads the live session the shell keeps across the back arrow
+    /// (goToLobby keeps `game`), so it flips the moment a session attaches, not when the game starts.
+    /// With no session attached yet (relaunch before resume), the server's inGameId decides.
+    var hasCurrentGame: Bool {
+        if let g = game, !g.isReview { return !g.finished }
         return user?.inGameId != nil
     }
 
