@@ -1261,19 +1261,18 @@ private struct ChatRow: View {
         )
     }
 
+    /// Vote text right-aligned with its timestamp at the far right of the same row.
     private var voteRow: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text(minuteSecond(line.time))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(UMTheme.muted)
-                .frame(width: 36, alignment: .leading)
-                .fixedSize()
-                .padding(.top, 2)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Spacer(minLength: 0)
             Text(line.content)
                 .font(.caption.italic())
                 .foregroundStyle(UMTheme.muted)
                 .multilineTextAlignment(.trailing)
+            Text(minuteSecond(line.time))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(UMTheme.muted)
+                .fixedSize()
         }
     }
 
