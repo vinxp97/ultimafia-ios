@@ -97,6 +97,15 @@ final class AppModel {
         user?.inGameId ?? game?.gameId
     }
 
+    /// Seated as a player in a pregame lobby or an unfinished game (spectating doesn't count).
+    /// Falls back to the server's inGameId when no session is attached yet.
+    var isSeatedInLiveGame: Bool {
+        if let g = game, g.gameId == seatedGameId || user?.inGameId == nil {
+            return !g.finished && g.players.contains { $0.id == g.selfId && !$0.left }
+        }
+        return user?.inGameId != nil
+    }
+
     var seatedGameSummary: GameSummary? {
         guard let id = seatedGameId else { return nil }
         return (openGames + inProgressGames).first { $0.id == id }
