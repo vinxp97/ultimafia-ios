@@ -102,7 +102,7 @@ extension Notification.Name {
 /// (login required; the server skips pushes while the user is playing or spectating).
 /// Registers only when signed in AND DM alerts are on with notification permission granted.
 enum UMPush {
-    static let isConfigured = true
+    static let isConfigured = UMFeatureFlags.pushNotificationsEnabled
     static let registerPath = "user/push/apns"
     static let tokenKey = "um.apns.token"
     static let bundleId = "VCCCLLC.Ultimafia"
@@ -132,6 +132,7 @@ enum UMPush {
 
     @MainActor
     static func didRegister(token: Data) {
+        guard isConfigured else { return }
         let hex = token.map { String(format: "%02x", $0) }.joined()
         UserDefaults.standard.set(hex, forKey: tokenKey)
         UMDiag.log("push", "apns token \(hex.prefix(8))… env \(environment)")
@@ -140,7 +141,7 @@ enum UMPush {
 
     @MainActor
     private static func upload(_ hex: String) {
-        guard signedIn, UMDMNotify.enabled, uploadedToken != hex else { return }
+        guard isConfigured, signedIn, UMDMNotify.enabled, uploadedToken != hex else { return }
         uploadedToken = hex
         Task {
             do {
