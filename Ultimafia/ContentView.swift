@@ -9,6 +9,9 @@ struct ContentView: View {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-UMDiagReplay") {
                 DiagReplayView()
+            } else if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-UMDiagMessages") {
+                DiagMessagesView(screen: ProcessInfo.processInfo.arguments.indices.contains(i + 1)
+                                 ? ProcessInfo.processInfo.arguments[i + 1] : "public")
             } else if app.isRestoring {
                 ZStack {
                     UMTheme.bg.ignoresSafeArea()
@@ -62,6 +65,9 @@ struct ContentView: View {
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
 
+    /// Seated or spectating: every DM entry point is hidden, sends blocked, alerts muted.
+    private var inGame: Bool { app.game != nil || app.seatedGameId != nil }
+
     var body: some View {
         ZStack {
             // Sections, always present in this order. UIKit owns the bar, so selection, Liquid
@@ -72,12 +78,26 @@ struct MainTabs: View {
                 selected: app.section,
                 mentionBadge: app.mentionBadge,
                 showsBar: app.showsAppTabs,
+                showsMessages: !inGame,
+                messagesBadge: inGame ? 0 : UMChatStore.shared.unreadDMCount,
                 play: AnyView(LobbyView().environment(app)),
+                messages: AnyView(MessagesView().environment(app)),
                 game: AnyView(GameSectionView().environment(app)),
                 you: AnyView(ProfileView().environment(app)),
                 onSelect: { app.select($0) }
             )
             .ignoresSafeArea()
+            .task {
+                UMChatStore.shared.inGame = inGame
+                UMChatStore.shared.start(selfId: app.user?.id)
+            }
+            .onChange(of: inGame) { _, now in
+                UMChatStore.shared.inGame = now
+                if now, app.section == .messages { app.section = .play }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .umOpenMessages)) { _ in
+                if !inGame { app.section = .messages }
+            }
             // Signed-in shell settled: warm Z's profile (credits link) at low priority.
             .task {
                 try? await Task.sleep(for: .seconds(8))

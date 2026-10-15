@@ -91,6 +91,7 @@ struct ProfileView: View {
                     NavigationLink("Custom Emojis & Stickers") { CustomMediaOrderView() }
                         .listRowBackground(UMTheme.card)
                 }
+                DMNotificationSettingsSection()
                 Section("Audio") {
                     volumeRow("Music Volume", $musicVolume) {
                         GameMusic.applyVolume()

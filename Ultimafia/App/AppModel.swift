@@ -82,6 +82,7 @@ final class AppModel {
         switch target {
         case .play: goToLobby()
         case .game: gamePath.removeAll()
+        case .messages: break
         case .you: youPath.removeAll()
         }
     }
@@ -535,7 +536,7 @@ final class AppModel {
 
     private func push(_ route: Route) {
         switch section {
-        case .play: path.append(route)
+        case .play, .messages: path.append(route)
         case .game: gamePath.append(route)
         case .you: youPath.append(route)
         }
