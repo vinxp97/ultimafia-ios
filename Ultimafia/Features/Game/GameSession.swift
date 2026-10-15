@@ -1241,6 +1241,9 @@ final class GameSession {
             }
         case "state":
             applyState(data)
+        case "diceRoll", "diceRoll2":
+            // Liars Dice new round: play the file the event names, once.
+            if !isQuiet { GameSFX.play(event) }
         case "history":
             ingestHistory(data)
         case "message":
@@ -2077,7 +2080,7 @@ final class GameSession {
         if let ld = LDState(obj["extraInfo"]) {
             let old = ldByPhase.filter { $0.key >= 0 && $0.key < id }.max { $0.key < $1.key }?.value ?? ldByPhase[id]
             ldByPhase[id] = ld
-            if !isQuiet, phaseChanged || old != ld { LDEvents.handle(old: old == ld ? nil : old, new: ld, selfId: selfId) }
+            if !isQuiet, phaseChanged || old != ld { LDEvents.handle(old: old, new: ld, selfId: selfId) }
         }
         if followLive {
             viewingPhaseId = id

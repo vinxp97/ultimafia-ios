@@ -178,16 +178,6 @@ struct LiarsDiceBoard: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-                if live {
-                    HStack(spacing: 8) {
-                        let lie = meeting("CallLie"), spot = meeting("SpotOn")
-                        Button("CALL BLUFF") { if let m = lie { session.vote(meetingId: m.id, selection: "Yes!") } }
-                            .buttonStyle(.borderedProminent).tint(UMTheme.blood).disabled(lie == nil)
-                        Button("SPOT ON") { if let m = spot { session.vote(meetingId: m.id, selection: "Yes!") } }
-                            .buttonStyle(.borderedProminent).tint(.orange).disabled(spot == nil)
-                    }
-                    .font(.subheadline.weight(.bold))
-                }
                 if let cur = st.currentBidder, !isMyTurn, live {
                     Text("Waiting for \(cur) to bid…").font(.subheadline).foregroundStyle(UMTheme.muted)
                 }
@@ -195,7 +185,10 @@ struct LiarsDiceBoard: View {
                     Text("For the rest of the round, bids can only increase amount by 1.")
                         .font(.caption).foregroundStyle(.orange)
                 }
-                if isMyTurn || live { betForm(st).disabled(!isMyTurn).opacity(isMyTurn ? 1 : 0.5) }
+                if isMyTurn || live {
+                    betForm(st).disabled(!isMyTurn).opacity(isMyTurn ? 1 : 0.5)
+                    actionRow(st)
+                }
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,13 +229,24 @@ struct LiarsDiceBoard: View {
                 }
             }
             if !bidError.isEmpty { Text(bidError).font(.caption).foregroundStyle(UMTheme.mafia) }
-            Button {
-                submit(st)
-            } label: {
-                Text("SUBMIT").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 6)
-            }
-            .buttonStyle(.borderedProminent).tint(UMTheme.blood)
-            .disabled(face == nil || amount < 1)
+        }
+    }
+
+    /// CALL BLUFF | SPOT ON | SUBMIT: three equal-width buttons in one row.
+    private func actionRow(_ st: LDState) -> some View {
+        let lie = meeting("CallLie"), spot = meeting("SpotOn")
+        func label(_ t: String) -> some View {
+            Text(t).font(.subheadline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity).padding(.vertical, 6)
+        }
+        return HStack(spacing: 8) {
+            Button { if let m = lie { session.vote(meetingId: m.id, selection: "Yes!") } } label: { label("CALL BLUFF") }
+                .buttonStyle(.borderedProminent).tint(UMTheme.blood).disabled(lie == nil)
+            Button { if let m = spot { session.vote(meetingId: m.id, selection: "Yes!") } } label: { label("SPOT ON") }
+                .buttonStyle(.borderedProminent).tint(.orange).disabled(spot == nil)
+            Button { submit(st) } label: { label("SUBMIT") }
+                .buttonStyle(.borderedProminent).tint(UMTheme.village)
+                .disabled(!isMyTurn || face == nil || amount < 1)
         }
     }
 
@@ -350,17 +354,12 @@ extension GameSession {
 
 /// Live Liars Dice cues, fed one new turn state at a time (never during history/review).
 enum LDEvents {
-    /// Dice-falling sound for round start/end: set the GameSFX name once Pranay confirms the
-    /// file and when it plays. nil = no sound (intentionally not guessed).
-    static var diceFallSound: String? = nil
-
+    /// Round sounds come from the server's bare `diceRoll` / `diceRoll2` socket events
+    /// (game start, after every Liar call and Spot On); GameSession plays the named file.
     @MainActor
     static func handle(old: LDState?, new: LDState, selfId: String?) {
-        let bid = new.lastBidder != nil &&
-            (old?.lastBidder != new.lastBidder || old?.lastAmount != new.lastAmount || old?.lastFace != new.lastFace)
-        if bid { GameSFX.play("ping") }
-        let roundStart = old == nil || (new.lastBidder == nil && old?.lastBidder != nil)
-        if roundStart, let s = diceFallSound { GameSFX.play(s) }
+        // Desktop plays ping on every state message after the first (bids, calls, new rounds).
+        if old != nil { GameSFX.play("ping") }
         let myTurn = new.players.first { $0.userId != nil && $0.userId == new.whoseTurnUserId }?.playerId
         if let me = selfId, myTurn == me, old?.whoseTurnUserId != new.whoseTurnUserId {
             GameAlerts.notifyYourTurn()
