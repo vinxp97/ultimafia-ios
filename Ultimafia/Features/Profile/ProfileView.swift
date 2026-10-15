@@ -10,6 +10,7 @@ struct ProfileView: View {
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.chatIndentUserMessages") private var indentUserMessages = false
     @AppStorage("um.hideTerminology") private var hideTerminology = false
+    @AppStorage(UMSpeechLM.enabledKey) private var dictationEnabled = false
     @AppStorage("um.playerListSize") private var playerListSize = "compact"
     @AppStorage("um.voteListDisplay") private var voteListDisplay = "avatars"
     @AppStorage("um.musicVolume") private var musicVolume = 1.0
@@ -68,6 +69,15 @@ struct ProfileView: View {
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)
+                    Toggle("Dictation", isOn: $dictationEnabled)
+                        .listRowBackground(UMTheme.card)
+                        .onChange(of: dictationEnabled) { _, on in
+                            if on {
+                                Task { await RoleCatalog.shared.load(); UMSpeechLM.prepareIfNeeded() }
+                            } else {
+                                UMDictation.shared.stop()
+                            }
+                        }
                     Toggle("Hide Game Terminology", isOn: $hideTerminology)
                         .listRowBackground(UMTheme.card)
                     playerListSizePicker

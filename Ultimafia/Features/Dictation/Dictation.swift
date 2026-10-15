@@ -56,6 +56,9 @@ nonisolated enum UMSpeechLM {
     static let commands = ["vote", "unvote", "whisper", "shoot", "kick", "ban", "extend", "cry"]
     private static let versionKey = "um.dictation.lmVersion"
     static let prepMsKey = "um.dictation.lmPrepMs"
+    /// You > Chat > Dictation. Off by default, per device.
+    static let enabledKey = "um.dictationEnabled"
+    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
     private nonisolated(unsafe) static var task: Task<Void, Never>?
 
     static var version: String {
@@ -81,7 +84,7 @@ nonisolated enum UMSpeechLM {
     /// Once per app version, in the background, after the role catalog has loaded.
     @MainActor
     static func prepareIfNeeded() {
-        guard !isReady, task == nil, RoleCatalog.shared.isReady else { return }
+        guard isEnabled, !isReady, task == nil, RoleCatalog.shared.isReady else { return }
         let roles = RoleCatalog.shared.allRoleNames()
         guard !roles.isEmpty else { return }
         task = Task.detached(priority: .utility) {
@@ -484,10 +487,15 @@ struct UMMicButton: View {
 
     @State private var id = UUID()
     @State private var showDenied = false
+    @AppStorage(UMSpeechLM.enabledKey) private var enabled = false
     private var dictation: UMDictation { UMDictation.shared }
     private var mine: Bool { dictation.owner == id }
 
     var body: some View {
+        if enabled { content }
+    }
+
+    private var content: some View {
         Button {
             dictation.toggle(owner: id, current: text, vocab: vocab()) { new in
                 text = String(new.prefix(maxLength))
@@ -497,10 +505,19 @@ struct UMMicButton: View {
                 if mine, case .preparing(let p) = dictation.phase {
                     ProgressView(value: max(p, 0.02)).progressViewStyle(.circular).controlSize(.small)
                 } else {
-                    Image(systemName: mine && dictation.isRecording ? "mic.fill" : "mic")
-                        .symbolEffect(.pulse, isActive: mine && dictation.isRecording)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(mine && dictation.isRecording ? Color.red : UMTheme.muted)
+                    let rec = mine && dictation.isRecording
+                    if glass {
+                        Image(systemName: rec ? "mic.fill" : "mic")
+                            .symbolEffect(.pulse, isActive: rec)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(rec ? Color.red : Color.white.opacity(0.85))
+                    } else {
+                        // Plain composers (DMs, public chat): send-button size; white idle, red while recording.
+                        Image(systemName: rec ? "mic.circle.fill" : "mic.circle")
+                            .symbolEffect(.pulse, isActive: rec)
+                            .font(.title2)
+                            .foregroundStyle(rec ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.white.opacity(0.9)))
+                    }
                 }
             }
             .frame(width: size, height: size)
