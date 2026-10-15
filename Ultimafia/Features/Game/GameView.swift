@@ -1219,6 +1219,9 @@ private struct ChatRow: View {
     var session: GameSession
     var layout: ChatLayout = .standard
 
+    /// "Indent Player Messages": inset only the message text (never the avatar/name header).
+    private var textInset: CGFloat { indentUser ? 10 : 0 }
+
     private var grouped: Bool {
         guard layout == .standard else { return false }
         if line.isQuote { return false }
@@ -1247,7 +1250,6 @@ private struct ChatRow: View {
         }
         .frame(maxWidth: .infinity, alignment: line.senderId == "vote" ? .trailing : .leading)
         .contentShape(Rectangle())
-        .padding(.leading, indentUser && isPlayerChat(line) && line.newspaper == nil ? 10 : 0)
         .opacity(session.dimsInChat(line) ? 0.35 : (line.isQuote ? 0.9 : 1))
         .padding(.top, grouped ? 0 : (layout == .standard && isPlayerChat(line) ? 8 : 0))
         .simultaneousGesture(
@@ -1340,6 +1342,7 @@ private struct ChatRow: View {
                 }
             }
             messageBody(player: player)
+                .padding(.leading, textInset)
         }
     }
 
@@ -1478,6 +1481,7 @@ private struct ChatRow: View {
             gameType: session.setupGameType,
             otherRoles: session.guessableRoles.map(\.raw)
         )
+        .padding(.leading, textInset)
         if line.isQuote {
             Image(systemName: "quote.closing")
                 .font(.caption2)
