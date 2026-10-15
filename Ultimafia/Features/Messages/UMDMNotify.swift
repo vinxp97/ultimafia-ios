@@ -41,7 +41,7 @@ enum UMDMNotify {
     @MainActor
     static func post(channel: UMChatChannel?, sender: String?, text: String?, selfId: String?, inGame: Bool,
                      channelId: String? = nil) {
-        guard enabled, !inGame else { return }
+        guard UMNotifyMaster.isOn, enabled, !inGame else { return }
         guard let id = channel?.id ?? channelId else { return }
         let viewing = UMChatStore.shared.currentChannelId == id
         if viewing && isAppActive { return }
@@ -119,7 +119,7 @@ enum UMPush {
     /// Call after login and after DM alerts are enabled.
     @MainActor
     static func registerIfConfigured() {
-        guard isConfigured, signedIn, UMDMNotify.enabled else { return }
+        guard isConfigured, signedIn, UMNotifyMaster.isOn, UMDMNotify.enabled else { return }
         UNUserNotificationCenter.current().getNotificationSettings { s in
             guard s.authorizationStatus == .authorized || s.authorizationStatus == .provisional else { return }
             Task { @MainActor in
@@ -190,3 +190,73 @@ final class UMAppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 #endif
+
+
+/// Device-wide master switch for ALL app notifications (DM alerts, ready check, mentions, kicks alerts,
+/// and APNs registration when UMFeatureFlags allows it). Plain UserDefaults: shared by every account.
+/// The Live Activity is not a notification and ignores this.
+enum UMNotifyMaster {
+    nonisolated static let key = "um.notifications.master"
+    nonisolated static let didAskKey = "um.notifications.didAskFirstLaunch"
+
+    nonisolated static var isOn: Bool { UserDefaults.standard.bool(forKey: key) }
+
+    @MainActor static func set(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: key)
+        if on { UMPush.registerIfConfigured() } else { Task { await UMPush.unregister() } }
+    }
+
+    @MainActor private static var observing = false
+
+    /// App launch: delegate, one-time permission ask, and foreground re-sync.
+    @MainActor static func launch() {
+        UNUserNotificationCenter.current().delegate = ReadyNotificationDelegate.shared
+        if !observing {
+            observing = true
+            NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification,
+                                                   object: nil, queue: .main) { _ in
+                Task { @MainActor in resync() }
+            }
+        }
+        if !UserDefaults.standard.bool(forKey: didAskKey) {
+            UserDefaults.standard.set(true, forKey: didAskKey)
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                Task { @MainActor in set(granted) }
+            }
+        } else {
+            resync()
+        }
+    }
+
+    /// System permission revoked in Settings -> show the toggle off.
+    @MainActor static func resync() {
+        UNUserNotificationCenter.current().getNotificationSettings { s in
+            let allowed = [.authorized, .provisional, .ephemeral].contains(s.authorizationStatus)
+            Task { @MainActor in if !allowed && isOn { set(false) } }
+        }
+    }
+
+    enum Outcome { case on, denied, off }
+
+    /// User turned the toggle on.
+    @MainActor static func requestOn(_ done: @escaping @MainActor (Outcome) -> Void) {
+        let c = UNUserNotificationCenter.current()
+        c.getNotificationSettings { s in
+            switch s.authorizationStatus {
+            case .denied:
+                Task { @MainActor in set(false); done(.denied) }
+            case .notDetermined:
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                    Task { @MainActor in set(granted); done(granted ? .on : .off) }
+                }
+            default:
+                Task { @MainActor in set(true); done(.on) }
+            }
+        }
+    }
+
+    @MainActor static func openSettings() {
+        let s = URL(string: UIApplication.openNotificationSettingsURLString) ?? URL(string: UIApplication.openSettingsURLString)
+        if let s { UIApplication.shared.open(s) }
+    }
+}

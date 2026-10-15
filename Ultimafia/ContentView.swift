@@ -38,7 +38,7 @@ struct ContentView: View {
         .overlay(alignment: .top) { UMBackendBadge() }
         .preferredColorScheme(.dark)
         .task {
-            ReadyNotifications.requestPermission()
+            UMNotifyMaster.launch()
             await app.bootstrap()
         }
         .task {

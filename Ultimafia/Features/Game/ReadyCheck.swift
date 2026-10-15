@@ -376,7 +376,7 @@ enum ReadyNotifications {
     }
 
     static func notifyIfBackgrounded() {
-        guard !isAppActive else { return }
+        guard UMNotifyMaster.isOn, !isAppActive else { return }
         let content = UNMutableNotificationContent()
         content.title = "Ultimafia"
         content.body = "Your game is starting! Accept ready check!"
@@ -415,7 +415,7 @@ enum GameAlerts {
     }
 
     private static func post(id: String, body: String) {
-        guard !ReadyNotifications.isAppActive else { return }
+        guard UMNotifyMaster.isOn, !ReadyNotifications.isAppActive else { return }
         let content = UNMutableNotificationContent()
         content.title = "Ultimafia"
         content.body = body

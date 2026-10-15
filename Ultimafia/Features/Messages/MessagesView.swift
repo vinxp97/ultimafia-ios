@@ -418,10 +418,31 @@ struct DMNotificationSettingsSection: View {
     @AppStorage(UMDMNotify.previewKey) private var preview = true
     @AppStorage(UMDMNotify.invitesKey) private var invites = false
     @State private var denied = false
+    @AppStorage(UMNotifyMaster.key) private var master = false
+    @State private var settingsAlert = false
+
+    private var masterBinding: Binding<Bool> {
+        Binding(get: { master }, set: { on in
+            if !on { UMNotifyMaster.set(false); return }
+            UMNotifyMaster.requestOn { r in
+                if r == .denied { settingsAlert = true }
+                denied = r != .on
+            }
+        })
+    }
 
     var body: some View {
         Section {
+            Toggle("Push notifications", isOn: masterBinding)
+                .listRowBackground(UMTheme.card)
+                .alert("Notifications are off", isPresented: $settingsAlert) {
+                    Button("Open Settings") { UMNotifyMaster.openSettings() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Notifications for UltiMafia are disabled in iOS Settings. Turn them on there, then come back.")
+                }
             Toggle("Direct message alerts", isOn: $enabled)
+                .disabled(!master)
                 .onChange(of: enabled) { _, on in
                     guard on else { Task { await UMPush.unregister() }; return }
                     UMDMNotify.requestPermission { granted in
@@ -429,8 +450,8 @@ struct DMNotificationSettingsSection: View {
                     }
                 }
                 .listRowBackground(UMTheme.card)
-            Toggle("Sound", isOn: $sound).disabled(!enabled).listRowBackground(UMTheme.card)
-            Toggle("Show preview", isOn: $preview).disabled(!enabled).listRowBackground(UMTheme.card)
+            Toggle("Sound", isOn: $sound).disabled(!master || !enabled).listRowBackground(UMTheme.card)
+            Toggle("Show preview", isOn: $preview).disabled(!master || !enabled).listRowBackground(UMTheme.card)
             Toggle(isOn: $invites) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Game invites")
@@ -444,7 +465,7 @@ struct DMNotificationSettingsSection: View {
         } footer: {
             Text(denied
                  ? "Notifications are off for UltiMafia in iOS Settings. Turn them on there to get DM alerts."
-                 : "Alerts arrive while the app is open or in the background, never during a game. Alerts with the app fully closed need server push (coming later).")
+                 : "Push notifications covers every alert on this device for all accounts: ready checks, mentions and kicks while the app is in the background, and DMs (never during a game). Alerts with the app fully closed are coming later.")
         }
     }
 }
