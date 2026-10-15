@@ -93,7 +93,7 @@ nonisolated enum UMSpeechLM {
                 UserDefaults.standard.set(ms, forKey: prepMsKey)
                 UMDiag.log("dictation", "custom LM prepared in \(ms)ms (\(roles.count) roles, v\(version))")
             } catch {
-                UMDiag.log("dictation", "custom LM failed: \(error.localizedDescription)")
+                UMDiag.log("dictation", "custom LM failed after \(Int((CACurrentMediaTime() - t0) * 1000))ms: \(error)")
             }
             task = nil
         }
@@ -324,6 +324,8 @@ final class UMDictation {
                 try await request.downloadAndInstall()
             }
             guard owner == id else { return }
+            // The custom LM builds on the on-device dictation assets; retry now that they exist.
+            UMSpeechLM.prepareIfNeeded()
 
             UMDictationAudio.active = true
             GameSFX.stopNonImportant()
