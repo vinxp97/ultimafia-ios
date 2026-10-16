@@ -260,11 +260,17 @@ struct NewMessageView: View {
                             .joined(separator: ", ") + " only accept DMs from friends.")
                             .font(.footnote).foregroundStyle(UMTheme.mafia).padding(12)
                     }
-                    TextField("Message", text: $text, axis: .vertical)
-                        .lineLimit(3...8)
-                        .padding(12)
-                        .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                        .padding(12)
+                    UMDictationBanner().clipShape(Capsule()).padding(.horizontal, 12)
+                    HStack(alignment: .top, spacing: 8) {
+                        TextField("Message", text: $text, axis: .vertical)
+                            .lineLimit(3...8)
+                            .padding(12)
+                            .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                        UMMicButton(text: $text, maxLength: UMConfig.maxChatLength,
+                                    vocab: { DictationVocab(players: recipients.map(\.name)) }, glass: false)
+                            .padding(.top, 6)
+                    }
+                    .padding(12)
                     Spacer()
                 }
             }
@@ -399,6 +405,7 @@ private struct ChatComposerBar: View {
                 .background(UMTheme.card, in: RoundedRectangle(cornerRadius: 18))
                 .onChange(of: draft) { _, v in if v.count > UMConfig.maxChatLength { draft = String(v.prefix(UMConfig.maxChatLength)) } }
                 .onSubmit(onSend)
+            UMMicButton(text: $draft, maxLength: UMConfig.maxChatLength, vocab: { DictationVocab() }, glass: false)
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
@@ -406,6 +413,7 @@ private struct ChatComposerBar: View {
             .accessibilityLabel("Send")
         }
         .disabled(disabled)
+        .safeAreaInset(edge: .top, spacing: 4) { UMDictationBanner().clipShape(Capsule()) }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(UMTheme.bg)
     }

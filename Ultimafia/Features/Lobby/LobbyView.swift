@@ -43,6 +43,7 @@ struct LobbyView: View {
             .refreshable { await app.refreshLobby() }
             .task {
                 await RoleCatalog.shared.load()
+                UMSpeechLM.prepareIfNeeded()
                 await app.refreshLobby()
                 app.startPresence()
             }
