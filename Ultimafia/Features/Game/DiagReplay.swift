@@ -8,10 +8,30 @@ struct DiagReplayView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        NavigationStack {
+        let replay = NavigationStack {
             GameView()
         }
         .task { await run() }
+        // `-UMDiagWidth <pt> [compact|regular]`: approximate a Split View / Slide Over window for
+        // screenshots (simctl can't resize the simulator's scene).
+        if let w = Self.diagWidth {
+            HStack(spacing: 0) {
+                replay
+                    .frame(width: w.width)
+                    .environment(\.horizontalSizeClass, w.compact ? .compact : .regular)
+                Rectangle().fill(Color.black).ignoresSafeArea()
+            }
+        } else {
+            replay
+        }
+    }
+
+    private static var diagWidth: (width: CGFloat, compact: Bool)? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-UMDiagWidth"), args.indices.contains(i + 1),
+              let w = Double(args[i + 1]) else { return nil }
+        let compact = args.indices.contains(i + 2) ? args[i + 2] == "compact" : w < 600
+        return (CGFloat(w), compact)
     }
 
     @MainActor

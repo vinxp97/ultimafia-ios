@@ -50,11 +50,13 @@ private struct GameScreen: View {
     var chatFocused: Binding<Bool>
     var onLeave: () -> Void
     var onDetach: () -> Void
+    @Environment(\.horizontalSizeClass) private var hSizeClass
 
     var body: some View {
         GeometryReader { geo in
-            let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
-            let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
+            let regular = hSizeClass == .regular
+            let threeColumns = UMGameLayout.usesThreeColumns(geo.size, regular: regular)
+            let wideHeader = UMGameLayout.usesWideHeader(geo.size.width, regular: regular)
             VStack(spacing: 0) {
                 // returnToLobby keeps a seated player's connection (the Lobby tab action does the
                 // same) and closes spectators and reviews, so the header always has a way out.
@@ -190,19 +192,19 @@ private struct GameScreen: View {
     }
 }
 
-/// iPad-only layout decisions for the game screen. iPhone always keeps the tabbed layout.
+/// Game screen layout by window, not device: a compact-width window (iPhone, iPad Slide Over,
+/// narrow Split View / Stage Manager windows) gets the tabbed iPhone layout; a regular-width
+/// window gets the iPad layout. Re-evaluated live as the window is resized.
 enum UMGameLayout {
-    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-
-    /// Three columns only on iPad, in landscape, with a window wide enough for ~340 pt side
-    /// columns (full screen 11"/13"; narrow Split View / Stage Manager windows keep the tabs).
-    static func usesThreeColumns(_ size: CGSize) -> Bool {
-        isPad && size.width > size.height && size.width >= 1000
+    /// Three columns in a regular-width, landscape-shaped window wide enough for ~340 pt side
+    /// columns (full screen 11"/13"; narrower windows keep the tabs).
+    static func usesThreeColumns(_ size: CGSize, regular: Bool) -> Bool {
+        regular && size.width > size.height && size.width >= 1000
     }
 
-    /// One-row header (name, roles, phases, timer) on iPad when there's room.
-    static func usesWideHeader(_ width: CGFloat) -> Bool {
-        isPad && width >= 820
+    /// One-row header (name, roles, phases, timer) in a regular-width window when there's room.
+    static func usesWideHeader(_ width: CGFloat, regular: Bool) -> Bool {
+        regular && width >= 820
     }
 }
 

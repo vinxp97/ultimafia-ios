@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showNameAutofill") private var showTabButton = true
@@ -349,9 +350,9 @@ extension ProfileView {
 }
 
 extension ProfileView {
-    /// iPad landscape three-column Village column only.
+    /// Three-column (regular-width, landscape) Village column only.
     @ViewBuilder fileprivate var playerListSizePicker: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad {
+        if hSizeClass == .regular {
             settingPicker("Player List Size", caption: "Size of the player list on iPad landscape.",
                           selection: $playerListSize, options: [("Compact", "compact"), ("Expanded", "expanded")])
         }
