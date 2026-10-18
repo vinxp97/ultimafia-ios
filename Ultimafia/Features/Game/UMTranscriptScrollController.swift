@@ -174,26 +174,50 @@ final class UMTranscriptScrollController {
     }
     func applyPendingNow() { if let scroll { refresh(scroll) } }
 
-    /// Offset from the top of the content, whichever way the document view is flipped.
+    /// Offset from the top of the content (0 = top, maxY = true bottom), whichever way the document
+    /// view is flipped. SwiftUI's `contentMargins` (the room reserved for the floating composer)
+    /// arrive as the scroll view's content insets, so the true bottom includes the bottom inset;
+    /// without it "latest" stops one composer-height short and the last line sits under the bar.
     private func metrics(_ scroll: NSScrollView) -> (y: CGFloat, maxY: CGFloat) {
         let clip = scroll.contentView
+        let insets = scroll.contentInsets
         let docH = scroll.documentView?.frame.height ?? 0
         let visH = clip.bounds.height
-        let maxY = max(0, docH - visH)
+        let maxY = max(0, docH - visH + insets.top + insets.bottom)
         let flipped = scroll.documentView?.isFlipped ?? true
-        let y = flipped ? clip.bounds.origin.y : maxY - clip.bounds.origin.y
-        return (y, maxY)
+        let y = flipped
+            ? clip.bounds.origin.y + insets.top
+            : (docH - visH + insets.top) - clip.bounds.origin.y
+        return (min(max(y, 0), maxY), maxY)
     }
 
     private func scrollTo(_ scroll: NSScrollView, fromTop y: CGFloat, maxY: CGFloat) {
         let flipped = scroll.documentView?.isFlipped ?? true
         let clip = scroll.contentView
-        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: flipped ? y : maxY - y))
+        let insets = scroll.contentInsets
+        let docH = scroll.documentView?.frame.height ?? 0
+        let originY = flipped ? y - insets.top : (docH - clip.bounds.height + insets.top) - y
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: originY))
         scroll.reflectScrolledClipView(clip)
     }
 
+    #if DEBUG
+    @ObservationIgnored private var loggedInsets: NSEdgeInsets?
+    private func logGeometry(_ scroll: NSScrollView) {
+        let i = scroll.contentInsets
+        if let l = loggedInsets, l.top == i.top, l.bottom == i.bottom { return }
+        loggedInsets = i
+        NSLog("UMTranscript: insets top=%.1f bottom=%.1f doc=%.1f clip=%.1f flipped=%d",
+              i.top, i.bottom, scroll.documentView?.frame.height ?? 0, scroll.contentView.bounds.height,
+              (scroll.documentView?.isFlipped ?? true) ? 1 : 0)
+    }
+    #endif
+
     fileprivate func refresh(_ scroll: NSScrollView) {
         self.scroll = scroll
+        #if DEBUG
+        logGeometry(scroll)
+        #endif
         var m = metrics(scroll)
         let userScrolling = Date().timeIntervalSince(lastUserScroll) < 0.35
         let action = policy.action(userIsScrolling: userScrolling, atBottom: m.y >= m.maxY - 2,

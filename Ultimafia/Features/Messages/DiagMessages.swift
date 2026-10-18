@@ -7,9 +7,12 @@ struct DiagMessagesView: View {
     var screen: String
     @Environment(AppModel.self) private var app
 
+    /// Once per launch: loading in every init re-ran whenever the parent re-rendered.
+    private static let demo: Void = UMChatStore.shared.loadDemo(selfId: "me")
+
     init(screen: String) {
         self.screen = screen
-        UMChatStore.shared.loadDemo(selfId: "me")
+        _ = Self.demo
     }
 
     var body: some View {

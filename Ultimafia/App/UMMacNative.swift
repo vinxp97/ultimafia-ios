@@ -242,8 +242,16 @@ enum UMMacNativeSnapshot {
             fallback = w
             NSLog("UMMacSnapshot: using a fallback window")
         }
-        waitForWindow(tries: 120) { window in
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { write(window, to: path) }
+        waitForWindow(tries: 120) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                // The scene's own window wins over the fallback once it exists; any other visible
+                // window is written alongside as <name>-2.png, <name>-3.png.
+                let windows = (NSApp?.windows ?? []).filter { $0.isVisible && $0.contentView != nil && !($0 is NSPanel) }
+                    .sorted { ($0 === fallback ? 1 : 0) < ($1 === fallback ? 1 : 0) }
+                for (n, w) in windows.enumerated() {
+                    write(w, to: n == 0 ? path : path.replacingOccurrences(of: ".png", with: "-\(n + 1).png"))
+                }
+            }
         }
     }
 

@@ -351,6 +351,9 @@ private struct RecipientChips: View {
 
 private struct ChatTranscript: View {
     var store: UMChatStore
+    #if os(macOS)
+    private static let bottomId = "chat-transcript-bottom"
+    #endif
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -373,13 +376,37 @@ private struct ChatTranscript: View {
                         }
                         .id(m.id)
                     }
+                    #if os(macOS)
+                    // True bottom: the sentinel sits below the last message's bottom padding, so
+                    // "latest" lands with the whole last line clear of the composer.
+                    Color.clear.frame(height: 1).id(Self.bottomId)
+                    #endif
                 }
                 .padding(12)
+                #if os(macOS)
+                .padding(.bottom, 12)
+                #endif
             }
+            #if os(macOS)
+            .defaultScrollAnchor(.bottom)
+            #endif
             .onChange(of: store.messages.last?.id) { _, id in
+                #if os(macOS)
+                if id != nil { withAnimation { proxy.scrollTo(Self.bottomId, anchor: .bottom) } }
+                #else
                 if let id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } }
+                #endif
             }
-            .onAppear { if let id = store.messages.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
+            .onAppear {
+                #if os(macOS)
+                // Rows lay out after the first pass on AppKit; land on the true bottom again once
+                // they have.
+                proxy.scrollTo(Self.bottomId, anchor: .bottom)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+                #else
+                if let id = store.messages.last?.id { proxy.scrollTo(id, anchor: .bottom) }
+                #endif
+            }
         }
         .overlay(alignment: .top) {
             if let err = store.lastError {
