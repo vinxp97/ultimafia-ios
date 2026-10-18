@@ -39,6 +39,7 @@ struct MessagesView: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("Messages")
+            .umMacLobbyButton(app)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if mode == .direct {

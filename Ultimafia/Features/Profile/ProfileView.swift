@@ -191,6 +191,7 @@ struct ProfileView: View {
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("You")
+            .umMacLobbyButton(app)
             // Web asks before silencing alerts; declining leaves them at 10%.
             .task { cacheBytes = UMCacheLocation.bytes() }
             .task { await app.refreshUserInfo() }
