@@ -847,7 +847,7 @@ private struct ChatComposer: View {
         guard let t = mediaToken else { return }
         var next = draft
         let bare = Self.bareCode(item.code)
-        next.replaceSubrange(t.range, with: (item.isSticker ? ";\(bare);" : ":\(bare):") + " ")
+        next.replaceSubrange(t.range, with: (item.isSticker ? ";\(bare);" : ":\(bare):") + UMChatPrefs.completionSuffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
     }
@@ -876,7 +876,7 @@ private struct ChatComposer: View {
     private func applySuggestion(_ name: String) {
         guard let t = nameToken else { return }
         var next = draft
-        next.replaceSubrange(t.range, with: t.prefix + name + " ")
+        next.replaceSubrange(t.range, with: t.prefix + name + UMChatPrefs.completionSuffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
     }
@@ -928,9 +928,9 @@ private struct ChatComposer: View {
     private func applySlash(_ item: SlashSuggestion) {
         switch item {
         case .command(let c):
-            draft = "/" + c.name + (c.arg == .none ? "" : " ")
+            draft = "/" + c.name + (c.arg == .none ? "" : UMChatPrefs.completionSuffix)
         case .player(let cmd, let p):
-            draft = "/\(cmd) \(p.name) "
+            draft = "/\(cmd) \(p.name)" + UMChatPrefs.completionSuffix
         case .noOne:
             // "nl" means No one, unless a player is literally named nl.
             let nlIsPlayer = session.players.contains { $0.name.caseInsensitiveCompare("nl") == .orderedSame }
@@ -1200,9 +1200,10 @@ private struct ChatComposer: View {
         let bare = Self.bareCode(item.code)
         let token = item.isSticker ? ";\(bare);" : ":\(bare):"
         let spaced = t.range.upperBound < draft.endIndex && draft[t.range.upperBound].isWhitespace
-        if String(draft[t.range]).lowercased() == token, spaced { return true }
+        let suffix = UMChatPrefs.completionSuffix
+        if String(draft[t.range]).lowercased() == token, spaced || suffix.isEmpty { return true }
         var next = draft
-        next.replaceSubrange(t.range, with: spaced ? token : token + " ")
+        next.replaceSubrange(t.range, with: spaced ? token : token + suffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
         return true

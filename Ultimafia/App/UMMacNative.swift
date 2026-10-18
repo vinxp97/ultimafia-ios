@@ -199,16 +199,35 @@ struct UMMacNativeCommands: Commands {
     }
 }
 
-/// Settings window (⌘,): the You page's settings.
+/// Settings window (⌘,): Chat (the You page's chat toggles, same stored values) and Advanced.
 struct UMMacSettingsScene: View {
     @Environment(AppModel.self) private var app
+    @AppStorage(UMChatPrefs.spaceAfterAutocompleteKey) private var spaceAfterAutocomplete = true
+    @AppStorage("um.showNameAutofill") private var showNameAutofill = true
+    @AppStorage("um.showEmoteAutocomplete") private var showEmoteAutocomplete = true
+    @AppStorage("um.chatIndentUserMessages") private var indentUserMessages = false
+
     var body: some View {
-        NavigationStack {
-            if app.isSignedIn {
-                AdvancedSettingsView()
-            } else {
-                ContentUnavailableView("Sign in to change settings", systemImage: "person.crop.circle")
+        TabView {
+            Form {
+                Section("Chat") {
+                    Toggle("Show Autofill Name", isOn: $showNameAutofill)
+                    Toggle("Show Autofill Emoji", isOn: $showEmoteAutocomplete)
+                    Toggle("Indent Player Messages", isOn: $indentUserMessages)
+                    Toggle("Space after autocomplete", isOn: $spaceAfterAutocomplete)
+                }
             }
+            .formStyle(.grouped)
+            .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+
+            NavigationStack {
+                if app.isSignedIn {
+                    AdvancedSettingsView()
+                } else {
+                    ContentUnavailableView("Sign in to change settings", systemImage: "person.crop.circle")
+                }
+            }
+            .tabItem { Label("Advanced", systemImage: "gearshape.2") }
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 720)
     }

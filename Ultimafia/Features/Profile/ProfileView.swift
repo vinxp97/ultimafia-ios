@@ -10,6 +10,7 @@ struct ProfileView: View {
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.chatIndentUserMessages") private var indentUserMessages = false
+    @AppStorage(UMChatPrefs.spaceAfterAutocompleteKey) private var spaceAfterAutocomplete = true
     @AppStorage("um.hideTerminology") private var hideTerminology = false
     @AppStorage(UMSpeechLM.enabledKey) private var dictationEnabled = false
     @AppStorage("um.playerListSize") private var playerListSize = "compact"
@@ -67,6 +68,8 @@ struct ProfileView: View {
                     Toggle("Show Voting Log", isOn: $showVotingLog)
                         .listRowBackground(UMTheme.card)
                     Toggle("Indent Player Messages", isOn: $indentUserMessages)
+                        .listRowBackground(UMTheme.card)
+                    Toggle("Space after autocomplete", isOn: $spaceAfterAutocomplete)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)

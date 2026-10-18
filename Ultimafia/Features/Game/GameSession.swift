@@ -719,7 +719,7 @@ final class GameSession {
         if seedLower.isEmpty {
             let lower = word.lowercased()
             if !lower.isEmpty, "@everyone".hasPrefix(lower), lower != "@everyone" {
-                words.append("@everyone ")
+                words.append("@everyone" + UMChatPrefs.completionSuffix)
                 return words.joined(separator: " ")
             }
             return nil
@@ -728,8 +728,9 @@ final class GameSession {
             name.lowercased().prefix(seedLower.count) == seedLower
         }
         if matched.count == 1 {
-            // Trailing space after a completed name / %avatar (the word is always last, so none follows).
-            words.append(prefix + matched[0] + " ")
+            // Trailing space after a completed name / %avatar unless "Space after autocomplete" is off
+            // (the word is always last, so none follows).
+            words.append(prefix + matched[0] + UMChatPrefs.completionSuffix)
             return words.joined(separator: " ")
         }
         if matched.count > 1 {
@@ -750,7 +751,7 @@ final class GameSession {
             return nil
         }
         if "@everyone".hasPrefix(word.lowercased()), word.lowercased() != "@everyone" {
-            words.append("@everyone ")
+            words.append("@everyone" + UMChatPrefs.completionSuffix)
             return words.joined(separator: " ")
         }
         return nil
