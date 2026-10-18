@@ -34,8 +34,8 @@ struct UserProfileView: View {
         }
         .background(pageBackground)
         .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .umInlineTitle()
+        .umNavigationBar(.visible)
         .task { await load() }
         .environment(\.openURL, OpenURLAction { url in
             let scheme = (url.scheme ?? "").lowercased()
@@ -43,7 +43,7 @@ struct UserProfileView: View {
             browserItem = UMBrowserItem(url: url)
             return .handled
         })
-        .fullScreenCover(item: $browserItem) { item in
+        .umFullScreenCover(item: $browserItem) { item in
             UMInAppBrowser(url: item.url) {
                 browserItem = nil
             }
@@ -1406,7 +1406,11 @@ private struct ProfileAudioBar: View {
 }
 
 #if canImport(WebKit)
-private struct ProfileWebEmbed: UIViewRepresentable {
+private struct ProfileWebEmbed: UMViewRepresentable {
+
+    #if os(macOS)
+    typealias NSViewType = WKWebView
+    #endif
     var html: String? = nil
     var url: URL? = nil
 
@@ -1414,13 +1418,18 @@ private struct ProfileWebEmbed: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        #if os(macOS)
+        let web = WKWebView(frame: .zero, configuration: config)
+        web.underPageBackgroundColor = .black
+        #else
+        config.allowsInlineMediaPlayback = true
         let web = WKWebView(frame: .zero, configuration: config)
         web.scrollView.isScrollEnabled = false
         web.isOpaque = false
         web.backgroundColor = .black
         web.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+        #endif
         load(into: web, context: context)
         return web
     }

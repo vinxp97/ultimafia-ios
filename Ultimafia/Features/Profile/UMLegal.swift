@@ -364,6 +364,6 @@ struct UMLegalView: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .umInlineTitle()
     }
 }

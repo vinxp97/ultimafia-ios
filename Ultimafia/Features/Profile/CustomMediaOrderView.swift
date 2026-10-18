@@ -49,7 +49,9 @@ struct CustomMediaOrderView: View {
         .scrollContentBackground(.hidden)
         .background(UMTheme.bg.ignoresSafeArea())
         .navigationTitle("Emojis & Stickers")
+        #if !os(macOS)
         .toolbar { EditButton() }
+        #endif
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: EmoteOrderStore.didChange)) { _ in rebuild() }
     }

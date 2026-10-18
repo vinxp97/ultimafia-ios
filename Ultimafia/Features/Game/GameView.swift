@@ -54,7 +54,11 @@ private struct GameScreen: View {
 
     var body: some View {
         GeometryReader { geo in
+            #if os(macOS)
+            let regular = true   // Mac windows are always "regular"; width alone picks the layout
+            #else
             let regular = hSizeClass == .regular
+            #endif
             let threeColumns = UMGameLayout.usesThreeColumns(geo.size, regular: regular)
             let wideHeader = UMGameLayout.usesWideHeader(geo.size.width, regular: regular)
             VStack(spacing: 0) {
@@ -119,7 +123,7 @@ private struct GameScreen: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .background { gameShortcuts }
-        .toolbar(.hidden, for: .navigationBar)
+        .umNavigationBar(.hidden)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -199,7 +203,7 @@ enum UMGameLayout {
     /// Three columns in a regular-width, landscape-shaped window wide enough for ~340 pt side
     /// columns (full screen 11"/13"; narrower windows keep the tabs).
     static func usesThreeColumns(_ size: CGSize, regular: Bool) -> Bool {
-        #if targetEnvironment(macCatalyst)
+        #if targetEnvironment(macCatalyst) || os(macOS)
         // Mac: desktop-style table (players | chat | actions) whenever the window is wide enough,
         // whatever its shape; the minimum window (1100 pt) always qualifies.
         return regular && size.width >= 980
@@ -211,7 +215,7 @@ enum UMGameLayout {
     /// Side column width in three-column mode. iPad keeps 25% each; Mac clamps so big windows
     /// give the extra room to the chat instead of stretching the player list and actions.
     static func sideColumnWidth(_ total: CGFloat) -> CGFloat {
-        #if targetEnvironment(macCatalyst)
+        #if targetEnvironment(macCatalyst) || os(macOS)
         return min(max(total * 0.25, 300), 440)
         #else
         return total * 0.25
@@ -1112,7 +1116,8 @@ private struct ChatComposer: View {
                     UMMicButton(text: cappedDraft, maxLength: UMConfig.maxChatLength, vocab: { dictationVocab })
                         .disabled(cooling)
 
-                    // Keyboard toggle (Return is the send key).
+                    #if !os(macOS)
+                    // Keyboard toggle (Return is the send key). Macs have a hardware keyboard.
                     Button {
                         chatFocused.wrappedValue.toggle()
                     } label: {
@@ -1140,6 +1145,7 @@ private struct ChatComposer: View {
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                         keyboardShown = false
                     }
+                    #endif
                     #endif
                 }
                 .padding(.horizontal, 10)
@@ -1745,8 +1751,10 @@ private struct CompactTownList: ViewModifier {
         if on {
             content
                 .environment(\.defaultMinListRowHeight, 0)
+                #if !os(macOS)
                 .listRowSpacing(0)
                 .listSectionSpacing(4)
+                #endif
                 .contentMargins(.top, 4, for: .scrollContent)
         } else {
             content
@@ -1860,6 +1868,7 @@ private struct GameActPane: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .fixedSize()
         }
         .accessibilityLabel("Choose meeting")

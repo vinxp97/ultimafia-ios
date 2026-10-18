@@ -231,7 +231,11 @@ enum UMNotifyMaster {
     /// System permission revoked in Settings -> show the toggle off.
     @MainActor static func resync() {
         UNUserNotificationCenter.current().getNotificationSettings { s in
+            #if os(macOS)
+            let allowed = [.authorized, .provisional].contains(s.authorizationStatus)
+            #else
             let allowed = [.authorized, .provisional, .ephemeral].contains(s.authorizationStatus)
+            #endif
             Task { @MainActor in if !allowed && isOn { set(false) } }
         }
     }

@@ -68,8 +68,12 @@ struct UMInAppBrowser: View {
     }
 }
 
-#if canImport(UIKit) && canImport(WebKit)
-private struct UMBrowserWebView: UIViewRepresentable {
+#if canImport(WebKit)
+private struct UMBrowserWebView: UMViewRepresentable {
+
+    #if os(macOS)
+    typealias NSViewType = WKWebView
+    #endif
     let url: URL
     var shareSiteSession: Bool = false
     @Binding var title: String
@@ -81,12 +85,18 @@ private struct UMBrowserWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        #if !os(macOS)
         config.allowsInlineMediaPlayback = true
+        #endif
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
+        #if os(macOS)
+        web.underPageBackgroundColor = .black
+        #else
         web.backgroundColor = .black
         web.isOpaque = false
+        #endif
         let request = UMAccess.request(url)
         let siteHost = UMConfig.siteBase.host ?? "ultimafia.com"
         if shareSiteSession, url.host == siteHost {

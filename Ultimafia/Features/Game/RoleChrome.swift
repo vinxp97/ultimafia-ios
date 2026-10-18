@@ -508,7 +508,7 @@ struct RolePoolSheet: View {
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -589,7 +589,7 @@ struct BanishedPoolSheet: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("Banished Pool")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -655,7 +655,7 @@ struct RoleGuessPickerSheet: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("Mark role as")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -779,7 +779,7 @@ struct RoleDetailsSheet: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle(details.name)
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

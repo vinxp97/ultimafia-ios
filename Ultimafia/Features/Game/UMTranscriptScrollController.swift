@@ -1,6 +1,10 @@
 #if canImport(UIKit)
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 import Observation
 
 /// Controls the actual transcript UIScrollView without replacing SwiftUI's delegate.
@@ -138,6 +142,117 @@ struct UMTranscriptScrollBridge: UIViewRepresentable {
             if let scroll = node as? UIScrollView { controller?.refresh(scroll) }
         }
         deinit { link?.invalidate() }
+    }
+}
+#elseif os(macOS)
+import SwiftUI
+import AppKit
+import Observation
+
+/// Mac: the same follow-latest controller over SwiftUI's backing NSScrollView, sampled 30x/s.
+@MainActor @Observable
+final class UMTranscriptScrollController {
+    private(set) var isFollowingLatest = true
+    private(set) var isAtBottom = true
+    private(set) var isAtTop = true
+    @ObservationIgnored private weak var scroll: NSScrollView?
+    @ObservationIgnored private var policy = UMTranscriptFollowPolicy()
+    @ObservationIgnored private var followsLivePhase = true
+    @ObservationIgnored fileprivate var lastUserScroll = Date.distantPast
+
+    func setFollowingAllowed(_ allowed: Bool) {
+        guard followsLivePhase != allowed else { return }
+        followsLivePhase = allowed
+        if !allowed { pauseFollowing() }
+        if let scroll { refresh(scroll) }
+    }
+    func requestLatest() { policy.requestLatest(); if let scroll { refresh(scroll) } }
+    func requestTop() { policy.requestTop(); if let scroll { refresh(scroll) } }
+    func pauseFollowing() {
+        policy.pauseFollowing()
+        if isFollowingLatest { isFollowingLatest = false }
+    }
+    func applyPendingNow() { if let scroll { refresh(scroll) } }
+
+    /// Offset from the top of the content, whichever way the document view is flipped.
+    private func metrics(_ scroll: NSScrollView) -> (y: CGFloat, maxY: CGFloat) {
+        let clip = scroll.contentView
+        let docH = scroll.documentView?.frame.height ?? 0
+        let visH = clip.bounds.height
+        let maxY = max(0, docH - visH)
+        let flipped = scroll.documentView?.isFlipped ?? true
+        let y = flipped ? clip.bounds.origin.y : maxY - clip.bounds.origin.y
+        return (y, maxY)
+    }
+
+    private func scrollTo(_ scroll: NSScrollView, fromTop y: CGFloat, maxY: CGFloat) {
+        let flipped = scroll.documentView?.isFlipped ?? true
+        let clip = scroll.contentView
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: flipped ? y : maxY - y))
+        scroll.reflectScrolledClipView(clip)
+    }
+
+    fileprivate func refresh(_ scroll: NSScrollView) {
+        self.scroll = scroll
+        var m = metrics(scroll)
+        let userScrolling = Date().timeIntervalSince(lastUserScroll) < 0.35
+        let action = policy.action(userIsScrolling: userScrolling, atBottom: m.y >= m.maxY - 2,
+                                   allowsFollowingLatest: followsLivePhase)
+        if action != .none {
+            let target = action == .top ? 0 : m.maxY
+            if abs(target - m.y) > 0.5 { scrollTo(scroll, fromTop: target, maxY: m.maxY); m = metrics(scroll) }
+        }
+        let bottom = m.y >= m.maxY - 2
+        let top = m.y <= 2
+        if isAtBottom != bottom { isAtBottom = bottom }
+        if isAtTop != top { isAtTop = top }
+        if isFollowingLatest != policy.isFollowingLatest { isFollowingLatest = policy.isFollowingLatest }
+    }
+}
+
+/// Transparent content background that finds the enclosing NSScrollView and samples it.
+struct UMTranscriptScrollBridge: NSViewRepresentable {
+    var controller: UMTranscriptScrollController
+
+    func makeNSView(context: Context) -> BridgeView {
+        let v = BridgeView()
+        v.controller = controller
+        return v
+    }
+    func updateNSView(_ v: BridgeView, context: Context) { v.controller = controller }
+
+    final class BridgeView: NSView {
+        var controller: UMTranscriptScrollController?
+        private var timer: Timer?
+        private var monitor: Any?
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            timer?.invalidate(); timer = nil
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            guard window != nil else { return }
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.sample() }
+            }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                MainActor.assumeIsolated {
+                    if let self, let scroll = self.enclosingScrollView,
+                       let w = scroll.window, event.window === w,
+                       scroll.bounds.contains(scroll.convert(event.locationInWindow, from: nil)) {
+                        self.controller?.lastUserScroll = Date()
+                    }
+                }
+                return event
+            }
+        }
+        func sample() {
+            guard window != nil, let scroll = enclosingScrollView else { return }
+            controller?.refresh(scroll)
+        }
+        deinit {
+            timer?.invalidate()
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
     }
 }
 #endif

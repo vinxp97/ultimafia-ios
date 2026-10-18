@@ -93,7 +93,7 @@ struct UMTrophyDetailSheet: View {
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg)
             .navigationTitle("Trophy")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .presentationDetents([.medium])

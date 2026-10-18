@@ -1,4 +1,4 @@
-#if !targetEnvironment(macCatalyst)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 import Foundation
 import os
@@ -116,7 +116,7 @@ enum UMLiveActivity {
     }
 }
 #else
-/// Mac (Catalyst): ActivityKit is unavailable, so Live Activities are a no-op.
+/// Mac (Catalyst and native): ActivityKit is unavailable, so Live Activities are a no-op.
 @MainActor
 enum UMLiveActivity {
     static func start(session: GameSession) {}

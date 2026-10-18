@@ -4,11 +4,30 @@ struct ContentView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
 
+    #if DEBUG
+    /// `-UMDiagShell <section>` (native Mac only).
+    private static var diagShell: String? {
+        #if os(macOS)
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-UMDiagShell") else { return nil }
+        return args.indices.contains(i + 1) ? args[i + 1] : "play"
+        #else
+        return nil
+        #endif
+    }
+    #endif
+
     var body: some View {
         Group {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-UMDiagReplay") {
                 DiagReplayView()
+            } else if let section = Self.diagShell {
+                #if os(macOS)
+                DiagShellView(section: section)
+                #else
+                Text(section)
+                #endif
             } else if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-UMDiagMessages") {
                 DiagMessagesView(screen: ProcessInfo.processInfo.arguments.indices.contains(i + 1)
                                  ? ProcessInfo.processInfo.arguments[i + 1] : "public")

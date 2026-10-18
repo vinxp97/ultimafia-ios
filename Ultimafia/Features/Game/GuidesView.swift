@@ -82,7 +82,7 @@ struct GuidesView: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle(setupName.map { "Guides · \($0)" } ?? "Guides")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

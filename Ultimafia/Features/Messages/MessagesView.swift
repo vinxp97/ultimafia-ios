@@ -30,6 +30,7 @@ struct MessagesView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 switch mode {
@@ -40,10 +41,10 @@ struct MessagesView: View {
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("Messages")
             .umMacLobbyButton(app)
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 if mode == .direct {
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .umTrailing) {
                         Button { composing = true } label: { Image(systemName: "square.and.pencil") }
                             .accessibilityLabel("New message")
                     }
@@ -190,7 +191,7 @@ struct DMThreadView: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .navigationTitle(store.channel(channelId)?.title(selfId: store.selfId) ?? "Message")
-        .navigationBarTitleDisplayMode(.inline)
+        .umInlineTitle()
         .onAppear { store.open(channelId) }
         .onDisappear { store.closeView(channelId) }
         .task(id: channelId) {
@@ -277,7 +278,7 @@ struct NewMessageView: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("New Message")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

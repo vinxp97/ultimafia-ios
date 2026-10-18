@@ -19,7 +19,11 @@ enum UMComposerSizing {
 
 #if canImport(UIKit)
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Chat input backed by UITextView so Return never ends editing: the delegate catches "\n",
 /// calls `onReturn` (send) and returns false, so the view never resigns first responder and
@@ -198,6 +202,62 @@ struct UMComposerField: UIViewRepresentable {
         func textViewDidEndEditing(_ textView: UITextView) {
             if parent.isFocused { parent.isFocused = false }
         }
+    }
+}
+#elseif os(macOS)
+import SwiftUI
+import AppKit
+
+/// Native Mac chat input: Return sends (Option-Return is ignored; chat lines are single-line), Tab
+/// completes, Option+arrows drive the game shortcuts. Grows to eight lines, then scrolls.
+struct UMComposerField: View {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    var placeholder: String
+    var enabled: Bool
+    var textColor: NSColor
+    var maxLength: Int
+    var onReturn: () -> Void
+    var onTab: () -> Bool = { false }
+    var onShortcut: (UMGameShortcut) -> Void = { _ in }
+
+    static let font = NSFont.preferredFont(forTextStyle: .body)
+    static let maxLines = 8
+
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(placeholder, text: Binding(
+            get: { text },
+            set: { text = String($0.replacingOccurrences(of: "\n", with: " ").prefix(maxLength)) }
+        ), axis: .vertical)
+        .textFieldStyle(.plain)
+        .font(.body)
+        .lineLimit(1...Self.maxLines)
+        .foregroundStyle(Color(nsColor: textColor))
+        .disabled(!enabled)
+        .focused($focused)
+        .onKeyPress(.return, phases: .down) { _ in
+            onReturn()
+            return .handled
+        }
+        .onKeyPress(.tab, phases: .down) { _ in
+            _ = onTab()
+            return .handled
+        }
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: .down) { press in
+            guard press.modifiers.contains(.option) else { return .ignored }
+            switch press.key {
+            case .leftArrow: onShortcut(.previousPhase)
+            case .rightArrow: onShortcut(.nextPhase)
+            case .upArrow: onShortcut(.chatTop)
+            default: onShortcut(.chatBottom)
+            }
+            return .handled
+        }
+        .onChange(of: isFocused) { _, v in if focused != v { focused = v } }
+        .onChange(of: focused) { _, v in if isFocused != v { isFocused = v } }
+        .onAppear { if isFocused { focused = true } }
     }
 }
 #endif

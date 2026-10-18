@@ -353,7 +353,7 @@ extension ProfileView {
 extension ProfileView {
     /// Three-column (regular-width, landscape) Village column only.
     @ViewBuilder fileprivate var playerListSizePicker: some View {
-        if hSizeClass == .regular {
+        if hSizeClass == .regular || UMPlatformInfo.isMac {
             settingPicker("Player List Size", caption: "Size of the player list on iPad landscape.",
                           selection: $playerListSize, options: [("Compact", "compact"), ("Expanded", "expanded")])
         }

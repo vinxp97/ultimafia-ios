@@ -1,5 +1,5 @@
 // Live Activities don't exist on Mac (Catalyst): compiled for iPhone/iPad and the widget only.
-#if !targetEnvironment(macCatalyst)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 import Foundation
 
