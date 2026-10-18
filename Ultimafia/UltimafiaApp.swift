@@ -18,6 +18,12 @@ struct UltimafiaApp: App {
                 .environment(appModel)
                 .tint(UMTheme.blood)
                 .task { UMNameFonts.shared.loadIfNeeded() }
+                #if targetEnvironment(macCatalyst)
+                .background(UMMacWindowConfigurator().frame(width: 0, height: 0))
+                #endif
         }
+        #if targetEnvironment(macCatalyst)
+        .commands { UMMacCommands(app: appModel) }
+        #endif
     }
 }

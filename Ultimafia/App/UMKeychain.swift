@@ -21,7 +21,7 @@ nonisolated enum UMKeychain {
             kSecUseDataProtectionKeychain as String: true,
             kSecValueData as String: data,
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        SecItemAdd(adapt(query) as CFDictionary, nil)
     }
 
     static func get(service: String, account: String) -> Data? {
@@ -35,7 +35,7 @@ nonisolated enum UMKeychain {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var out: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess else { return nil }
+        guard SecItemCopyMatching(adapt(query) as CFDictionary, &out) == errSecSuccess else { return nil }
         return out as? Data
     }
 
@@ -47,7 +47,7 @@ nonisolated enum UMKeychain {
             kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecUseDataProtectionKeychain as String: true,
         ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(adapt(query) as CFDictionary)
     }
 
     /// Account names of every item under `service` (synced or not).
@@ -61,8 +61,33 @@ nonisolated enum UMKeychain {
             kSecMatchLimit as String: kSecMatchLimitAll,
         ]
         var out: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+        guard SecItemCopyMatching(adapt(query) as CFDictionary, &out) == errSecSuccess,
               let items = out as? [[String: Any]] else { return [] }
         return items.compactMap { $0[kSecAttrAccount as String] as? String }
     }
+
+    /// Mac (Catalyst) builds signed to run locally have no application-identifier entitlement, so
+    /// the data-protection keychain and iCloud Keychain sync are unavailable (errSecMissingEntitlement).
+    /// Those builds fall back to the login keychain, device-only. Team-signed builds keep the
+    /// default behaviour; iPhone/iPad are unchanged.
+    private static func adapt(_ query: [String: Any]) -> [String: Any] {
+        #if targetEnvironment(macCatalyst)
+        guard !hasAppIdentifier else { return query }
+        var q = query
+        q.removeValue(forKey: kSecUseDataProtectionKeychain as String)
+        q.removeValue(forKey: kSecAttrSynchronizable as String)
+        q.removeValue(forKey: kSecAttrAccessible as String)
+        return q
+        #else
+        return query
+        #endif
+    }
+
+    #if targetEnvironment(macCatalyst)
+    /// True when the binary carries a team prefix (embedded provisioning profile present).
+    private static let hasAppIdentifier: Bool =
+        Bundle.main.url(forResource: "embedded", withExtension: "provisionprofile") != nil
+            || FileManager.default.fileExists(atPath: Bundle.main.bundleURL
+                .appendingPathComponent("Contents/embedded.provisionprofile").path)
+    #endif
 }

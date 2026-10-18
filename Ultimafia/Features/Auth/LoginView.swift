@@ -41,8 +41,19 @@ struct LoginView: View {
         !app.isBusy && !email.isEmpty && password.count >= 6 && (!creating || (password == confirm && birthDate != nil && !isUnder13))
     }
 
+    #if targetEnvironment(macCatalyst)
+    private static let tagline = "Play chat mafia on your Mac."
+    #else
+    private static let tagline = "Play chat mafia on your phone."
+    #endif
+
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        // Mac: a centred, form-width column instead of edge-to-edge fields.
+        umBody.frame(maxWidth: 460).frame(maxWidth: .infinity).background(UMTheme.bg.ignoresSafeArea())
+        #else
         umBody.umKeyboardDismissBar()
+        #endif
     }
 
     @ViewBuilder private var umBody: some View {
@@ -67,7 +78,7 @@ struct LoginView: View {
                 Text("ULTIMAFIA")
                     .font(.system(.largeTitle, design: .serif).weight(.bold))
                     .tracking(2)
-                Text("Play chat mafia on your phone.")
+                Text(Self.tagline)
                     .font(.subheadline)
                     .foregroundStyle(UMTheme.muted)
             }

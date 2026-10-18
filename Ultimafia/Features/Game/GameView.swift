@@ -72,13 +72,13 @@ private struct GameScreen: View {
                         // selectedPanel is kept untouched so rotating back restores the same tab.
                         HStack(spacing: 0) {
                             GameTownPane(session: session, compact: true)
-                                .frame(width: geo.size.width * 0.25)
+                                .frame(width: UMGameLayout.sideColumnWidth(geo.size.width))
                             Divider().overlay(UMTheme.line)
                             GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader && !session.isLiarsDice)
                                 .frame(maxWidth: .infinity)
                             Divider().overlay(UMTheme.line)
                             GameActPane(session: session)
-                                .frame(width: geo.size.width * 0.25)
+                                .frame(width: UMGameLayout.sideColumnWidth(geo.size.width))
                         }
                     } else {
                         // Every panel stays in the hierarchy, so leaving the chat and coming back keeps
@@ -199,7 +199,23 @@ enum UMGameLayout {
     /// Three columns in a regular-width, landscape-shaped window wide enough for ~340 pt side
     /// columns (full screen 11"/13"; narrower windows keep the tabs).
     static func usesThreeColumns(_ size: CGSize, regular: Bool) -> Bool {
-        regular && size.width > size.height && size.width >= 1000
+        #if targetEnvironment(macCatalyst)
+        // Mac: desktop-style table (players | chat | actions) whenever the window is wide enough,
+        // whatever its shape; the minimum window (1100 pt) always qualifies.
+        return regular && size.width >= 980
+        #else
+        return regular && size.width > size.height && size.width >= 1000
+        #endif
+    }
+
+    /// Side column width in three-column mode. iPad keeps 25% each; Mac clamps so big windows
+    /// give the extra room to the chat instead of stretching the player list and actions.
+    static func sideColumnWidth(_ total: CGFloat) -> CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return min(max(total * 0.25, 300), 440)
+        #else
+        return total * 0.25
+        #endif
     }
 
     /// One-row header (name, roles, phases, timer) in a regular-width window when there's room.
