@@ -74,10 +74,14 @@ struct UMMacCommands: Commands {
         CommandGroup(replacing: .newItem) {}
         CommandMenu("Go") {
             ForEach(Array(UMAppSection.allCases.enumerated()), id: \.element) { index, section in
-                Button(section.title) { app.select(section) }
+                Button(section == .you ? "Profile" : section.title) { app.select(section) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                     .disabled(section == .messages && (app.game != nil || app.seatedGameId != nil))
             }
+            Divider()
+            Button("Back") { app.macBack() }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(!app.isSignedIn || !app.macCanGoBack)
         }
     }
 }
