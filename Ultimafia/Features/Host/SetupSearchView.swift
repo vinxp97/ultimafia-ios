@@ -27,6 +27,7 @@ struct SetupSearchView: View {
                     ForEach(UMGameTypes.hostable, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 filterChips
                 searchField
                 if let error, !loading {
@@ -59,8 +60,8 @@ struct SetupSearchView: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .navigationTitle("Host a Game")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .umInlineTitle()
+        .umNavigationBar(.visible)
         .task(id: filter) { await load(reset: true) }
         .onChange(of: gameType) { _, _ in Task { await load(reset: true) } }
         .task(id: query) {

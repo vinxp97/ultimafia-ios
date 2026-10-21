@@ -32,6 +32,7 @@ enum RememberedLogin {
     }
 
     private static func setPassword(_ password: String) {
+        if UMKeychain.skipped { return }
         deletePassword()
         let data = Data(password.utf8)
         let query: [String: Any] = [
@@ -44,6 +45,7 @@ enum RememberedLogin {
     }
 
     private static func readPassword() -> String? {
+        if UMKeychain.skipped { return nil }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -58,6 +60,7 @@ enum RememberedLogin {
     }
 
     private static func deletePassword() {
+        if UMKeychain.skipped { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

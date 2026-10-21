@@ -1,5 +1,9 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Local-only install/device identity and the users who signed in on this device.
 /// Nothing here is sent to any server (that would need an App Store privacy disclosure update).
@@ -33,7 +37,18 @@ enum DeviceIdentity {
         UserDefaults.standard.set(true, forKey: key)
     }
 
+    #if os(macOS)
+    /// Mac has no identifierForVendor: a per-install UUID kept in defaults.
+    static var vendorId: String? {
+        let key = "um.device.macVendorId"
+        if let v = UserDefaults.standard.string(forKey: key) { return v }
+        let v = UUID().uuidString
+        UserDefaults.standard.set(v, forKey: key)
+        return v
+    }
+    #else
     static var vendorId: String? { UIDevice.current.identifierForVendor?.uuidString }
+    #endif
 
     static var signIns: [SignIn] {
         guard let data = UserDefaults.standard.data(forKey: signInsKey) else { return [] }

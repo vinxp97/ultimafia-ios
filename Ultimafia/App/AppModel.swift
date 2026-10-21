@@ -145,6 +145,11 @@ final class AppModel {
     }
 
     func bootstrap() async {
+        #if DEBUG
+        // `-UMNoSession`: diag/screenshot runs stay signed out (never resume a saved session or
+        // reconnect to a seated game).
+        if ProcessInfo.processInfo.arguments.contains("-UMNoSession") { return }
+        #endif
         isRestoring = true
         defer { isRestoring = false }
         _ = DeviceIdentity.installId

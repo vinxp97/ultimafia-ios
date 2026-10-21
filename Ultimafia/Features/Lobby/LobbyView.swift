@@ -38,8 +38,8 @@ struct LobbyView: View {
             }
             }
             .background(UMTheme.bg.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .navigationBar)
+            .umInlineTitle()
+            .umNavigationBar(.hidden)
             .refreshable { await app.refreshLobby() }
             .task {
                 await RoleCatalog.shared.load()

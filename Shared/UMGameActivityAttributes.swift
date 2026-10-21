@@ -1,3 +1,5 @@
+// Live Activities don't exist on Mac (Catalyst): compiled for iPhone/iPad and the widget only.
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 import Foundation
 
@@ -25,3 +27,4 @@ nonisolated struct UMGameActivityAttributes: ActivityAttributes {
     var gameId: String
     var setupName: String
 }
+#endif

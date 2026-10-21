@@ -21,7 +21,7 @@ struct DiagnosticsView: View {
                 .onChange(of: text) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
             }
             .navigationTitle("Diagnostics")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
                 ToolbarItemGroup(placement: .primaryAction) {

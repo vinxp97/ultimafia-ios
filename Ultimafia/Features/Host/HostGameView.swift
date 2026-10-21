@@ -79,7 +79,7 @@ struct HostGameView: View {
             .background(UMTheme.bg.ignoresSafeArea())
             .animation(.default, value: o)
             .navigationTitle("Host Game")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

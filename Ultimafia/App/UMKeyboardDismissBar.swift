@@ -1,5 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// App-wide keyboard accessory for SwiftUI text inputs: a slim bar with a chevron.down that hides
 /// the keyboard (the tab bar sits at the bottom, so there's otherwise no way out).
@@ -7,6 +11,9 @@ import UIKit
 /// toolbars, so it keeps only its own chevron toggle.
 struct UMKeyboardDismissBar: ViewModifier {
     func body(content: Content) -> some View {
+        #if os(macOS)
+        content
+        #else
         content
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
@@ -22,6 +29,7 @@ struct UMKeyboardDismissBar: ViewModifier {
                     .accessibilityLabel("Hide keyboard")
                 }
             }
+        #endif
     }
 }
 

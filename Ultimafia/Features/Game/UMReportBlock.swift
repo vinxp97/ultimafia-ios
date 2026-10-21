@@ -171,7 +171,11 @@ struct UMReportSheet: View {
                             Text("Select a rule").tag("")
                             ForEach(violations, id: \.self) { Text($0).tag($0) }
                         }
+#if os(macOS)
+                        .pickerStyle(.menu)
+                        #else
                         .pickerStyle(.navigationLink)
+#endif
                     }
                 }
                 Section("Description (Optional)") {
@@ -199,7 +203,7 @@ struct UMReportSheet: View {
                 }
             }
             .navigationTitle("File a Report")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }

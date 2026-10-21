@@ -191,7 +191,7 @@ struct UMImageUploadButton: View {
         } message: {
             Text("Keeping the animation uploads the original file. Cropping makes a still image.")
         }
-        .fullScreenCover(item: $cropImage) { item in
+        .umFullScreenCover(item: $cropImage) { item in
             UMCropSheet(image: item.image, aspect: spec.aspect ?? 1, title: spec.title) { cropped in
                 cropImage = nil
                 if let cropped { Task { await uploadStill(cropped, alreadySized: false) } }
@@ -353,7 +353,7 @@ struct UMCropSheet: View {
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Crop \(title)")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
         }
     }
 
@@ -505,7 +505,7 @@ private struct UMTrimSheet: View {
                 }
             }
             .navigationTitle("Trim Death Sound")
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { player?.stop(); onDone(nil, nil) } }
                 ToolbarItem(placement: .confirmationAction) {

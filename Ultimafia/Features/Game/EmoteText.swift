@@ -334,7 +334,7 @@ struct UMTermSheet: View {
             }
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle(term.key)
-            .navigationBarTitleDisplayMode(.inline)
+            .umInlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

@@ -1,5 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 // Mirrors the website's Settings page (react_main/src/pages/User/Settings.jsx):
 // tabs Site, User, Game, Account, Cookies, Family in the site's order.
@@ -145,7 +149,7 @@ struct AdvancedSettingsView: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .navigationTitle("Advanced Settings")
-        .navigationBarTitleDisplayMode(.inline)
+        .umInlineTitle()
         .task { await model.load() }
         .alert("Couldn't save", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}

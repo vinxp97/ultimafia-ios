@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     @AppStorage("um.chatLayout") private var chatLayout: ChatLayout = .standard
     @AppStorage("um.showTypingIndicator") private var showTypingIndicator = true
     @AppStorage("um.showNameAutofill") private var showTabButton = true
@@ -9,6 +10,7 @@ struct ProfileView: View {
     @AppStorage("um.showSetupGuides") private var showSetupGuides = true
     @AppStorage("um.showVotingLog") private var showVotingLog = true
     @AppStorage("um.chatIndentUserMessages") private var indentUserMessages = false
+    @AppStorage(UMChatPrefs.spaceAfterAutocompleteKey) private var spaceAfterAutocomplete = true
     @AppStorage("um.hideTerminology") private var hideTerminology = false
     @AppStorage(UMSpeechLM.enabledKey) private var dictationEnabled = false
     @AppStorage("um.playerListSize") private var playerListSize = "compact"
@@ -66,6 +68,8 @@ struct ProfileView: View {
                     Toggle("Show Voting Log", isOn: $showVotingLog)
                         .listRowBackground(UMTheme.card)
                     Toggle("Indent Player Messages", isOn: $indentUserMessages)
+                        .listRowBackground(UMTheme.card)
+                    Toggle("Space after autocomplete", isOn: $spaceAfterAutocomplete)
                         .listRowBackground(UMTheme.card)
                     Toggle("Show Setup Guides", isOn: $showSetupGuides)
                         .listRowBackground(UMTheme.card)
@@ -190,6 +194,7 @@ struct ProfileView: View {
             .scrollContentBackground(.hidden)
             .background(UMTheme.bg.ignoresSafeArea())
             .navigationTitle("You")
+            .umMacLobbyButton(app)
             // Web asks before silencing alerts; declining leaves them at 10%.
             .task { cacheBytes = UMCacheLocation.bytes() }
             .task { await app.refreshUserInfo() }
@@ -349,9 +354,9 @@ extension ProfileView {
 }
 
 extension ProfileView {
-    /// iPad landscape three-column Village column only.
+    /// Three-column (regular-width, landscape) Village column only.
     @ViewBuilder fileprivate var playerListSizePicker: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad {
+        if hSizeClass == .regular || UMPlatformInfo.isMac {
             settingPicker("Player List Size", caption: "Size of the player list on iPad landscape.",
                           selection: $playerListSize, options: [("Compact", "compact"), ("Expanded", "expanded")])
         }

@@ -390,6 +390,21 @@ final class UMChatStore {
             UMChatMessage(id: "2", channel: "main", sender: c, content: "hosting in a sec", date: now - 240),
             UMChatMessage(id: "3", channel: "main", sender: me, content: "I'm in", date: now - 60),
         ]
+        // `-UMDiagLongChat`: a transcript long enough to scroll, ending on a marked last line, for
+        // checking that the newest message sits fully above the composer.
+        if ProcessInfo.processInfo.arguments.contains("-UMDiagLongChat") {
+            let people = [a, b, c, me]
+            var long = (0..<60).map { i in
+                UMChatMessage(id: "L\(i)", channel: "main", sender: people[i % people.count],
+                              content: i % 9 == 0
+                                ? "longer line \(i): who's the cop, who's the vig, and why did nobody claim on day one"
+                                : "line \(i)",
+                              date: now - Double(60 - i) * 20)
+            }
+            long.append(UMChatMessage(id: "LAST", channel: "main", sender: me,
+                                      content: "LAST LINE — must be fully visible above the composer", date: now))
+            messages = long
+        }
         connected = true
     }
     #endif

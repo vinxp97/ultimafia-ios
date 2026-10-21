@@ -30,9 +30,9 @@ struct FamilyView: View {
         }
         .background(pageBackground)
         .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .umInlineTitle()
         .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+        .umNavigationBar(.hidden)
         .task { await load() }
         .environment(\.openURL, OpenURLAction { url in
             let scheme = (url.scheme ?? "").lowercased()
@@ -40,7 +40,7 @@ struct FamilyView: View {
             browserItem = UMBrowserItem(url: url)
             return .handled
         })
-        .fullScreenCover(item: $browserItem) { item in
+        .umFullScreenCover(item: $browserItem) { item in
             UMInAppBrowser(url: item.url) { browserItem = nil }
         }
     }

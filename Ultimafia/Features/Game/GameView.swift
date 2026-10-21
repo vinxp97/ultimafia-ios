@@ -50,11 +50,17 @@ private struct GameScreen: View {
     var chatFocused: Binding<Bool>
     var onLeave: () -> Void
     var onDetach: () -> Void
+    @Environment(\.horizontalSizeClass) private var hSizeClass
 
     var body: some View {
         GeometryReader { geo in
-            let threeColumns = UMGameLayout.usesThreeColumns(geo.size)
-            let wideHeader = UMGameLayout.usesWideHeader(geo.size.width)
+            #if os(macOS)
+            let regular = true   // Mac windows are always "regular"; width alone picks the layout
+            #else
+            let regular = hSizeClass == .regular
+            #endif
+            let threeColumns = UMGameLayout.usesThreeColumns(geo.size, regular: regular)
+            let wideHeader = UMGameLayout.usesWideHeader(geo.size.width, regular: regular)
             VStack(spacing: 0) {
                 // returnToLobby keeps a seated player's connection (the Lobby tab action does the
                 // same) and closes spectators and reviews, so the header always has a way out.
@@ -70,13 +76,13 @@ private struct GameScreen: View {
                         // selectedPanel is kept untouched so rotating back restores the same tab.
                         HStack(spacing: 0) {
                             GameTownPane(session: session, compact: true)
-                                .frame(width: geo.size.width * 0.25)
+                                .frame(width: UMGameLayout.sideColumnWidth(geo.size.width))
                             Divider().overlay(UMTheme.line)
                             GameChatPane(session: session, draft: $draft, chatFocused: chatFocused, showsPhaseBar: !wideHeader && !session.isLiarsDice)
                                 .frame(maxWidth: .infinity)
                             Divider().overlay(UMTheme.line)
                             GameActPane(session: session)
-                                .frame(width: geo.size.width * 0.25)
+                                .frame(width: UMGameLayout.sideColumnWidth(geo.size.width))
                         }
                     } else {
                         // Every panel stays in the hierarchy, so leaving the chat and coming back keeps
@@ -117,7 +123,7 @@ private struct GameScreen: View {
         }
         .background(UMTheme.bg.ignoresSafeArea())
         .background { gameShortcuts }
-        .toolbar(.hidden, for: .navigationBar)
+        .umNavigationBar(.hidden)
         .navigationBarBackButtonHidden(true)
         .alert("Game", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -190,19 +196,35 @@ private struct GameScreen: View {
     }
 }
 
-/// iPad-only layout decisions for the game screen. iPhone always keeps the tabbed layout.
+/// Game screen layout by window, not device: a compact-width window (iPhone, iPad Slide Over,
+/// narrow Split View / Stage Manager windows) gets the tabbed iPhone layout; a regular-width
+/// window gets the iPad layout. Re-evaluated live as the window is resized.
 enum UMGameLayout {
-    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-
-    /// Three columns only on iPad, in landscape, with a window wide enough for ~340 pt side
-    /// columns (full screen 11"/13"; narrow Split View / Stage Manager windows keep the tabs).
-    static func usesThreeColumns(_ size: CGSize) -> Bool {
-        isPad && size.width > size.height && size.width >= 1000
+    /// Three columns in a regular-width, landscape-shaped window wide enough for ~340 pt side
+    /// columns (full screen 11"/13"; narrower windows keep the tabs).
+    static func usesThreeColumns(_ size: CGSize, regular: Bool) -> Bool {
+        #if targetEnvironment(macCatalyst) || os(macOS)
+        // Mac: desktop-style table (players | chat | actions) whenever the window is wide enough,
+        // whatever its shape; the minimum window (1100 pt) always qualifies.
+        return regular && size.width >= 980
+        #else
+        return regular && size.width > size.height && size.width >= 1000
+        #endif
     }
 
-    /// One-row header (name, roles, phases, timer) on iPad when there's room.
-    static func usesWideHeader(_ width: CGFloat) -> Bool {
-        isPad && width >= 820
+    /// Side column width in three-column mode. iPad keeps 25% each; Mac clamps so big windows
+    /// give the extra room to the chat instead of stretching the player list and actions.
+    static func sideColumnWidth(_ total: CGFloat) -> CGFloat {
+        #if targetEnvironment(macCatalyst) || os(macOS)
+        return min(max(total * 0.25, 300), 440)
+        #else
+        return total * 0.25
+        #endif
+    }
+
+    /// One-row header (name, roles, phases, timer) in a regular-width window when there's room.
+    static func usesWideHeader(_ width: CGFloat, regular: Bool) -> Bool {
+        regular && width >= 820
     }
 }
 
@@ -825,7 +847,7 @@ private struct ChatComposer: View {
         guard let t = mediaToken else { return }
         var next = draft
         let bare = Self.bareCode(item.code)
-        next.replaceSubrange(t.range, with: (item.isSticker ? ";\(bare);" : ":\(bare):") + " ")
+        next.replaceSubrange(t.range, with: (item.isSticker ? ";\(bare);" : ":\(bare):") + UMChatPrefs.completionSuffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
     }
@@ -854,7 +876,7 @@ private struct ChatComposer: View {
     private func applySuggestion(_ name: String) {
         guard let t = nameToken else { return }
         var next = draft
-        next.replaceSubrange(t.range, with: t.prefix + name + " ")
+        next.replaceSubrange(t.range, with: t.prefix + name + UMChatPrefs.completionSuffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
     }
@@ -906,9 +928,9 @@ private struct ChatComposer: View {
     private func applySlash(_ item: SlashSuggestion) {
         switch item {
         case .command(let c):
-            draft = "/" + c.name + (c.arg == .none ? "" : " ")
+            draft = "/" + c.name + (c.arg == .none ? "" : UMChatPrefs.completionSuffix)
         case .player(let cmd, let p):
-            draft = "/\(cmd) \(p.name) "
+            draft = "/\(cmd) \(p.name)" + UMChatPrefs.completionSuffix
         case .noOne:
             // "nl" means No one, unless a player is literally named nl.
             let nlIsPlayer = session.players.contains { $0.name.caseInsensitiveCompare("nl") == .orderedSame }
@@ -1094,7 +1116,8 @@ private struct ChatComposer: View {
                     UMMicButton(text: cappedDraft, maxLength: UMConfig.maxChatLength, vocab: { dictationVocab })
                         .disabled(cooling)
 
-                    // Keyboard toggle (Return is the send key).
+                    #if !os(macOS)
+                    // Keyboard toggle (Return is the send key). Macs have a hardware keyboard.
                     Button {
                         chatFocused.wrappedValue.toggle()
                     } label: {
@@ -1122,6 +1145,7 @@ private struct ChatComposer: View {
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                         keyboardShown = false
                     }
+                    #endif
                     #endif
                 }
                 .padding(.horizontal, 10)
@@ -1176,9 +1200,10 @@ private struct ChatComposer: View {
         let bare = Self.bareCode(item.code)
         let token = item.isSticker ? ";\(bare);" : ":\(bare):"
         let spaced = t.range.upperBound < draft.endIndex && draft[t.range.upperBound].isWhitespace
-        if String(draft[t.range]).lowercased() == token, spaced { return true }
+        let suffix = UMChatPrefs.completionSuffix
+        if String(draft[t.range]).lowercased() == token, spaced || suffix.isEmpty { return true }
         var next = draft
-        next.replaceSubrange(t.range, with: spaced ? token : token + " ")
+        next.replaceSubrange(t.range, with: spaced ? token : token + suffix)
         draft = String(next.prefix(UMConfig.maxChatLength))
         session.noteTyping()
         return true
@@ -1727,8 +1752,10 @@ private struct CompactTownList: ViewModifier {
         if on {
             content
                 .environment(\.defaultMinListRowHeight, 0)
+                #if !os(macOS)
                 .listRowSpacing(0)
                 .listSectionSpacing(4)
+                #endif
                 .contentMargins(.top, 4, for: .scrollContent)
         } else {
             content
@@ -1842,6 +1869,7 @@ private struct GameActPane: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .fixedSize()
         }
         .accessibilityLabel("Choose meeting")
