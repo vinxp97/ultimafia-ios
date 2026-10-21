@@ -16,6 +16,12 @@ import Foundation
 ///   the alert "Kicking… n / ceil(alive/3)"; at the threshold the 15s "vegKick" timer starts.
 /// - /cry: `speak` {abilityName: "Cry", abilityTarget: "out"} when the Cry ability is offered
 ///   (Crier's BroadcastMessage card); the server re-sends it anonymously with prefix "cries out".
+/// - /join, /spectate (site PR #3093): sent as a plain `speak`; Player.parseCommand seats a pregame
+///   spectator (same checks as Join open seat) or moves a seated pregame player to spectators.
+///   Every refusal comes back as a ":system:" chat line, so they are always passed through.
+/// - /wave, /shake, /glow, /rainbow, /slide, /flash (site PR #3090): `speak` with the command in
+///   the content; the server strips it and attaches `textEffect` for owners of Advanced Text
+///   Effects, or answers with a notice. Offered in the bar only to owners.
 struct SlashCommand: Identifiable, Hashable {
     enum Arg { case none, player, playerThenText, text, optionalPlayer }
     var name: String
@@ -34,9 +40,10 @@ enum SlashResult {
 
 extension GameSession {
     /// Commands the server parses itself and that the web lists (react_main constants/commandList).
-    private static let serverCommands: Set<String> = [
+    private static let serverCommands: Set<String> = Set([
         "me", "role", "item", "modifier", "achievement", "diceroll", "nightorder", "help", "daily",
-    ]
+        "join", "spectate",
+    ] + UMTextEffect.allCases.map(\.rawValue))
 
     var isPregame: Bool { currentPhaseId == -1 }
 
@@ -100,8 +107,23 @@ extension GameSession {
     }
 
     var availableSlashCommands: [SlashCommand] {
-        guard isViewingLive, !spectate else { return [] }
+        guard isViewingLive, !isReview else { return [] }
         var out: [SlashCommand] = []
+        // Seats (site #3093), for everyone in pregame: spectators sit down, seated players watch.
+        if canTakeSeat {
+            out.append(SlashCommand(name: "join", usage: "/join", summary: "Take an open seat in the game", icon: "chair.fill", arg: .none))
+        }
+        if isPregame, !spectate, spectatingAllowed, !finished {
+            out.append(SlashCommand(name: "spectate", usage: "/spectate", summary: "Give up your seat and watch as a spectator", icon: "eye", arg: .none))
+        }
+        // Text effects (site #3090) wherever you can talk, listed last; the server checks the item.
+        var effects: [SlashCommand] = []
+        if UMTextEffects.owned, speechChannels.contains(where: { $0.canTalk }) {
+            effects = UMTextEffect.allCases.map { e in
+                SlashCommand(name: e.rawValue, usage: "/\(e.rawValue) text", summary: e.summary, icon: e.icon, arg: .text)
+            }
+        }
+        guard !spectate else { return out + effects }
         if isPregame {
             if isHost && !competitiveGame {
                 out.append(SlashCommand(name: "kick", usage: "/kick name", summary: "Remove a player from the lobby", icon: "person.fill.xmark", arg: .player))
@@ -130,7 +152,7 @@ extension GameSession {
         if abilityChannel("Cry") != nil {
             out.append(SlashCommand(name: "cry", usage: "/cry message", summary: "Cry out anonymously to everyone", icon: "megaphone.fill", arg: .text))
         }
-        return out
+        return out + effects
     }
 
     private var whisperSummary: String {

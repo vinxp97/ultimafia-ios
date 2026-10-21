@@ -6,10 +6,20 @@ import UIKit
 struct GameView: View {
     @Environment(AppModel.self) private var app
     var review = false
-    @State private var draft = ""
+    @State private var draft = GameView.diagDraft ?? ""
     @State private var selectedPanel = 0
     /// Composer focus (UIKit-backed field; Return never resigns first responder).
-    @State private var chatFocused = false
+    @State private var chatFocused = GameView.diagDraft != nil
+
+    /// DEBUG `-UMDiagDraft <text>`: start with this draft in a focused composer (screenshots of the
+    /// slash bar without typing).
+    private static var diagDraft: String? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-UMDiagDraft"), args.indices.contains(i + 1) { return args[i + 1] }
+        #endif
+        return nil
+    }
 
     var body: some View {
         Group {
@@ -302,6 +312,8 @@ private struct GameHeader: View {
             } else {
                 Spacer(minLength: 8)
             }
+            SpectatorCountBadge(session: session)
+            PregameSeatButton(session: session)
             PhaseTimerBadge(session: session)
             if showsGuides, showSetupGuides, session.setupId != nil {
                 SetupGuidesButton(session: session, fillsWidth: false)
@@ -866,7 +878,7 @@ private struct ChatComposer: View {
     private var nameSuggestions: [String] {
         guard showTabButton, chatFocused.wrappedValue, mediaToken == nil, let t = nameToken else { return [] }
         var seen = Set<String>()
-        return session.players.map(\.name).filter { name in
+        return session.tabCompleteNames.filter { name in
             name.lowercased().hasPrefix(t.query.lowercased())
                 && name.caseInsensitiveCompare(t.query) != .orderedSame
                 && seen.insert(name).inserted
@@ -987,6 +999,7 @@ private struct ChatComposer: View {
 
     var body: some View {
         VStack(spacing: 0) {
+        PregameSpectatorBar(session: session)
         if let hint = session.slashHint {
             Text(hint)
                 .font(.caption.weight(.semibold))
@@ -1213,7 +1226,7 @@ private struct ChatComposer: View {
     private func completeName() -> Bool {
         guard let next = session.completePlayerName(draft), next != draft else { return false }
         draft = String(next.prefix(UMConfig.maxChatLength))
-        if !draft.hasPrefix("/") { session.noteTyping() }
+        if !draft.hasPrefix("/") || UMTextEffect.parse(draft) != nil { session.noteTyping() }
         return true
     }
 
@@ -1224,6 +1237,12 @@ private struct ChatComposer: View {
             return
         }
         if session.slashHint != nil, newValue != oldValue { session.slashHint = nil }
+        if newValue.hasPrefix("/"), UMTextEffect.parse(newValue) != nil {
+            // A text effect (/wave hello) is a chat message, so it shows typing like the web (#3090).
+            session.typingSuppressed = false
+            if newValue != oldValue { session.noteTyping() }
+            return
+        }
         if newValue.hasPrefix("/") {
             // Suppress typing until the next normal message is sent.
             session.typingSuppressed = true
@@ -1414,6 +1433,7 @@ private struct ChatRow: View {
                 gameType: session.setupGameType,
                 otherRoles: session.guessableRoles.map(\.raw)
             )
+            .umTextEffect(line, enabled: !session.isReview)
             if line.isQuote {
                 Image(systemName: "quote.closing")
                     .font(.caption2)
@@ -1518,6 +1538,7 @@ private struct ChatRow: View {
             gameType: session.setupGameType,
             otherRoles: session.guessableRoles.map(\.raw)
         )
+        .umTextEffect(line, enabled: !session.isReview)
         .padding(.leading, textInset)
         if line.isQuote {
             Image(systemName: "quote.closing")

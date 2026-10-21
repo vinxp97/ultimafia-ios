@@ -257,7 +257,8 @@ struct GameRow: View {
                         .buttonStyle(.borderedProminent)
                         .tint(UMTheme.blood)
                     if game.spectating == true {
-                        Button("Watch") { app.openGame(game, spectate: true) }
+                        // Site #3053: watch an open lobby without taking a seat; /join sits down later.
+                        Button("Spectate") { app.openGame(game, spectate: true) }
                             .buttonStyle(.bordered)
                     }
                 } else if game.isFinished {

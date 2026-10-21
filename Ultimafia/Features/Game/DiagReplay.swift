@@ -34,8 +34,67 @@ struct DiagReplayView: View {
         return (CGFloat(w), compact)
     }
 
+    /// `-UMDiagPregame spectator|seated`: a pregame lobby for the seat actions and text effects
+    /// (site PRs #3053, #3093, #3090), no network.
+    private static var diagPregame: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-UMDiagPregame") else { return nil }
+        return args.indices.contains(i + 1) ? args[i + 1] : "spectator"
+    }
+
+    @MainActor
+    private func runPregame(_ mode: String) async {
+        let watching = mode != "seated"
+        let s = GameSession(gameId: "diag-pregame", spectate: watching)
+        app.game = s
+        UMTextEffects.owned = true
+        s.debugMarkConnected()
+        s.debugFeed("options", ["spectating": true, "ranked": false])
+        var players: [String: Any] = [:]
+        let names = ["Vinman", "Pranay", "Rivka", "Ozzie", "Juno", "Basil"]
+        for (i, n) in names.enumerated() {
+            players["p\(i)"] = ["id": "p\(i)", "name": n, "avatar": false, "playerListPosition": i]
+        }
+        s.debugFeed("players", players)
+        s.debugFeed("self", watching ? "s0" : "p0")
+        s.debugFeed("state", ["id": -1, "name": "Pregame"])
+        s.debugFeed("meeting", ["id": "pregame", "name": "Pregame", "speech": true, "voting": false,
+                                "amMember": true, "canTalk": true])
+        s.debugFeed("spectators", [
+            "s0": ["id": "s0", "name": watching ? "Watcher" : "Watcher", "avatar": false, "watching": true],
+            "s1": ["id": "s1", "name": "Marlowe", "avatar": false, "watching": true],
+            "s9": ["id": "s9", "name": "Gone", "avatar": false],
+        ])
+        s.debugFeed("spectatorCount", 2)
+        if watching { s.debugFeed("isSpectator", nil) }
+        let now = Date().timeIntervalSince1970 * 1000
+        func say(_ id: String, _ from: String, _ text: String, _ ago: Double, effect: String? = nil) {
+            var m: [String: Any] = ["id": id, "senderId": from, "content": text, "time": now - ago * 1000,
+                                    "meetingId": "pregame"]
+            if let effect { m["textEffect"] = effect }
+            s.debugFeed("message", m)
+        }
+        say("a1", "p1", "gl everyone, two more and we start", 40)
+        say("a2", "s1", "watching this one, good luck", 30)
+        say("a3", "p2", "hello table", 2, effect: "wave")
+        if watching {
+            s.debugFeed("message", ["id": "h1", "senderId": "server", "time": now - 1000,
+                                    "content": ":system: You are spectating. Type /join to take a seat at the table."])
+            s.debugFeed("takeSeatFailed", "No open seats.")
+        } else {
+            s.debugFeed("message", ["id": "h2", "senderId": "server", "time": now - 1000,
+                                    "content": "Marlowe is now spectating."])
+        }
+        // Keep the text effects going for the snapshot: one fresh effect every second.
+        for (k, e) in ["rainbow", "glow", "shake", "slide", "flash"].enumerated() {
+            try? await Task.sleep(for: .milliseconds(900))
+            say("fx\(k)", "p\(3 + k % 3)", "\(e) text effect demo", 0, effect: e)
+        }
+    }
+
     @MainActor
     private func run() async {
+        if let mode = Self.diagPregame { await runPregame(mode); return }
         let s = GameSession(gameId: "diag-replay", spectate: true)
         app.game = s
         UMDiag.log("replay", "start")

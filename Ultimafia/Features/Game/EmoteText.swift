@@ -74,6 +74,7 @@ struct EmoteText: View {
     @State private var selectedRole: MentionedRole?
     @State private var selectedTerm: UMTerminology.Term?
     @AppStorage("um.hideTerminology") private var hideTerminology = false
+    @Environment(\.umTextEffectFrame) private var effectFrame
 
     private struct MentionedRole: Identifiable {
         var id: String { name }
@@ -100,8 +101,15 @@ struct EmoteText: View {
                 if seg.pieces.count == 1, seg.pieces[0].text == nil || seg.pieces[0].player != nil {
                     pieceView(seg.pieces[0])
                 } else {
-                    runText(seg.pieces)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let effectFrame {
+                        // Text effect wave / rainbow (site #3090): one glyph at a time.
+                        runText(seg.pieces)
+                            .textRenderer(UMTextEffectRenderer(frame: effectFrame))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        runText(seg.pieces)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

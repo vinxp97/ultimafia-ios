@@ -530,7 +530,9 @@ struct ReadyCheckOverlay: View {
                             .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                             .foregroundStyle(left < 10 ? UMTheme.mafia : .white)
                     }
-                    Text("Failure to ready up will result in being kicked.")
+                    // Site #3053/#3093: unready players go to spectators (removed when spectating is off).
+                    Text(session.spectatingAllowed ? "Failure to ready up will move you to spectators."
+                         : "Failure to ready up will remove you from the game.")
                         .font(.caption)
                         .foregroundStyle(UMTheme.muted)
                     HStack(spacing: 12) {

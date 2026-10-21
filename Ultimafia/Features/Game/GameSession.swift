@@ -66,6 +66,9 @@ struct ChatLine: Identifiable, Hashable {
     /// Message carried its own `alive` flag (so senderWasDead isn't a fallback guess).
     var aliveFlagKnown: Bool = false
     var newspaper: NewspaperIssue? = nil
+    /// Chat text effect ("wave", "shake", …; site PR #3090). Attached by the server only for owners
+    /// of Advanced Text Effects; `content` is always the plain text.
+    var textEffect: String? = nil
 
     var isVoteLog: Bool { senderId == "vote" || id.hasPrefix("votehist:") }
 }
@@ -203,7 +206,11 @@ final class GameSession {
     @ObservationIgnored var chatPinnedToBottom = true
     @ObservationIgnored var chatHasOpened = false
     let gameId: String
-    let spectate: Bool
+    /// Watching instead of seated. Starts as the join intent (lobby Spectate, reviews) and then
+    /// follows the server's `isSpectator` (true when we land in spectators, false after taking a
+    /// seat; site PRs #3053/#3093), so /join, /spectate, Join open seat and a missed ready check
+    /// all flip it without a new session.
+    private(set) var spectate: Bool
     /// Read-only replay of a finished game from `/game/:id/review/data`: no socket, no sounds.
     let isReview: Bool
     /// Sound/notification side effects are muted while replaying history or reviewing.
@@ -239,6 +246,15 @@ final class GameSession {
     var rankedGame = false
     var competitiveGame = false
     var graveyardParticipation = false
+    /// options.spectating: the game allows spectators (lobby Spectate, /spectate, Spectate button).
+    var spectatingAllowed = false
+    /// Server `spectatorCount` (everyone gets it; once the game starts players get only this).
+    var spectatorCount = 0
+    /// A failed ready check moved us to spectators (site #3053): the bell keeps ringing until we
+    /// take a seat, leave, or a new ready check starts.
+    var missedReadyCheck = false
+    /// Why the server removed us (`left` {reason}, site #3093), shown after leaving the game screen.
+    var leftReason: String?
 
     /// Mirrors web Game.jsx: dialog only when participating in a live (non-pregame/postgame) game.
     var leaveNeedsConfirm: Bool {
@@ -395,7 +411,9 @@ final class GameSession {
     var speechMeetingId: String? { selectedSpeechMeetingId }
 
     var speechOptions: [SpeechOption] {
-        var opts = [SpeechOption(id: "Say", label: "Say", placeholder: "to everyone", abilityName: nil, abilityTarget: nil)]
+        let toSpectators = spectate && speechTargetChannel?.name == "Spectator Meeting"
+        var opts = [SpeechOption(id: "Say", label: "Say", placeholder: toSpectators ? "to spectators" : "to everyone",
+                                 abilityName: nil, abilityTarget: nil)]
         let channel = speechChannels.first(where: { $0.id == selectedSpeechMeetingId })
         for ability in channel?.abilities ?? [] {
             if ability.name == "Whisper" && !setupWhispers { continue }
@@ -724,8 +742,11 @@ final class GameSession {
             }
             return nil
         }
-        let matched = players.map { $0.name }.filter { name in
-            name.lowercased().prefix(seedLower.count) == seedLower
+        // Site #3093 tabCompleteNames: one entry per name, no left seats (a re-seated player keeps a
+        // `left` copy), plus current spectators in pregame or while spectating.
+        var seenNames = Set<String>()
+        let matched = tabCompleteNames.filter { name in
+            name.lowercased().prefix(seedLower.count) == seedLower && seenNames.insert(name).inserted
         }
         if matched.count == 1 {
             // Trailing space after a completed name / %avatar unless "Space after autocomplete" is off
@@ -755,6 +776,23 @@ final class GameSession {
             return words.joined(separator: " ")
         }
         return nil
+    }
+
+    /// Names Tab and the name chips complete (site #3093 shared/tabComplete.js): players still in
+    /// the game; current spectators too during pregame (shared Pregame chat) and for spectators
+    /// (spectator chat). Players in a started game never get spectator names.
+    var tabCompleteNames: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        func add(_ name: String) {
+            guard !name.isEmpty, seen.insert(name).inserted else { return }
+            out.append(name)
+        }
+        for p in players where !p.left { add(p.name) }
+        if isPregame || spectate {
+            for s in spectatorList { add(s.name) }
+        }
+        return out
     }
 
     func playerNamed(_ name: String) -> GamePlayer? {
@@ -851,6 +889,7 @@ final class GameSession {
     }
 
     func disconnectWithoutLeaving() {
+        stopMissedReadyBell()
         expectDisconnect = true
         stopTyping()
         GameMusic.stop()
@@ -861,6 +900,7 @@ final class GameSession {
     }
 
     func stop() {
+        stopMissedReadyBell()
         weInitiatedLeave = true
         expectDisconnect = true
         stopTyping()
@@ -1027,6 +1067,60 @@ final class GameSession {
         }
     }
 
+    // MARK: Seats and spectating (site PRs #3053, #3093)
+
+    /// Pregame spectator: "Join open seat" / `/join`. Seated pregame player in a game that allows
+    /// spectators: "Spectate" / `/spectate`.
+    var canTakeSeat: Bool {
+        spectate && !isReview && !finished && isPregame && connected
+    }
+
+    /// Mirrors the server's `/spectate` guard: pregame, seated, spectating on, and not the only
+    /// seated player (that would leave a lobby with no players).
+    var canSpectateFromSeat: Bool {
+        guard !spectate, !isReview, !finished, isPregame, connected, spectatingAllowed, !readyCheckActive,
+              let me = selfId, players.contains(where: { $0.id == me && !$0.left }) else { return false }
+        return players.filter { !$0.left }.count > 1
+    }
+
+    /// Join open seat (Spectator.js `takeSeat`, same checks as `/join`). A refusal comes back as
+    /// `takeSeatFailed` and is shown in the pregame chat.
+    func takeSeat() {
+        guard canTakeSeat else { return }
+        socket.send("takeSeat")
+    }
+
+    func stopMissedReadyBell() {
+        guard missedReadyCheck else { return }
+        missedReadyCheck = false
+        ReadyBell.stop()
+        ReadyNotifications.clear()
+    }
+
+    /// A refusal the server sent as an event rather than chat, shown as a system line in the
+    /// current phase (the way #3093 shows `/join` refusals).
+    private func appendLocalNotice(_ text: String) {
+        var line = ChatLine(
+            id: "local:" + UUID().uuidString,
+            senderId: "server",
+            senderName: "Server",
+            content: ":system: " + text,
+            time: Date(),
+            isServer: true,
+            meetingId: nil
+        )
+        line.quotable = false
+        line.fromState = currentPhaseId
+        appendLine(line)
+    }
+
+    /// The meeting Say goes to (same pick as `speak`). For a spectator in a started game that is
+    /// the Spectator Meeting, shown as "to spectators" (site #3093).
+    var speechTargetChannel: SpeechChannel? {
+        speechChannels.first(where: { $0.id == selectedSpeechMeetingId && $0.canTalk })
+            ?? speechChannels.first(where: { $0.canTalk })
+    }
+
     func clearReadyCheck() {
         readyCheckActive = false
         readyPlayerIds = []
@@ -1046,6 +1140,10 @@ final class GameSession {
     /// Ids of "Spectator Meeting" chats (only spectators are members, so only they get its lines).
     @ObservationIgnored private var spectatorMeetingIds: Set<String> = []
 
+    /// Site #3093 `watching`: ids spectating right now (nil = server doesn't mark them).
+    @ObservationIgnored private var watchingSpectatorIds: Set<String>?
+    @ObservationIgnored private var serverMarksWatching = false
+
     /// Server order of the `spectators` payload (spectators, then spectatorsOld = join order).
     @ObservationIgnored private var spectatorOrder: [String] = []
 
@@ -1062,8 +1160,12 @@ final class GameSession {
             // position), so the first seat per person is the one that's here now if any.
             if latest[key] == nil { latest[key] = s }
         }
+        // Seated now (took a seat after watching): not a spectator, even if an old entry remains.
+        let seatedUserIds = Set(players.filter { !$0.left }.compactMap(\.userId))
         return latest.values
             .filter { s in !formerPlayerIds.contains(s.id) && !players.contains { $0.id == s.id } }
+            .filter { s in watchingSpectatorIds?.contains(s.id) ?? true }
+            .filter { s in s.userId.map { !seatedUserIds.contains($0) } ?? true }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -1176,6 +1278,8 @@ final class GameSession {
     #if DEBUG
     /// DiagReplay: feed a synthetic socket event through the real handler.
     func debugFeed(_ event: String, _ data: Any?) { handle(event, data) }
+    /// DiagReplay: pretend the socket is up (seat buttons need a live connection).
+    func debugMarkConnected() { connected = true }
     #endif
 
     private func handle(_ event: String, _ data: Any?) {
@@ -1210,6 +1314,7 @@ final class GameSession {
                 }
                 competitiveGame = (o["competitive"] as? Bool) ?? false
                 graveyardParticipation = (o["graveyardParticipation"] as? Bool) ?? false
+                spectatingAllowed = boolValue(o["spectating"])
             }
         case "setup":
             applySetup(data)
@@ -1225,8 +1330,44 @@ final class GameSession {
                 next[p.id] = p
                 order.append(p.id)
             }
+            // Site #3093 marks who is spectating right now (`watching`); the rest are past
+            // spectators kept so chat can still name them. Older servers send no mark.
+            var watching: Set<String> = []
+            var marked = false
+            if let dict = data as? [String: Any] {
+                for (id, value) in dict {
+                    guard let blob = value as? [String: Any], blob["watching"] != nil else { continue }
+                    marked = true
+                    if boolValue(blob["watching"]) { watching.insert(id) }
+                }
+            }
+            if marked { serverMarksWatching = true }
+            watchingSpectatorIds = serverMarksWatching ? watching : nil
             spectatorOrder = order
             spectatorPlayers = next
+        case "spectatorCount":
+            if let n = intValue(data) { spectatorCount = max(0, n) }
+        case "isSpectator":
+            // Spectator.sendSelf sends it with no value (= true); takeSeat sends false (site #3053).
+            guard !isReview else { break }
+            let now = (data as? Bool) ?? ((data as? NSNumber)?.boolValue ?? true)
+            if !now { stopMissedReadyBell() }
+            if spectate != now { spectate = now }
+        case "takeSeatFailed":
+            // Join open seat refused (no open seats, ban, ranked/competitive, hearts, leave penalty).
+            if let reason = stringValue(data) { appendLocalNotice(reason) }
+        case "spectateFailed":
+            // Spectate from a seat refused (spectating off/full): the server kept our seat.
+            if spectate { spectate = false }
+            if let reason = stringValue(data) { appendLocalNotice(reason) }
+        case "readyCheck failed":
+            // Not readied in time: moved to spectators (site #3053). Ring until we sit back down.
+            clearReadyCheck()
+            missedReadyCheck = true
+            if !isQuiet {
+                ReadyBell.start()
+                ReadyNotifications.notifyIfBackgrounded()
+            }
         case "playerJoin":
             if let p = parsePlayer(data) {
                 formerPlayerIds.insert(p.id)
@@ -1292,6 +1433,12 @@ final class GameSession {
             finished = true
             stateName = "Finished"
         case "left":
+            // Site #3093: {reason} when the server removed us (e.g. a missed ready check with
+            // spectating off); the lobby shows it once the game screen closes.
+            if let reason = (data as? [String: Any])?["reason"] as? String, !reason.isEmpty {
+                leftReason = reason
+            }
+            stopMissedReadyBell()
             connected = false
             if weInitiatedLeave {
                 leftByServer = true
@@ -1339,6 +1486,7 @@ final class GameSession {
         case "winners":
             applyWinners(data)
         case "readyCheck init":
+            stopMissedReadyBell()
             applyReadyCheckInit(data)
         case "readyCheck cancel", "readyCheck success":
             clearReadyCheck()
@@ -1356,9 +1504,12 @@ final class GameSession {
     private func join() {
         guard !didJoin else { return }
         didJoin = true
+        // `spectate` (site #3053, Games/games.js): watch an open lobby without taking a seat. The
+        // server also remembers pregame spectators, so a reconnect stays spectating either way.
         socket.send("join", object: [
             "gameId": gameId,
             "isBot": false,
+            "spectate": spectate && !isReview,
         ])
     }
 
@@ -1679,7 +1830,10 @@ final class GameSession {
             quotable: !isQuote && senderId != "server" && senderId != "vote",
             fromState: intValue(obj["fromState"]),
             senderWasDead: deadWhenSent(senderId: senderId, alive: obj["alive"]),
-            aliveFlagKnown: !(obj["alive"] == nil || obj["alive"] is NSNull)
+            aliveFlagKnown: !(obj["alive"] == nil || obj["alive"] is NSNull),
+            // Never on server/anonymous lines (the server already drops it; keep the client honest).
+            textEffect: (senderId == "server" || senderId == "anonymous" || isQuote) ? nil
+                : UMTextEffect(rawValue: (obj["textEffect"] as? String ?? "").lowercased())?.rawValue
         )
     }
 
@@ -1725,7 +1879,9 @@ final class GameSession {
                 let channel = SpeechChannel(
                     id: id,
                     name: (obj["name"] as? String) ?? "Chat",
-                    canTalk: can && amMember && (!spectate || (obj["name"] as? String) == "Spectator Meeting"),
+                    // Spectators talk in the Spectator Meeting and, since site #3053, in Pregame
+                    // (pregame spectators are Pregame members with canTalk).
+                    canTalk: can && amMember && (!spectate || ["Spectator Meeting", "Pregame"].contains((obj["name"] as? String) ?? "")),
                     abilities: abilities
                 )
                 nextSpeech.removeAll { $0.id == id }

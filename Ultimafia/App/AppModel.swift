@@ -6,6 +6,7 @@ final class AppModel {
     var user: UserInfo? {
         didSet {
             UMViewerPrefs.shared.apply(user: user)
+            UMTextEffects.update(from: user)
             UMProfileCache.activeUserId.withLock { $0 = user?.id }
         }
     }
@@ -490,6 +491,21 @@ final class AppModel {
         Task { await session.start() }
     }
 
+    /// Spectate button for a seated pregame player (site #3053): reopen the game with the
+    /// spectate intent, the same as the web's `/game/:id?spectate=true`. The server moves the seat
+    /// to spectators (host passes on) or answers `spectateFailed` and keeps the seat. A plain
+    /// disconnect never leaves a seat, so replacing the session is safe. `/spectate` typed in chat
+    /// goes to the server instead (site #3093).
+    func spectateFromSeat() {
+        guard let session = game, session.canSpectateFromSeat else { return }
+        resumeGame(session.gameId, spectate: true)
+    }
+
+    /// Join open seat (Spectator `takeSeat`); same checks as `/join`.
+    func takeOpenSeat() {
+        game?.takeSeat()
+    }
+
     /// Re-read GET user/info (coins, hearts, …); keeps the current user on failure.
     func refreshUserInfo() async {
         guard isSignedIn, let info = try? await APIClient.shared.userInfo(), info.id != nil else { return }
@@ -497,6 +513,8 @@ final class AppModel {
     }
 
     func detachFromGame() {
+        // Site #3093: the server said why it removed us (e.g. missed ready check, spectating off).
+        if let reason = game?.leftReason { alertMessage = reason }
         game?.disconnectWithoutLeaving()
         game = nil
         gamePath.removeAll()

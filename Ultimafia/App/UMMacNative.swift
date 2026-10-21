@@ -104,6 +104,14 @@ struct NativeAppTabs: View {
                     if selected != .game {
                         Button { app.select(.game) } label: { Label("Return to Game", systemImage: "gamecontroller") }
                     }
+                    // Pregame seats (site #3053/#3093): spectators sit down, seated players watch.
+                    if app.game?.canTakeSeat == true {
+                        Button { app.takeOpenSeat() } label: { Label("Join Open Seat", systemImage: "chair.fill") }
+                            .help("Take an open seat (/join, ⇧⌘J)")
+                    } else if app.game?.canSpectateFromSeat == true {
+                        Button { app.spectateFromSeat() } label: { Label("Spectate", systemImage: "eye") }
+                            .help("Give up your seat and watch (/spectate)")
+                    }
                     Button(role: .destructive) { app.requestLeave() } label: {
                         Label("Leave Game", systemImage: "rectangle.portrait.and.arrow.right")
                     }.help("Leave the game (⇧⌘L)")
@@ -191,6 +199,12 @@ struct UMMacNativeCommands: Commands {
                 .disabled(!app.isSignedIn)
             Button("Return to Game") { app.select(.game) }
                 .disabled(!inGame)
+            Divider()
+            Button("Join Open Seat") { app.takeOpenSeat() }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+                .disabled(app.game?.canTakeSeat != true)
+            Button("Spectate") { app.spectateFromSeat() }
+                .disabled(app.game?.canSpectateFromSeat != true)
             Divider()
             Button("Leave Game") { app.requestLeave() }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
