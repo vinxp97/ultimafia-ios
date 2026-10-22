@@ -2,7 +2,7 @@
   <img src="Ultimafia/Assets.xcassets/AppIcon.appiconset/AppIcon-256.png" width="128" alt="Ultimafia app icon">
 </p>
 
-# Ultimafia — Companion app for ultimafia.com
+# Ultimafia Mobile — Companion app for ultimafia.com
 
 Ultimafia is a native SwiftUI client for [ultimafia.com](https://ultimafia.com), the online social-deduction game site. Browse the lobby, join or spectate games, chat and vote in real time, host your own setups, and keep up with direct messages, all from one app built for Apple platforms with no third-party dependencies.
 
