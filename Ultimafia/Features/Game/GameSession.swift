@@ -1079,7 +1079,7 @@ final class GameSession {
     /// seated player (that would leave a lobby with no players).
     var canSpectateFromSeat: Bool {
         guard !spectate, !isReview, !finished, isPregame, connected, spectatingAllowed, !readyCheckActive,
-              let me = selfId, players.contains(where: { $0.id == me && !$0.left }) else { return false }
+              !spectateRequestPending, let me = selfId, players.contains(where: { $0.id == me && !$0.left }) else { return false }
         return players.filter { !$0.left }.count > 1
     }
 
@@ -1088,6 +1088,33 @@ final class GameSession {
     func takeSeat() {
         guard canTakeSeat else { return }
         socket.send("takeSeat")
+    }
+
+    /// A `spectate` request is in flight (cleared by `isSpectator`, `spectateFailed` or the timeout).
+    private(set) var spectateRequestPending = false
+    @ObservationIgnored private var spectateRequestTimeout: Task<Void, Never>?
+
+    /// Spectate from a seat (site #3093, Gitea #72): the `spectate` socket event, no payload. On
+    /// success the server sends playerLeave, an alert and `isSpectator`; a refusal comes back as
+    /// `spectateFailed` with the reason. There is no capability flag to detect support, so if
+    /// neither reply arrives (older server) the seat is kept and a notice says so.
+    func requestSpectate() {
+        guard canSpectateFromSeat else { return }
+        spectateRequestPending = true
+        socket.send("spectate")
+        spectateRequestTimeout?.cancel()
+        spectateRequestTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled, let self, self.spectateRequestPending else { return }
+            self.spectateRequestPending = false
+            self.appendLocalNotice("No response to Spectate. This server may not support it yet, so you're still seated.")
+        }
+    }
+
+    private func finishSpectateRequest() {
+        spectateRequestTimeout?.cancel()
+        spectateRequestTimeout = nil
+        if spectateRequestPending { spectateRequestPending = false }
     }
 
     func stopMissedReadyBell() {
@@ -1331,7 +1358,9 @@ final class GameSession {
                 order.append(p.id)
             }
             // Site #3093 marks who is spectating right now (`watching`); the rest are past
-            // spectators kept so chat can still name them. Older servers send no mark.
+            // spectators kept so chat can still name them (watching=false). In a started game players
+            // only get pregame chatters, all false, so counts come from `spectatorCount`. Older
+            // servers send no mark.
             var watching: Set<String> = []
             var marked = false
             if let dict = data as? [String: Any] {
@@ -1352,12 +1381,16 @@ final class GameSession {
             guard !isReview else { break }
             let now = (data as? Bool) ?? ((data as? NSNumber)?.boolValue ?? true)
             if !now { stopMissedReadyBell() }
+            finishSpectateRequest()
             if spectate != now { spectate = now }
         case "takeSeatFailed":
             // Join open seat refused (no open seats, ban, ranked/competitive, hearts, leave penalty).
             if let reason = stringValue(data) { appendLocalNotice(reason) }
         case "spectateFailed":
-            // Spectate from a seat refused (spectating off/full): the server kept our seat.
+            // Plain-string reason. Sent when the `spectate` event is refused (we keep our seat), and
+            // when a `?spectate=true` join is refused (we join seated; the server cancels any ready
+            // check, which arrives as `readyCheck cancel`).
+            finishSpectateRequest()
             if spectate { spectate = false }
             if let reason = stringValue(data) { appendLocalNotice(reason) }
         case "readyCheck failed":
@@ -1449,6 +1482,7 @@ final class GameSession {
             socket.disconnect()
         case "disconnected":
             connected = false
+            finishSpectateRequest()
             if !expectDisconnect, !weInitiatedLeave, !finished {
                 displaceToLobby()
             }

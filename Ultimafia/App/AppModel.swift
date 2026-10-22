@@ -491,14 +491,12 @@ final class AppModel {
         Task { await session.start() }
     }
 
-    /// Spectate button for a seated pregame player (site #3053): reopen the game with the
-    /// spectate intent, the same as the web's `/game/:id?spectate=true`. The server moves the seat
-    /// to spectators (host passes on) or answers `spectateFailed` and keeps the seat. A plain
-    /// disconnect never leaves a seat, so replacing the session is safe. `/spectate` typed in chat
-    /// goes to the server instead (site #3093).
+    /// Spectate button for a seated pregame player: sends the `spectate` socket event (site #3093,
+    /// Gitea #72) on the live session, with no reconnect. The server moves us to spectators
+    /// (playerLeave, alert, `isSpectator`) or answers `spectateFailed` and keeps the seat.
+    /// `/spectate` typed in chat goes to the server as a command.
     func spectateFromSeat() {
-        guard let session = game, session.canSpectateFromSeat else { return }
-        resumeGame(session.gameId, spectate: true)
+        game?.requestSpectate()
     }
 
     /// Join open seat (Spectator `takeSeat`); same checks as `/join`.
