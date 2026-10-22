@@ -95,8 +95,13 @@ final class AppModel {
     var isSignedIn: Bool { user?.id != nil }
 
     var seatedGameId: String? {
-        user?.inGameId ?? game?.gameId
+        if let id = user?.inGameId, id != leavingGameId { return id }
+        return game?.gameId
     }
+
+    /// The game a Leave is in flight for: until POST game/leave is done, a user/info that still
+    /// says inGame (or a resume) must not bring the seat back.
+    private(set) var leavingGameId: String?
 
     /// Any current game session: pregame or started, seated or spectating, until it's actually left
     /// (game = nil) or finished. Reads the live session the shell keeps across the back arrow
@@ -454,7 +459,7 @@ final class AppModel {
     }
 
     func resumeIfSeated() {
-        guard let id = user?.inGameId else { return }
+        guard let id = user?.inGameId, id != leavingGameId else { return }
         resumeGame(id)
     }
 
@@ -480,6 +485,7 @@ final class AppModel {
         // leave a ranked game on the player's behalf. Only the explicit Leave action does that.
         game?.disconnectWithoutLeaving()
         let session = GameSession(gameId: id, spectate: spectate)
+        session.onSpectateFromSeat = { [weak self] in self?.spectateFromSeat() }
         session.onMention = { [weak self] in
             guard let self, !self.isViewingGame else { return }
             self.mentionCount += 1
@@ -491,12 +497,14 @@ final class AppModel {
         Task { await session.start() }
     }
 
-    /// Spectate button for a seated pregame player: sends the `spectate` socket event (site #3093,
-    /// Gitea #72) on the live session, with no reconnect. The server moves us to spectators
-    /// (playerLeave, alert, `isSpectator`) or answers `spectateFailed` and keeps the seat.
-    /// `/spectate` typed in chat goes to the server as a command.
+    /// Spectate button and typed `/spectate` for a seated pregame player. Live master does this
+    /// with `window.location.assign('/game/<id>?spectate=true')`: a fresh connect + `join` with
+    /// `spectate: true`, which Game.userJoin turns into movePlayerToSpectator (playerLeave, the
+    /// "is now spectating" alert, `isSpectator`) or answers `spectateFailed` and keeps the seat.
+    /// Replacing the session is safe: a plain disconnect never leaves a seat.
     func spectateFromSeat() {
-        game?.requestSpectate()
+        guard let session = game, session.canSpectateFromSeat else { return }
+        resumeGame(session.gameId, spectate: true)
     }
 
     /// Join open seat (Spectator `takeSeat`); same checks as `/join`.
@@ -534,18 +542,26 @@ final class AppModel {
     }
 
     func leaveActiveGame() {
-        game?.leave()
+        let leavingId = game?.gameId ?? user?.inGameId
+        // With a session: socket `leave` + POST. Without one (seated per user/info, e.g. after a
+        // relaunch or the session was detached), POST game/leave alone: it used to do nothing at
+        // all here, so the refresh brought the seat straight back.
+        let posted: Task<Void, Never> = game?.leave() ?? Task { await APIClient.shared.leaveGame() }
         game = nil
         gamePath.removeAll()
         section = .play
+        showLeaveConfirm = false
+        leavingGameId = leavingId
         if var info = user {
             info.inGame = nil
             user = info
         }
         Task {
+            await posted.value
             if let info = try? await APIClient.shared.userInfo() {
                 user = info
             }
+            if leavingGameId == leavingId { leavingGameId = nil }
             await refreshLobby()
         }
     }

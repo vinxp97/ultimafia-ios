@@ -16,9 +16,10 @@ import Foundation
 ///   the alert "Kicking… n / ceil(alive/3)"; at the threshold the 15s "vegKick" timer starts.
 /// - /cry: `speak` {abilityName: "Cry", abilityTarget: "out"} when the Cry ability is offered
 ///   (Crier's BroadcastMessage card); the server re-sends it anonymously with prefix "cries out".
-/// - /join, /spectate (site PR #3093): sent as a plain `speak`; Player.parseCommand seats a pregame
-///   spectator (same checks as Join open seat) or moves a seated pregame player to spectators.
-///   Every refusal comes back as a ":system:" chat line, so they are always passed through.
+/// - /join, /spectate: handled in the app, because live master has no such chat commands (PR
+///   #3093 isn't merged). /join = the desktop "Join open seat" button (`takeSeat`; refusals come
+///   back as `takeSeatFailed`). /spectate = the desktop Spectate button (rejoin with
+///   `?spectate=true`; a refusal comes back as `spectateFailed`).
 /// - /wave, /shake, /glow, /rainbow, /slide, /flash (site PR #3090): `speak` with the command in
 ///   the content; the server strips it and attaches `textEffect` for owners of Advanced Text
 ///   Effects, or answers with a notice. Offered in the bar only to owners.
@@ -42,7 +43,6 @@ extension GameSession {
     /// Commands the server parses itself and that the web lists (react_main constants/commandList).
     private static let serverCommands: Set<String> = Set([
         "me", "role", "item", "modifier", "achievement", "diceroll", "nightorder", "help", "daily",
-        "join", "spectate",
     ] + UMTextEffect.allCases.map(\.rawValue))
 
     var isPregame: Bool { currentPhaseId == -1 }
@@ -113,7 +113,7 @@ extension GameSession {
         if canTakeSeat {
             out.append(SlashCommand(name: "join", usage: "/join", summary: "Take an open seat in the game", icon: "chair.fill", arg: .none))
         }
-        if isPregame, !spectate, spectatingAllowed, !finished {
+        if canSpectateFromSeat {
             out.append(SlashCommand(name: "spectate", usage: "/spectate", summary: "Give up your seat and watch as a spectator", icon: "eye", arg: .none))
         }
         // Text effects (site #3090) wherever you can talk, listed last; the server checks the item.
@@ -189,6 +189,17 @@ extension GameSession {
             return .error("/\(cmd) isn't available right now")
         }
         switch def.name {
+        // Live master's server has no /join or /spectate chat command yet, so the app does what
+        // the desktop buttons do: Join open seat = `takeSeat`; Spectate = rejoin with spectate.
+        case "join":
+            guard canTakeSeat else { return .error("You can only take a seat while spectating in pregame") }
+            takeSeat()
+            return .handled
+        case "spectate":
+            guard canSpectateFromSeat else { return .error("You can't spectate right now") }
+            guard let onSpectateFromSeat else { return .error("You can't spectate right now") }
+            onSpectateFromSeat()
+            return .handled
         case "kick" where !isPregame:
             guard rest.isEmpty else { return .error("In-game /kick takes no name") }
             sendKick()

@@ -49,6 +49,31 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         session = nil
     }
 
+    /// Send one last event (e.g. `leave`) and close only after it was written, or after `timeout`.
+    /// `disconnect()` right after `send` cancels the task and can drop the frame, and the server
+    /// then sees a plain disconnect, which never leaves a seat or forgets a pregame spectator.
+    func sendThenClose(_ event: String, timeout: TimeInterval = 1.5) {
+        guard let task else { disconnect(); return }
+        pingTimer?.invalidate()
+        pingTimer = nil
+        let oldSession = session
+        self.task = nil
+        session = nil
+        isOpen = false
+        final class Once: @unchecked Sendable { var done = false }
+        let once = Once()
+        let close: @Sendable () -> Void = {
+            DispatchQueue.main.async {
+                guard !once.done else { return }
+                once.done = true
+                task.cancel(with: .goingAway, reason: nil)
+                oldSession?.finishTasksAndInvalidate()
+            }
+        }
+        task.send(.string(stringify(event, data: nil))) { _ in close() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { close() }
+    }
+
     func send(_ event: String, object: Any? = nil) {
         let payload = stringify(event, data: object)
         task?.send(.string(payload)) { error in

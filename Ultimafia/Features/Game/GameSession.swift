@@ -899,18 +899,21 @@ final class GameSession {
         isStarting = false
     }
 
-    func stop() {
+    /// Leave for real: socket `leave` (flushed before the socket closes, like the web, which sends
+    /// it and navigates away) plus POST game/leave. The returned task finishes once the server
+    /// has handled the POST, so callers can re-read user/info without seeing the old inGame.
+    @discardableResult
+    func stop() -> Task<Void, Never> {
         stopMissedReadyBell()
         weInitiatedLeave = true
         expectDisconnect = true
         stopTyping()
         GameMusic.stop()
         GameWinMusic.stop()
-        socket.send("leave")
-        socket.disconnect()
+        socket.sendThenClose("leave")
         connected = false
         RoleMarkStore.clear(gameId: gameId)
-        Task { await APIClient.shared.leaveGame() }
+        return Task { await APIClient.shared.leaveGame() }
     }
 
     @discardableResult
@@ -1055,7 +1058,8 @@ final class GameSession {
         viewPhase(currentPhaseId)
     }
 
-    func leave() {
+    @discardableResult
+    func leave() -> Task<Void, Never> {
         stop()
     }
 
@@ -1075,11 +1079,14 @@ final class GameSession {
         spectate && !isReview && !finished && isPregame && connected
     }
 
+    /// Typed `/spectate`: the app does what the Spectate button does (set by AppModel).
+    @ObservationIgnored var onSpectateFromSeat: (() -> Void)?
+
     /// Mirrors the server's `/spectate` guard: pregame, seated, spectating on, and not the only
     /// seated player (that would leave a lobby with no players).
     var canSpectateFromSeat: Bool {
         guard !spectate, !isReview, !finished, isPregame, connected, spectatingAllowed, !readyCheckActive,
-              !spectateRequestPending, let me = selfId, players.contains(where: { $0.id == me && !$0.left }) else { return false }
+              let me = selfId, players.contains(where: { $0.id == me && !$0.left }) else { return false }
         return players.filter { !$0.left }.count > 1
     }
 
@@ -1088,33 +1095,6 @@ final class GameSession {
     func takeSeat() {
         guard canTakeSeat else { return }
         socket.send("takeSeat")
-    }
-
-    /// A `spectate` request is in flight (cleared by `isSpectator`, `spectateFailed` or the timeout).
-    private(set) var spectateRequestPending = false
-    @ObservationIgnored private var spectateRequestTimeout: Task<Void, Never>?
-
-    /// Spectate from a seat (site #3093, Gitea #72): the `spectate` socket event, no payload. On
-    /// success the server sends playerLeave, an alert and `isSpectator`; a refusal comes back as
-    /// `spectateFailed` with the reason. There is no capability flag to detect support, so if
-    /// neither reply arrives (older server) the seat is kept and a notice says so.
-    func requestSpectate() {
-        guard canSpectateFromSeat else { return }
-        spectateRequestPending = true
-        socket.send("spectate")
-        spectateRequestTimeout?.cancel()
-        spectateRequestTimeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(8))
-            guard !Task.isCancelled, let self, self.spectateRequestPending else { return }
-            self.spectateRequestPending = false
-            self.appendLocalNotice("No response to Spectate. This server may not support it yet, so you're still seated.")
-        }
-    }
-
-    private func finishSpectateRequest() {
-        spectateRequestTimeout?.cancel()
-        spectateRequestTimeout = nil
-        if spectateRequestPending { spectateRequestPending = false }
     }
 
     func stopMissedReadyBell() {
@@ -1199,6 +1179,8 @@ final class GameSession {
     /// Line written by a spectator (in the Spectator Meeting, or by a known spectator seat).
     func isSpectatorLine(_ line: ChatLine) -> Bool {
         guard !line.isServer, !line.isQuote else { return false }
+        // Our own lines while spectating, even before the `spectators` list names our seat.
+        if spectate, !isReview, let me = selfId, line.senderId == me { return true }
         if let m = line.meetingId, spectatorMeetingIds.contains(m) { return true }
         return spectatorPlayers[line.senderId] != nil && !players.contains { $0.id == line.senderId }
     }
@@ -1381,16 +1363,13 @@ final class GameSession {
             guard !isReview else { break }
             let now = (data as? Bool) ?? ((data as? NSNumber)?.boolValue ?? true)
             if !now { stopMissedReadyBell() }
-            finishSpectateRequest()
             if spectate != now { spectate = now }
         case "takeSeatFailed":
             // Join open seat refused (no open seats, ban, ranked/competitive, hearts, leave penalty).
             if let reason = stringValue(data) { appendLocalNotice(reason) }
         case "spectateFailed":
-            // Plain-string reason. Sent when the `spectate` event is refused (we keep our seat), and
-            // when a `?spectate=true` join is refused (we join seated; the server cancels any ready
-            // check, which arrives as `readyCheck cancel`).
-            finishSpectateRequest()
+            // Plain-string reason. Master sends it when a seated player's `?spectate=true` join is
+            // refused (Game.userJoin): we stay seated with full game info.
             if spectate { spectate = false }
             if let reason = stringValue(data) { appendLocalNotice(reason) }
         case "readyCheck failed":
@@ -1482,7 +1461,6 @@ final class GameSession {
             socket.disconnect()
         case "disconnected":
             connected = false
-            finishSpectateRequest()
             if !expectDisconnect, !weInitiatedLeave, !finished {
                 displaceToLobby()
             }
@@ -1913,9 +1891,9 @@ final class GameSession {
                 let channel = SpeechChannel(
                     id: id,
                     name: (obj["name"] as? String) ?? "Chat",
-                    // Spectators talk in the Spectator Meeting and, since site #3053, in Pregame
-                    // (pregame spectators are Pregame members with canTalk).
-                    canTalk: can && amMember && (!spectate || ["Spectator Meeting", "Pregame"].contains((obj["name"] as? String) ?? "")),
+                    // Spectators talk only in Pregame (master: pregame spectators are Pregame
+                    // members). Once the game starts they read along but can't type.
+                    canTalk: can && amMember && (!spectate || (obj["name"] as? String) == "Pregame"),
                     abilities: abilities
                 )
                 nextSpeech.removeAll { $0.id == id }
