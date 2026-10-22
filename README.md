@@ -8,6 +8,10 @@ Ultimafia is a native SwiftUI client for [ultimafia.com](https://ultimafia.com),
 
 **Platforms:** iPhone · iPad · native macOS
 
+[![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-Join%20the%20beta-0D96F6?logo=apple&logoColor=white)](https://testflight.apple.com/join/RjFMGD2E)
+
+**Try the beta:** [Join the TestFlight beta](https://testflight.apple.com/join/RjFMGD2E). This requires Apple's [TestFlight](https://apps.apple.com/app/testflight/id899247664) app on your iPhone or iPad.
+
 ## Highlights
 
 - **Lobby and games:** open, in-progress and finished games; join a seat or spectate; pregame ready checks.
