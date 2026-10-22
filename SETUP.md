@@ -24,8 +24,8 @@ The app bundle ID is `VCCCLLC.Ultimafia` and the widget bundle ID is `VCCCLLC.Ul
 ## Clone and open
 
 ```sh
-git clone https://github.com/vinxp97/ultimafia-ios.git
-cd ultimafia-ios
+git clone https://github.com/vinxp97/ultimafia-mobile.git
+cd ultimafia-mobile
 open Ultimafia.xcodeproj
 ```
 
