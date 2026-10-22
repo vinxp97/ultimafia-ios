@@ -38,4 +38,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENS
 ## Credits
 
 - App developed by Z
-- UltiMafia © VCCC LLC
+- UltiMafia Mobile © VCCC LLC
