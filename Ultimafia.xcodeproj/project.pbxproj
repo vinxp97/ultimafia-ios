@@ -50,11 +50,6 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		ABA694C8303D294F00FF9116 /* Ultimafia */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Ultimafia;
-			sourceTree = "<group>";
-		};
 		AB1A0002303D300000FF9116 /* UltimafiaWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -68,17 +63,22 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		ABA694C8303D294F00FF9116 /* Ultimafia */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Ultimafia;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		ABA694C3303D294F00FF9116 /* Frameworks */ = {
+		AB1A0006303D300000FF9116 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AB1A0006303D300000FF9116 /* Frameworks */ = {
+		ABA694C3303D294F00FF9116 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -110,31 +110,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		ABA694C5303D294F00FF9116 /* Ultimafia */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = ABA694D1303D295000FF9116 /* Build configuration list for PBXNativeTarget "Ultimafia" */;
-			buildPhases = (
-				ABA694C2303D294F00FF9116 /* Sources */,
-				ABA694C3303D294F00FF9116 /* Frameworks */,
-				ABA694C4303D294F00FF9116 /* Resources */,
-				AB1A000B303D300000FF9116 /* Embed Foundation Extensions */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				AB1A000D303D300000FF9116 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				ABA694C8303D294F00FF9116 /* Ultimafia */,
-				AB1A0003303D300000FF9116 /* Shared */,
-			);
-			name = Ultimafia;
-			packageProductDependencies = (
-			);
-			productName = Ultimafia;
-			productReference = ABA694C6303D294F00FF9116 /* Ultimafia.app */;
-			productType = "com.apple.product-type.application";
-		};
 		AB1A0004303D300000FF9116 /* UltimafiaWidgets */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AB1A0008303D300000FF9116 /* Build configuration list for PBXNativeTarget "UltimafiaWidgets" */;
@@ -158,6 +133,31 @@
 			productReference = AB1A0001303D300000FF9116 /* UltimafiaWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		ABA694C5303D294F00FF9116 /* Ultimafia */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABA694D1303D295000FF9116 /* Build configuration list for PBXNativeTarget "Ultimafia" */;
+			buildPhases = (
+				ABA694C2303D294F00FF9116 /* Sources */,
+				ABA694C3303D294F00FF9116 /* Frameworks */,
+				ABA694C4303D294F00FF9116 /* Resources */,
+				AB1A000B303D300000FF9116 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AB1A000D303D300000FF9116 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AB1A0003303D300000FF9116 /* Shared */,
+				ABA694C8303D294F00FF9116 /* Ultimafia */,
+			);
+			name = Ultimafia;
+			packageProductDependencies = (
+			);
+			productName = Ultimafia;
+			productReference = ABA694C6303D294F00FF9116 /* Ultimafia.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -168,10 +168,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
-					ABA694C5303D294F00FF9116 = {
+					AB1A0004303D300000FF9116 = {
 						CreatedOnToolsVersion = 26.6;
 					};
-					AB1A0004303D300000FF9116 = {
+					ABA694C5303D294F00FF9116 = {
 						CreatedOnToolsVersion = 26.6;
 					};
 				};
@@ -197,14 +197,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		ABA694C4303D294F00FF9116 /* Resources */ = {
+		AB1A0007303D300000FF9116 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AB1A0007303D300000FF9116 /* Resources */ = {
+		ABA694C4303D294F00FF9116 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -214,14 +214,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		ABA694C2303D294F00FF9116 /* Sources */ = {
+		AB1A0005303D300000FF9116 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AB1A0005303D300000FF9116 /* Sources */ = {
+		ABA694C2303D294F00FF9116 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -240,6 +240,60 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		AB1A0009303D300000FF9116 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB1A000A303D300000FF9116 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		ABA694CF303D295000FF9116 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -372,24 +426,24 @@
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=macosx*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=macosx*]" = YES;
-				SUPPORTS_MACCATALYST = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "UltiMafia uses the microphone when you tap the mic button to dictate a chat message.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "UltiMafia turns your speech into chat text on this device so you can dictate messages, including player and role names.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -412,6 +466,7 @@
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -434,24 +489,24 @@
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=macosx*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=macosx*]" = YES;
-				SUPPORTS_MACCATALYST = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "UltiMafia uses the microphone when you tap the mic button to dictate a chat message.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "UltiMafia turns your speech into chat text on this device so you can dictate messages, including player and role names.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.strategy-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -474,6 +529,7 @@
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -484,63 +540,18 @@
 			};
 			name = Release;
 		};
-		AB1A0009303D300000FF9116 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		AB1A000A303D300000FF9116 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = UltimafiaWidgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = UltiMafia;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = VCCCLLC.Ultimafia.Widgets;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AB1A0008303D300000FF9116 /* Build configuration list for PBXNativeTarget "UltimafiaWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB1A0009303D300000FF9116 /* Debug */,
+				AB1A000A303D300000FF9116 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		ABA694C1303D294F00FF9116 /* Build configuration list for PBXProject "Ultimafia" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -555,15 +566,6 @@
 			buildConfigurations = (
 				ABA694D2303D295000FF9116 /* Debug */,
 				ABA694D3303D295000FF9116 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AB1A0008303D300000FF9116 /* Build configuration list for PBXNativeTarget "UltimafiaWidgets" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AB1A0009303D300000FF9116 /* Debug */,
-				AB1A000A303D300000FF9116 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
