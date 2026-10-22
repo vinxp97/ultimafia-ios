@@ -40,6 +40,9 @@ final class APIClient {
         var req = URLRequest(url: url)
         UMAccess.apply(&req)
         req.httpMethod = method
+        // Account state (coins, inGame, itemsOwned such as a just-bought text effects item) must
+        // never come from the URL cache.
+        if path == "user/info" { req.cachePolicy = .reloadIgnoringLocalCacheData }
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("\(UMConfig.site)", forHTTPHeaderField: "Origin")
         if let csrf, method != "GET" {

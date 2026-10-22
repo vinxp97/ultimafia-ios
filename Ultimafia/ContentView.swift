@@ -77,6 +77,9 @@ struct ContentView: View {
                 GameBackgroundHold.end()
                 UMLiveActivity.endAll()
                 app.startPresence()
+                // Re-read user/info on every return to the app, so items bought on the site
+                // (e.g. Advanced Text Effects) and server-side seat changes show up.
+                Task { await app.refreshUserInfo() }
             }
         }
     }

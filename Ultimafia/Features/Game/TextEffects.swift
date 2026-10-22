@@ -66,10 +66,22 @@ nonisolated enum UMTextEffect: String, CaseIterable, Sendable {
 enum UMTextEffects {
     static var owned = false
 
+    /// Mongo `itemsOwned.textEffects` is a Number (1 once bought); the server's own check is
+    /// plain truthiness (Games/core/User.js `!!itemsOwned.textEffects`), so match that.
     static func update(from user: UserInfo?) {
         let items = user?.itemsOwned?.asAny as? [String: Any] ?? [:]
-        let v = items["textEffects"]
-        owned = (v as? Double ?? 0) > 0 || (v as? Int ?? 0) > 0 || (v as? Bool ?? false)
+        owned = umTruthy(items["textEffects"])
+    }
+
+    nonisolated static func umTruthy(_ v: Any?) -> Bool {
+        switch v {
+        case let b as Bool: return b
+        case let i as Int: return i != 0
+        case let d as Double: return d != 0 && !d.isNaN
+        case let s as String: return !s.isEmpty && s != "0" && s.lowercased() != "false"
+        case is [Any], is [String: Any]: return true
+        default: return false
+        }
     }
 
     /// First time each message id was drawn. An effect runs from then, so a row that is rebuilt

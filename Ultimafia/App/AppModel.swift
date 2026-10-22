@@ -155,6 +155,25 @@ final class AppModel {
         // `-UMNoSession`: diag/screenshot runs stay signed out (never resume a saved session or
         // reconnect to a seated game).
         if ProcessInfo.processInfo.arguments.contains("-UMNoSession") { return }
+        // `-UMDiagUserInfo <path>`: one read-only GET user/info with the saved session; writes the
+        // backend host, whether a user came back, and itemsOwned (no tokens, csrf or email) as
+        // JSON, then quits. Never signs in further, resumes a game or opens a socket.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-UMDiagUserInfo"), i + 1 < args.count {
+            var out: [String: Any] = ["host": UMConfig.site]
+            if let data = try? await APIClient.shared.request("GET", path: "user/info", query: [:], body: nil),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                out["signedIn"] = obj["id"] != nil
+                out["name"] = obj["name"] ?? NSNull()
+                out["itemsOwned"] = obj["itemsOwned"] ?? NSNull()
+            } else {
+                out["error"] = "request failed"
+            }
+            if let json = try? JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]) {
+                try? json.write(to: URL(fileURLWithPath: args[i + 1]))
+            }
+            exit(0)
+        }
         #endif
         isRestoring = true
         defer { isRestoring = false }
