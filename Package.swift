@@ -16,17 +16,19 @@ let package = Package(
     targets: [
         .target(
             name: "Ultimafia",
-            path: "Ultimafia",
+            path: ".",
             exclude: [
-                "Assets.xcassets",
-                "PrivacyInfo.xcprivacy",
-                "UMTerminology.json",
-                "Sounds",
-                "Fonts",
-                "RoleIcons",
-                "Ultimafia.entitlements",
-                "Ultimafia-iOS.entitlements",
+                "Ultimafia/Assets.xcassets",
+                "Ultimafia/PrivacyInfo.xcprivacy",
+                "Ultimafia/UMTerminology.json",
+                "Ultimafia/Sounds",
+                "Ultimafia/Fonts",
+                "Ultimafia/RoleIcons",
+                "Ultimafia/Ultimafia.entitlements",
+                "Ultimafia/Ultimafia-iOS.entitlements",
             ],
+            // Shared/ holds types the app and the widget extension both compile (Live Activity attributes).
+            sources: ["Ultimafia", "Shared"],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
                 // Match SWIFT_DEFAULT_ACTOR_ISOLATION from the Xcode target.
